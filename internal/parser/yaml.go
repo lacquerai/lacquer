@@ -7,27 +7,16 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lacquer/lacquer/internal/ast"
 	"github.com/lacquer/lacquer/internal/parser/schema"
 	"gopkg.in/yaml.v3"
 )
 
-// Temporary Workflow struct - will be replaced with proper AST types in Subtask 1.3
-type Workflow struct {
-	Version  string                 `yaml:"version" json:"version"`
-	Metadata map[string]interface{} `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	Agents   map[string]interface{} `yaml:"agents,omitempty" json:"agents,omitempty"`
-	Workflow map[string]interface{} `yaml:"workflow" json:"workflow"`
-	
-	// Internal fields
-	SourceFile string   `yaml:"-" json:"-"`
-	Position   Position `yaml:"-" json:"-"`
-}
-
 // Parser interface defines the contract for workflow parsing
 type Parser interface {
-	ParseFile(filename string) (*Workflow, error)
-	ParseBytes(data []byte) (*Workflow, error)
-	ParseReader(r io.Reader) (*Workflow, error)
+	ParseFile(filename string) (*ast.Workflow, error)
+	ParseBytes(data []byte) (*ast.Workflow, error)
+	ParseReader(r io.Reader) (*ast.Workflow, error)
 	ValidateOnly(data []byte) error
 	SetStrict(strict bool)
 }
@@ -84,7 +73,7 @@ func (p *YAMLParser) SetStrict(strict bool) {
 }
 
 // ParseFile parses a workflow file
-func (p *YAMLParser) ParseFile(filename string) (*Workflow, error) {
+func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 	// Validate file extension
 	if !isValidWorkflowFile(filename) {
 		return nil, fmt.Errorf("invalid file extension: expected .laq.yaml, got %s", filepath.Ext(filename))
@@ -115,11 +104,11 @@ func (p *YAMLParser) ParseFile(filename string) (*Workflow, error) {
 }
 
 // ParseBytes parses workflow data from bytes
-func (p *YAMLParser) ParseBytes(data []byte) (*Workflow, error) {
+func (p *YAMLParser) ParseBytes(data []byte) (*ast.Workflow, error) {
 	if len(data) == 0 {
 		return nil, &ParseError{
 			Message:  "empty workflow file",
-			Position: Position{Line: 1, Column: 1},
+			Position: ast.Position{Line: 1, Column: 1},
 			Suggestion: "Add a basic workflow structure with version and workflow fields",
 		}
 	}
@@ -131,14 +120,14 @@ func (p *YAMLParser) ParseBytes(data []byte) (*Workflow, error) {
 	}
 	
 	// Parse into workflow struct
-	var workflow Workflow
+	var workflow ast.Workflow
 	if err := yaml.Unmarshal(data, &workflow); err != nil {
 		return nil, WrapYAMLError(err, data, "")
 	}
 	
 	// Set position information from the root node
 	if node.Line > 0 {
-		workflow.Position = Position{
+		workflow.Position = ast.Position{
 			Line:   node.Line,
 			Column: node.Column,
 		}
@@ -155,7 +144,7 @@ func (p *YAMLParser) ParseBytes(data []byte) (*Workflow, error) {
 }
 
 // ParseReader parses workflow data from a reader
-func (p *YAMLParser) ParseReader(r io.Reader) (*Workflow, error) {
+func (p *YAMLParser) ParseReader(r io.Reader) (*ast.Workflow, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read data: %w", err)
@@ -199,12 +188,12 @@ func (p *YAMLParser) validateWorkflow(data []byte) error {
 }
 
 // extractPositionFromPath attempts to find position from JSON path
-func extractPositionFromPath(path string, source []byte) Position {
+func extractPositionFromPath(path string, source []byte) ast.Position {
 	// This is a simplified implementation
 	// A more sophisticated version would parse the JSON path and map it to YAML positions
 	
 	if path == "" || path == "/" {
-		return Position{Line: 1, Column: 1}
+		return ast.Position{Line: 1, Column: 1}
 	}
 	
 	// Remove leading slash and split path
@@ -215,7 +204,7 @@ func extractPositionFromPath(path string, source []byte) Position {
 	for lineNum, line := range lines {
 		for _, part := range pathParts {
 			if strings.Contains(line, part+":") {
-				return Position{
+				return ast.Position{
 					Line:   lineNum + 1,
 					Column: strings.Index(line, part) + 1,
 				}
@@ -223,7 +212,7 @@ func extractPositionFromPath(path string, source []byte) Position {
 		}
 	}
 	
-	return Position{Line: 1, Column: 1}
+	return ast.Position{Line: 1, Column: 1}
 }
 
 // isValidWorkflowFile checks if the filename has a valid extension
@@ -245,13 +234,13 @@ func isValidWorkflowFile(filename string) bool {
 }
 
 // ParseWorkflowNode parses a workflow from a YAML node (for advanced use cases)
-func (p *YAMLParser) ParseWorkflowNode(node *yaml.Node) (*Workflow, error) {
-	var workflow Workflow
+func (p *YAMLParser) ParseWorkflowNode(node *yaml.Node) (*ast.Workflow, error) {
+	var workflow ast.Workflow
 	if err := node.Decode(&workflow); err != nil {
 		return nil, fmt.Errorf("failed to decode workflow: %w", err)
 	}
 	
-	workflow.Position = Position{
+	workflow.Position = ast.Position{
 		Line:   node.Line,
 		Column: node.Column,
 	}

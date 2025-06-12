@@ -4,16 +4,17 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lacquer/lacquer/internal/ast"
 	"gopkg.in/yaml.v3"
 )
 
 // ParseError represents a parsing error with context
 type ParseError struct {
-	Message    string   `json:"message"`
-	Position   Position `json:"position"`
-	Context    string   `json:"context,omitempty"`
-	Source     []byte   `json:"-"`
-	Suggestion string   `json:"suggestion,omitempty"`
+	Message    string       `json:"message"`
+	Position   ast.Position `json:"position"`
+	Context    string       `json:"context,omitempty"`
+	Source     []byte       `json:"-"`
+	Suggestion string       `json:"suggestion,omitempty"`
 }
 
 // Error implements the error interface
@@ -53,7 +54,7 @@ func WrapYAMLError(err error, source []byte, filename string) error {
 		return &ParseError{
 			Message:  err.Error(),
 			Position: position,
-			Context:  ExtractContext(source, position, 2),
+			Context:  ast.ExtractContext(source, position, 2),
 			Source:   source,
 			Suggestion: generateSuggestion(err.Error()),
 		}
@@ -64,7 +65,7 @@ func WrapYAMLError(err error, source []byte, filename string) error {
 func handleTypeError(err *yaml.TypeError, source []byte, filename string) error {
 	// For type errors, we'll use the first error in the list
 	if len(err.Errors) == 0 {
-		position := Position{Line: 1, Column: 1}
+		position := ast.Position{Line: 1, Column: 1}
 		if filename != "" {
 			position.File = filename
 		}
@@ -85,14 +86,14 @@ func handleTypeError(err *yaml.TypeError, source []byte, filename string) error 
 	return &ParseError{
 		Message:    fmt.Sprintf("Type error: %s", firstError),
 		Position:   position,
-		Context:    ExtractContext(source, position, 2),
+		Context:    ast.ExtractContext(source, position, 2),
 		Source:     source,
 		Suggestion: generateSuggestion(firstError),
 	}
 }
 
 // extractPositionFromMessage attempts to extract line/column from error messages
-func extractPositionFromMessage(message string, source []byte) Position {
+func extractPositionFromMessage(message string, source []byte) ast.Position {
 	// YAML error messages often contain "line X" patterns
 	// This is a simple implementation - could be enhanced with regex
 	
@@ -101,13 +102,13 @@ func extractPositionFromMessage(message string, source []byte) Position {
 		if word == "line" && i+1 < len(lines) {
 			var line int
 			if _, err := fmt.Sscanf(lines[i+1], "%d", &line); err == nil {
-				return Position{Line: line, Column: 1}
+				return ast.Position{Line: line, Column: 1}
 			}
 		}
 	}
 	
 	// Fallback to beginning of file
-	return Position{Line: 1, Column: 1}
+	return ast.Position{Line: 1, Column: 1}
 }
 
 // generateSuggestion provides helpful suggestions based on common errors
