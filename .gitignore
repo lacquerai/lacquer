@@ -1,0 +1,142 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Go workspace file
+go.work
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go module download cache
+go/pkg/mod/
+
+# Go build cache
+go-build/
+
+# Binary output directory
+bin/
+dist/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Coverage reports
+coverage.txt
+coverage.html
+*.cover
+*.coverprofile
+cover.out
+cover.html
+
+# Profiling data
+*.prof
+*.pprof
+
+# Debug files
+debug
+__debug_bin
+
+# Air live reload
+.air.toml
+tmp/
+
+# Delve debugger
+.dlv
+
+# GoReleaser
+dist/
+.goreleaser.yml
+
+# Local configuration
+config.local.yaml
+config.local.yml
+config.local.json
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Private keys and certificates
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# Backup files
+*.bak
+*.backup
+
+# Archives
+*.tar
+*.tar.gz
+*.zip
+*.gz
+*.tgz
+
+# Application specific
+/myapp
+/app
+/server
+/main
+
+# Build artifacts
+build/
+
+# Docker volumes
+.docker/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Kubernetes
+kubeconfig
+
+# Agent directory (already in your git status)
+.agent/
