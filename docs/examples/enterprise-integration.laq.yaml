@@ -1,0 +1,595 @@
+# Enterprise workflow with CRM, email notifications, and human approval
+version: "1.0"
+metadata:
+  name: enterprise-customer-onboarding
+  description: Complete customer onboarding workflow with enterprise integrations
+  author: enterprise-team
+  tags:
+    - enterprise
+    - crm
+    - customer-onboarding
+    - integration
+
+# MCP server configurations for enterprise systems
+mcp_servers:
+  salesforce-mcp:
+    image: company/salesforce-mcp:v2.1
+    port: 8080
+    health_check: "/health"
+    startup_timeout: 60s
+    env:
+      SF_INSTANCE: "{{ env.SALESFORCE_INSTANCE }}"
+      SF_TOKEN: "{{ secrets.SALESFORCE_TOKEN }}"
+  
+  jira-mcp:
+    endpoint: "jira-mcp.company.com:443"
+    tls:
+      enabled: true
+      verify: true
+      ca_cert: "{{ secrets.COMPANY_CA_CERT }}"
+    auth:
+      token: "{{ secrets.JIRA_MCP_TOKEN }}"
+
+agents:
+  # Customer success agent with CRM access
+  customer_success:
+    model: gpt-4
+    temperature: 0.3
+    system_prompt: |
+      You are a customer success manager who:
+      - Guides customers through onboarding
+      - Identifies customer needs and goals
+      - Ensures smooth implementation
+      - Tracks customer satisfaction
+    tools:
+      - name: crm
+        mcp_server: salesforce-mcp
+        config:
+          tools: ["create_contact", "update_opportunity", "search_accounts", "create_task"]
+          rate_limit:
+            requests_per_minute: 30
+      
+      - name: send_email
+        uses: lacquer/email@v1
+        config:
+          smtp_server: "{{ env.SMTP_SERVER }}"
+          auth:
+            username: "{{ env.SMTP_USERNAME }}"
+            password: "{{ secrets.SMTP_PASSWORD }}"
+  
+  # Technical implementation specialist
+  technical_specialist:
+    model: gpt-4
+    temperature: 0.2
+    system_prompt: |
+      You are a technical implementation specialist who:
+      - Assesses technical requirements
+      - Plans implementation roadmaps
+      - Coordinates with engineering teams
+      - Manages technical risks
+    tools:
+      - name: jira
+        mcp_server: jira-mcp
+        config:
+          tools: ["create_ticket", "update_ticket", "search_tickets", "create_epic"]
+      
+      - name: github
+        uses: lacquer/github@v1
+        config:
+          auth_token: "{{ secrets.GITHUB_TOKEN }}"
+          organization: "{{ env.GITHUB_ORG }}"
+  
+  # Account manager for commercial aspects
+  account_manager:
+    model: gpt-4
+    temperature: 0.4
+    system_prompt: |
+      You are an account manager focused on:
+      - Contract negotiations and renewals
+      - Upselling and expansion opportunities
+      - Relationship building
+      - Revenue optimization
+
+workflow:
+  inputs:
+    customer_data:
+      type: object
+      description: New customer information
+      required: true
+      properties:
+        company_name: string
+        contact_email: string
+        contact_name: string
+        deal_size: number
+        product_tier: string
+        implementation_complexity: string
+    
+    priority_level:
+      type: string
+      description: Customer priority level
+      enum: ["standard", "high-value", "enterprise", "strategic"]
+      default: "standard"
+    
+    auto_approve_standard:
+      type: boolean
+      description: Auto-approve standard onboarding steps
+      default: true
+
+  state:
+    onboarding_stage: "initial"
+    customer_id: null
+    assigned_team: {}
+    implementation_tickets: []
+    milestone_progress: {}
+    escalation_level: "none"
+    satisfaction_score: null
+
+  steps:
+    # Step 1: Customer validation and CRM setup
+    - id: validate_and_setup_crm
+      agent: customer_success
+      prompt: |
+        Process new customer onboarding for:
+        
+        Company: {{ inputs.customer_data.company_name }}
+        Contact: {{ inputs.customer_data.contact_name }} ({{ inputs.customer_data.contact_email }})
+        Deal Size: ${{ inputs.customer_data.deal_size }}
+        Product Tier: {{ inputs.customer_data.product_tier }}
+        Priority: {{ inputs.priority_level }}
+        
+        Steps to complete:
+        1. Search for existing account in CRM using company name
+        2. Create or update customer contact
+        3. Create new opportunity record
+        4. Set up initial onboarding tasks
+        5. Send welcome email to customer
+        
+        Use the crm tool for Salesforce operations and send_email for communication.
+      outputs:
+        customer_id: string
+        account_id: string
+        opportunity_id: string
+        existing_customer: boolean
+        welcome_email_sent: boolean
+      
+      on_success:
+        - action: update_state
+          updates:
+            customer_id: "{{ steps.validate_and_setup_crm.outputs.customer_id }}"
+            onboarding_stage: "crm_setup_complete"
+      
+      on_error:
+        - action: update_state
+          updates:
+            escalation_level: "crm_setup_failed"
+        - uses: lacquer/slack@v1
+          with:
+            webhook_url: "{{ secrets.SLACK_WEBHOOK }}"
+            channel: "#customer-success"
+            message: |
+              🚨 CRM setup failed for new customer: {{ inputs.customer_data.company_name }}
+              Error: {{ error.message }}
+              Priority: {{ inputs.priority_level }}
+
+    # Step 2: Technical assessment and planning
+    - id: technical_assessment
+      agent: technical_specialist
+      prompt: |
+        Conduct technical assessment for customer onboarding:
+        
+        Customer: {{ inputs.customer_data.company_name }}
+        Product Tier: {{ inputs.customer_data.product_tier }}
+        Implementation Complexity: {{ inputs.customer_data.implementation_complexity }}
+        
+        Assessment areas:
+        1. Technical requirements analysis
+        2. Integration complexity evaluation
+        3. Timeline estimation
+        4. Resource allocation planning
+        5. Risk identification
+        
+        Based on the assessment:
+        - Create JIRA epic for the implementation
+        - Create initial technical tickets
+        - Estimate implementation timeline
+        - Identify potential blockers
+        
+        Use the jira tool to create tickets and epics.
+      outputs:
+        epic_id: string
+        initial_tickets: array
+        estimated_timeline: string
+        complexity_score: integer
+        identified_risks: array
+        resource_requirements: object
+      
+      on_success:
+        - action: update_state
+          updates:
+            implementation_tickets: "{{ steps.technical_assessment.outputs.initial_tickets }}"
+            onboarding_stage: "technical_planning_complete"
+
+    # Step 3: Team assignment based on priority and complexity
+    - id: assign_team
+      agent: account_manager
+      prompt: |
+        Assign appropriate team based on customer profile:
+        
+        Customer: {{ inputs.customer_data.company_name }}
+        Priority Level: {{ inputs.priority_level }}
+        Deal Size: ${{ inputs.customer_data.deal_size }}
+        Complexity Score: {{ steps.technical_assessment.outputs.complexity_score }}
+        Estimated Timeline: {{ steps.technical_assessment.outputs.estimated_timeline }}
+        
+        Team assignment criteria:
+        - Strategic accounts (>$100k): Senior team with dedicated CSM
+        - Enterprise (>$50k): Experienced team with regular check-ins
+        - High-value (>$25k): Standard team with enhanced support
+        - Standard (<$25k): Efficient team with automated touchpoints
+        
+        Assign team members and update CRM with assignments.
+      outputs:
+        customer_success_manager: string
+        technical_lead: string
+        account_manager: string
+        support_level: string
+        escalation_path: array
+      
+      on_success:
+        - action: update_state
+          updates:
+            assigned_team: "{{ steps.assign_team.outputs }}"
+            onboarding_stage: "team_assigned"
+
+    # Step 4: Conditional approval workflow
+    - id: approval_workflow
+      switch:
+        on: "{{ inputs.priority_level }}"
+        cases:
+          strategic:
+            # Strategic accounts require C-level approval
+            action: human_input
+            prompt: |
+              STRATEGIC ACCOUNT APPROVAL REQUIRED
+              
+              Customer: {{ inputs.customer_data.company_name }}
+              Deal Size: ${{ inputs.customer_data.deal_size }}
+              Complexity: {{ steps.technical_assessment.outputs.complexity_score }}/10
+              Timeline: {{ steps.technical_assessment.outputs.estimated_timeline }}
+              
+              Assigned Team:
+              - CSM: {{ steps.assign_team.outputs.customer_success_manager }}
+              - Tech Lead: {{ steps.assign_team.outputs.technical_lead }}
+              - Account Manager: {{ steps.assign_team.outputs.account_manager }}
+              
+              Risks Identified:
+              {{ steps.technical_assessment.outputs.identified_risks | join('\n- ') }}
+              
+              Please approve strategic account onboarding plan.
+            timeout: 4h
+            outputs:
+              approved: boolean
+              approval_notes: string
+              executive_sponsor: string
+          
+          enterprise:
+            # Enterprise accounts require VP approval
+            action: human_input
+            prompt: |
+              ENTERPRISE ACCOUNT APPROVAL
+              
+              Customer: {{ inputs.customer_data.company_name }}
+              Deal Size: ${{ inputs.customer_data.deal_size }}
+              
+              Automatic approval criteria check:
+              - Deal size: {{ inputs.customer_data.deal_size >= 50000 }}
+              - Complexity manageable: {{ steps.technical_assessment.outputs.complexity_score <= 7 }}
+              - Timeline reasonable: {{ steps.technical_assessment.outputs.estimated_timeline }}
+              
+              Approve enterprise onboarding?
+            timeout: 2h
+            outputs:
+              approved: boolean
+              approval_notes: string
+          
+          default:
+            # Auto-approve standard and high-value if criteria met
+            condition: |
+              {{
+                inputs.auto_approve_standard and
+                steps.technical_assessment.outputs.complexity_score <= 6 and
+                inputs.customer_data.deal_size >= 10000
+              }}
+            agent: account_manager
+            prompt: |
+              Auto-approving standard onboarding for {{ inputs.customer_data.company_name }}.
+              All criteria met for automatic approval.
+            outputs:
+              approved: true
+              approval_notes: "Auto-approved based on standard criteria"
+
+    # Step 5: Kickoff coordination
+    - id: coordinate_kickoff
+      condition: "{{ steps.approval_workflow.outputs.approved }}"
+      agent: customer_success
+      prompt: |
+        Coordinate customer onboarding kickoff:
+        
+        Customer: {{ inputs.customer_data.company_name }}
+        Assigned Team: {{ state.assigned_team | json }}
+        Technical Plan: {{ steps.technical_assessment.outputs.epic_id }}
+        
+        Kickoff activities:
+        1. Schedule kickoff call with customer
+        2. Send onboarding welcome package
+        3. Set up project communication channels
+        4. Initialize customer success tracking
+        5. Create milestone tracking in CRM
+        
+        Use CRM and email tools to execute these activities.
+      outputs:
+        kickoff_scheduled: string
+        welcome_package_sent: boolean
+        communication_channels: array
+        milestone_tracking_setup: boolean
+      
+      on_success:
+        - action: update_state
+          updates:
+            onboarding_stage: "kickoff_complete"
+        
+        # Parallel notifications to stakeholders
+        - parallel:
+            steps:
+              - id: notify_customer
+                uses: lacquer/email@v1
+                with:
+                  to: "{{ inputs.customer_data.contact_email }}"
+                  subject: "Welcome to {{ env.COMPANY_NAME }} - Your Onboarding Journey Begins!"
+                  template: "customer_onboarding_welcome"
+                  data:
+                    customer_name: "{{ inputs.customer_data.contact_name }}"
+                    company_name: "{{ inputs.customer_data.company_name }}"
+                    csm_name: "{{ state.assigned_team.customer_success_manager }}"
+                    kickoff_date: "{{ steps.coordinate_kickoff.outputs.kickoff_scheduled }}"
+              
+              - id: notify_internal_team
+                uses: lacquer/slack@v1
+                with:
+                  channel: "#customer-success"
+                  message: |
+                    🎉 New customer onboarding started!
+                    
+                    Customer: {{ inputs.customer_data.company_name }}
+                    Priority: {{ inputs.priority_level }}
+                    Deal Size: ${{ inputs.customer_data.deal_size }}
+                    CSM: {{ state.assigned_team.customer_success_manager }}
+                    Tech Lead: {{ state.assigned_team.technical_lead }}
+                    
+                    Epic: {{ steps.technical_assessment.outputs.epic_id }}
+                    Timeline: {{ steps.technical_assessment.outputs.estimated_timeline }}
+
+    # Step 6: Implementation tracking setup
+    - id: setup_implementation_tracking
+      agent: technical_specialist
+      prompt: |
+        Set up comprehensive implementation tracking:
+        
+        Epic: {{ steps.technical_assessment.outputs.epic_id }}
+        Initial Tickets: {{ state.implementation_tickets | length }}
+        Customer: {{ inputs.customer_data.company_name }}
+        
+        Setup activities:
+        1. Link all tickets to customer record
+        2. Set up automated progress reporting
+        3. Configure milestone alerts
+        4. Create customer dashboard access
+        5. Set up weekly status reports
+        
+        Use JIRA and CRM integrations for tracking setup.
+      outputs:
+        tracking_dashboard: string
+        automated_reports: boolean
+        milestone_alerts: array
+        customer_portal_access: string
+      
+      on_success:
+        - action: update_state
+          updates:
+            onboarding_stage: "tracking_active"
+
+    # Step 7: Risk monitoring and escalation
+    - id: risk_monitoring
+      condition: "{{ steps.technical_assessment.outputs.identified_risks | length > 0 }}"
+      agent: technical_specialist
+      prompt: |
+        Set up risk monitoring for identified risks:
+        
+        Risks: {{ steps.technical_assessment.outputs.identified_risks | json }}
+        Customer Priority: {{ inputs.priority_level }}
+        
+        For each risk:
+        1. Create monitoring tickets
+        2. Set up automated risk alerts
+        3. Define escalation procedures
+        4. Assign risk owners
+        
+        Priority-based escalation:
+        - Strategic: Immediate escalation to VP level
+        - Enterprise: 4-hour escalation to Director level
+        - High-value: 8-hour escalation to Manager level
+        - Standard: 24-hour escalation to Team Lead
+      outputs:
+        risk_monitoring_tickets: array
+        escalation_procedures: object
+        risk_owners: object
+    
+    # Step 8: Quality assurance checkpoint
+    - id: qa_checkpoint
+      agent: customer_success
+      prompt: |
+        Perform quality assurance checkpoint for onboarding setup:
+        
+        Customer: {{ inputs.customer_data.company_name }}
+        Onboarding Stage: {{ state.onboarding_stage }}
+        
+        QA Checklist:
+        ✓ CRM records created and accurate
+        ✓ Team assignments completed
+        ✓ Technical planning finalized
+        ✓ Kickoff coordination completed
+        ✓ Implementation tracking active
+        ✓ Risk monitoring configured
+        
+        Current Status:
+        - Customer ID: {{ state.customer_id }}
+        - Epic ID: {{ steps.technical_assessment.outputs.epic_id }}
+        - Team: {{ state.assigned_team | keys | join(', ') }}
+        - Risks: {{ steps.technical_assessment.outputs.identified_risks | length }}
+        
+        Verify all components are properly configured and ready for active implementation.
+      outputs:
+        qa_passed: boolean
+        qa_issues: array
+        qa_recommendations: array
+        readiness_score: float
+      
+      on_success:
+        - condition: "{{ steps.qa_checkpoint.outputs.qa_passed }}"
+          action: update_state
+          updates:
+            onboarding_stage: "implementation_ready"
+
+    # Step 9: Customer satisfaction baseline
+    - id: initial_satisfaction_survey
+      condition: "{{ state.onboarding_stage == 'implementation_ready' }}"
+      agent: customer_success
+      prompt: |
+        Send initial satisfaction survey to establish baseline:
+        
+        Customer: {{ inputs.customer_data.contact_name }}
+        Company: {{ inputs.customer_data.company_name }}
+        
+        Survey should cover:
+        1. Onboarding experience so far
+        2. Team interaction quality
+        3. Communication effectiveness
+        4. Expectation alignment
+        5. Confidence in success
+        
+        Use email tool to send personalized survey.
+      outputs:
+        survey_sent: boolean
+        survey_link: string
+        follow_up_scheduled: string
+      
+      on_success:
+        - action: update_state
+          updates:
+            satisfaction_score: "baseline_sent"
+
+  outputs:
+    # Onboarding status
+    onboarding_status:
+      stage: "{{ state.onboarding_stage }}"
+      customer_id: "{{ state.customer_id }}"
+      approval_status: "{{ steps.approval_workflow.outputs.approved | default(false) }}"
+      qa_passed: "{{ steps.qa_checkpoint.outputs.qa_passed | default(false) }}"
+      ready_for_implementation: "{{ state.onboarding_stage == 'implementation_ready' }}"
+    
+    # Customer information
+    customer_profile:
+      company: "{{ inputs.customer_data.company_name }}"
+      contact: "{{ inputs.customer_data.contact_name }}"
+      email: "{{ inputs.customer_data.contact_email }}"
+      priority: "{{ inputs.priority_level }}"
+      deal_size: "{{ inputs.customer_data.deal_size }}"
+      complexity_score: "{{ steps.technical_assessment.outputs.complexity_score | default(0) }}"
+    
+    # Team assignments
+    assigned_team: "{{ state.assigned_team }}"
+    
+    # Implementation details
+    implementation_plan:
+      epic_id: "{{ steps.technical_assessment.outputs.epic_id }}"
+      estimated_timeline: "{{ steps.technical_assessment.outputs.estimated_timeline }}"
+      initial_tickets: "{{ steps.technical_assessment.outputs.initial_tickets | length }}"
+      identified_risks: "{{ steps.technical_assessment.outputs.identified_risks | length }}"
+      tracking_dashboard: "{{ steps.setup_implementation_tracking.outputs.tracking_dashboard }}"
+    
+    # Quality metrics
+    quality_metrics:
+      qa_score: "{{ steps.qa_checkpoint.outputs.readiness_score | default(0) }}"
+      qa_issues: "{{ steps.qa_checkpoint.outputs.qa_issues | length | default(0) }}"
+      approval_time: "{{ steps.approval_workflow.duration | default('N/A') }}"
+      total_setup_time: "{{ workflow.duration }}"
+    
+    # CRM integration results
+    crm_integration:
+      customer_id: "{{ state.customer_id }}"
+      account_id: "{{ steps.validate_and_setup_crm.outputs.account_id }}"
+      opportunity_id: "{{ steps.validate_and_setup_crm.outputs.opportunity_id }}"
+      existing_customer: "{{ steps.validate_and_setup_crm.outputs.existing_customer }}"
+    
+    # Communication tracking
+    communications:
+      welcome_email_sent: "{{ steps.validate_and_setup_crm.outputs.welcome_email_sent | default(false) }}"
+      kickoff_scheduled: "{{ steps.coordinate_kickoff.outputs.kickoff_scheduled }}"
+      survey_sent: "{{ steps.initial_satisfaction_survey.outputs.survey_sent | default(false) }}"
+      internal_notifications: "{{ steps.coordinate_kickoff.outputs.communication_channels | length | default(0) }}"
+    
+    # Risk assessment
+    risk_profile:
+      total_risks: "{{ steps.technical_assessment.outputs.identified_risks | length }}"
+      monitoring_active: "{{ steps.risk_monitoring.outputs is defined }}"
+      escalation_level: "{{ state.escalation_level }}"
+      risk_owners_assigned: "{{ steps.risk_monitoring.outputs.risk_owners | length | default(0) }}"
+    
+    # Success indicators
+    success_indicators:
+      crm_setup_success: "{{ steps.validate_and_setup_crm.success }}"
+      technical_planning_complete: "{{ steps.technical_assessment.success }}"
+      team_assignment_complete: "{{ steps.assign_team.success }}"
+      approval_received: "{{ steps.approval_workflow.outputs.approved | default(false) }}"
+      kickoff_coordinated: "{{ steps.coordinate_kickoff.success | default(false) }}"
+      tracking_configured: "{{ steps.setup_implementation_tracking.success | default(false) }}"
+      qa_checkpoint_passed: "{{ steps.qa_checkpoint.outputs.qa_passed | default(false) }}"
+    
+    # Next steps
+    next_steps:
+      immediate_actions: |
+        {{
+          ['Start implementation execution', 'Monitor milestone progress', 'Conduct kickoff call'] 
+          if state.onboarding_stage == 'implementation_ready'
+          else ['Complete onboarding setup', 'Address QA issues'] 
+          if steps.qa_checkpoint.outputs.qa_issues | length > 0
+          else ['Await approval'] 
+          if not (steps.approval_workflow.outputs.approved | default(false))
+          else ['Continue onboarding process']
+        }}
+      
+      follow_up_schedule:
+        first_check_in: "{{ steps.coordinate_kickoff.outputs.kickoff_scheduled }}"
+        milestone_reviews: "Weekly during implementation"
+        satisfaction_survey: "{{ steps.initial_satisfaction_survey.outputs.follow_up_scheduled }}"
+        risk_assessment: "{{ 'Weekly' if steps.technical_assessment.outputs.identified_risks | length > 0 else 'Bi-weekly' }}"
+    
+    # ROI and efficiency metrics
+    efficiency_metrics:
+      automation_rate: |
+        {{
+          (
+            (1 if steps.validate_and_setup_crm.success else 0) +
+            (1 if inputs.auto_approve_standard and steps.approval_workflow.outputs.approved else 0) +
+            (1 if steps.setup_implementation_tracking.outputs.automated_reports else 0)
+          ) / 7 * 100 | round(1)
+        }}%
+      
+      manual_interventions: |
+        {{
+          (1 if not steps.approval_workflow.outputs.approved else 0) +
+          (steps.qa_checkpoint.outputs.qa_issues | length) +
+          (1 if state.escalation_level != 'none' else 0)
+        }}
+      
+      time_to_value_estimate: "{{ steps.technical_assessment.outputs.estimated_timeline }}"

@@ -1,0 +1,207 @@
+# Multi-step research workflow demonstrating agents, outputs, and variable interpolation
+version: "1.0"
+metadata:
+  name: research-workflow
+  description: Comprehensive research workflow with multiple agents and structured outputs
+  author: lacquer-team
+  tags:
+    - research
+    - multi-agent
+    - examples
+
+# Define specialized agents for different research tasks
+agents:
+  # Researcher agent with web search capabilities
+  researcher:
+    model: gpt-4
+    temperature: 0.3
+    system_prompt: |
+      You are a thorough researcher who:
+      - Finds credible, recent sources
+      - Cross-references information
+      - Identifies key insights and trends
+      - Cites all sources properly
+    tools:
+      - name: search_web
+        uses: lacquer/web-search@v1
+        config:
+          max_results: 5
+          safe_search: true
+  
+  # Analyst agent for deeper analysis
+  analyst:
+    model: gpt-4
+    temperature: 0.2
+    system_prompt: |
+      You are an analytical expert who:
+      - Identifies patterns and trends
+      - Provides data-driven insights
+      - Highlights important implications
+      - Makes evidence-based conclusions
+  
+  # Summarizer agent for final output
+  summarizer:
+    model: claude-3-opus
+    temperature: 0.5
+    system_prompt: |
+      You are a skilled summarizer who creates:
+      - Clear, concise summaries
+      - Well-structured content
+      - Key takeaways and actionable insights
+      - Executive-level briefings
+
+workflow:
+  inputs:
+    topic:
+      type: string
+      description: The research topic to investigate
+      required: true
+    
+    depth:
+      type: string
+      description: Research depth level
+      enum: ["basic", "detailed", "comprehensive"]
+      default: "detailed"
+    
+    format:
+      type: string
+      description: Output format preference
+      enum: ["executive-summary", "detailed-report", "bullet-points"]
+      default: "executive-summary"
+  
+  steps:
+    # Step 1: Initial research
+    - id: conduct_research
+      agent: researcher
+      prompt: |
+        Research the topic: {{ inputs.topic }}
+        
+        Research depth: {{ inputs.depth }}
+        
+        Please:
+        1. Search for recent information about this topic
+        2. Find at least 3-5 credible sources
+        3. Extract key facts, trends, and insights
+        4. Note any conflicting viewpoints
+        5. Identify important statistics or data points
+        
+        Focus on information from the last 12 months when possible.
+      outputs:
+        findings: string
+        sources: array
+        key_insights: array
+        statistics: array
+      timeout: 3m
+    
+    # Step 2: Analyze the research findings
+    - id: analyze_findings
+      agent: analyst
+      prompt: |
+        Analyze these research findings about {{ inputs.topic }}:
+        
+        Research Results:
+        {{ steps.conduct_research.outputs.findings }}
+        
+        Key Insights Found:
+        {{ steps.conduct_research.outputs.key_insights | join('\n- ') }}
+        
+        Please provide:
+        1. Pattern analysis - what trends do you see?
+        2. Significance assessment - what are the implications?
+        3. Gap identification - what information is missing?
+        4. Risk/opportunity analysis
+        5. Future outlook based on current trends
+      outputs:
+        analysis: string
+        trends: array
+        implications: array
+        recommendations: array
+        confidence_score: float
+    
+    # Step 3: Generate final summary based on format preference
+    - id: create_summary
+      agent: summarizer
+      prompt: |
+        Create a {{ inputs.format }} for the topic: {{ inputs.topic }}
+        
+        Based on this research:
+        {{ steps.conduct_research.outputs.findings }}
+        
+        And this analysis:
+        {{ steps.analyze_findings.outputs.analysis }}
+        
+        Key trends identified:
+        {{ steps.analyze_findings.outputs.trends | join('\n- ') }}
+        
+        Format requirements:
+        {% if inputs.format == "executive-summary" %}
+        - Executive-level overview (2-3 paragraphs)
+        - Key findings in bullet points
+        - Strategic recommendations
+        - Action items if applicable
+        {% elif inputs.format == "detailed-report" %}
+        - Comprehensive overview with sections
+        - Detailed findings with evidence
+        - Thorough analysis of implications
+        - Comprehensive recommendations
+        {% else %}
+        - Concise bullet points
+        - Key findings only
+        - Brief recommendations
+        {% endif %}
+        
+        Include confidence level: {{ steps.analyze_findings.outputs.confidence_score }}
+      outputs:
+        summary: string
+        word_count: integer
+    
+    # Optional step: Quality validation (only runs for comprehensive research)
+    - id: validate_quality
+      condition: "{{ inputs.depth == 'comprehensive' }}"
+      agent: analyst
+      prompt: |
+        Review this research summary for quality and completeness:
+        
+        Summary:
+        {{ steps.create_summary.outputs.summary }}
+        
+        Original sources:
+        {{ steps.conduct_research.outputs.sources | join('\n- ') }}
+        
+        Rate the quality (1-10) and identify any gaps or improvements needed.
+      outputs:
+        quality_score: integer
+        improvement_suggestions: array
+        is_complete: boolean
+  
+  # Workflow outputs with computed values
+  outputs:
+    # Main research summary
+    final_summary: "{{ steps.create_summary.outputs.summary }}"
+    
+    # Research metadata
+    sources_found: "{{ steps.conduct_research.outputs.sources }}"
+    key_insights: "{{ steps.conduct_research.outputs.key_insights }}"
+    trends_identified: "{{ steps.analyze_findings.outputs.trends }}"
+    recommendations: "{{ steps.analyze_findings.outputs.recommendations }}"
+    
+    # Quality metrics
+    confidence_score: "{{ steps.analyze_findings.outputs.confidence_score }}"
+    quality_score: "{{ steps.validate_quality.outputs.quality_score | default('Not assessed') }}"
+    
+    # Summary statistics
+    word_count: "{{ steps.create_summary.outputs.word_count }}"
+    research_depth: "{{ inputs.depth }}"
+    format_used: "{{ inputs.format }}"
+    
+    # Computed status
+    status: |
+      {{
+        'high-quality' if (steps.analyze_findings.outputs.confidence_score > 0.8 and 
+                          (steps.validate_quality.outputs.quality_score | default(8)) > 7)
+        else 'good' if steps.analyze_findings.outputs.confidence_score > 0.6
+        else 'needs-improvement'
+      }}
+    
+    # Research completion timestamp
+    completed_at: "{{ now() | strftime('%Y-%m-%d %H:%M:%S') }}"

@@ -1,0 +1,409 @@
+# Comprehensive error handling workflow with retries, fallbacks, and recovery
+version: "1.0"
+metadata:
+  name: error-handling-demo
+  description: Demonstrates robust error handling patterns and recovery strategies
+  author: lacquer-team
+
+agents:
+  primary_processor:
+    model: gpt-4
+    temperature: 0.3
+    system_prompt: You are a high-performance processor that sometimes encounters issues.
+  
+  backup_processor:
+    model: gpt-3.5-turbo
+    temperature: 0.5
+    system_prompt: You are a reliable backup processor with simpler but stable processing.
+  
+  error_analyzer:
+    model: gpt-4
+    temperature: 0.2
+    system_prompt: You analyze errors and recommend recovery strategies.
+  
+  validator:
+    model: gpt-4
+    temperature: 0.1
+    system_prompt: You validate results and ensure quality standards are met.
+
+workflow:
+  inputs:
+    data:
+      type: array
+      description: Data items to process
+      required: true
+    
+    error_simulation:
+      type: string
+      description: Simulate specific error types for testing
+      enum: ["none", "timeout", "validation", "rate_limit", "service_down"]
+      default: "none"
+    
+    retry_strategy:
+      type: string
+      description: Retry strategy to use
+      enum: ["aggressive", "conservative", "minimal"]
+      default: "conservative"
+
+  state:
+    error_count: 0
+    successful_count: 0
+    retry_attempts: {}
+    circuit_breaker:
+      status: "closed"  # closed, open, half_open
+      failure_count: 0
+      last_failure: null
+      threshold: 3
+      recovery_timeout: 300  # 5 minutes
+    fallback_used: false
+    errors_encountered: []
+
+  steps:
+    # Step 1: Primary processing with comprehensive error handling
+    - id: primary_processing
+      agent: primary_processor
+      prompt: |
+        Process these data items:
+        {{ inputs.data | json }}
+        
+        {% if inputs.error_simulation != "none" %}
+        SIMULATE ERROR: {{ inputs.error_simulation }}
+        {% endif %}
+        
+        Provide structured analysis and insights.
+      outputs:
+        results: array
+        processing_stats: object
+      
+      # Timeout configuration
+      timeout: 2m
+      
+      # Comprehensive retry configuration
+      retry:
+        max_attempts: |
+          {{
+            3 if inputs.retry_strategy == "minimal"
+            else 5 if inputs.retry_strategy == "conservative"
+            else 8
+          }}
+        
+        initial_delay: |
+          {{
+            10 if inputs.retry_strategy == "aggressive"
+            else 5 if inputs.retry_strategy == "conservative"  
+            else 2
+          }}s
+        
+        max_delay: 60s
+        backoff: exponential
+        backoff_multiplier: 2
+        
+        # Conditional retry logic
+        retry_condition: |
+          {{
+            error.code in ['timeout', 'rate_limit', 'service_unavailable'] or
+            error.type == 'temporary_failure'
+          }}
+        
+        # Actions on each retry
+        on_retry:
+          - action: update_state
+            updates:
+              retry_attempts: |
+                {{ state.retry_attempts | merge({
+                  'primary_processing': (state.retry_attempts.primary_processing | default(0)) + 1
+                }) }}
+          
+          - log: "Retry attempt {{ retry.attempt }} of {{ retry.max_attempts }} for primary processing"
+      
+      # Timeout-specific handling
+      on_timeout:
+        - log: "Primary processing timed out after 2 minutes"
+        - action: update_state
+          updates:
+            error_count: "{{ state.error_count + 1 }}"
+            errors_encountered: |
+              {{ state.errors_encountered + [{
+                'type': 'timeout',
+                'step': 'primary_processing',
+                'timestamp': now(),
+                'details': 'Processing exceeded 2 minute timeout'
+              }] }}
+        - fallback: backup_processing
+      
+      # General error handling
+      on_error:
+        - id: analyze_error
+          agent: error_analyzer
+          prompt: |
+            Analyze this processing error:
+            
+            Error Type: {{ error.type }}
+            Error Code: {{ error.code }}
+            Error Message: {{ error.message }}
+            Retry Attempts Made: {{ retry.attempt | default(0) }}
+            Input Data Size: {{ inputs.data | length }}
+            
+            Recommend recovery strategy and classify error severity.
+          outputs:
+            error_classification: string
+            severity: string
+            recovery_strategy: string
+            is_recoverable: boolean
+        
+        # Update circuit breaker state
+        - action: update_state
+          updates:
+            error_count: "{{ state.error_count + 1 }}"
+            circuit_breaker:
+              failure_count: "{{ state.circuit_breaker.failure_count + 1 }}"
+              last_failure: "{{ now() }}"
+              status: |
+                {{
+                  'open' if state.circuit_breaker.failure_count + 1 >= state.circuit_breaker.threshold
+                  else state.circuit_breaker.status
+                }}
+            errors_encountered: |
+              {{ state.errors_encountered + [{
+                'type': error.type,
+                'code': error.code,
+                'message': error.message,
+                'step': 'primary_processing',
+                'timestamp': now(),
+                'analysis': steps.analyze_error.outputs
+              }] }}
+        
+        # Route to fallback based on error analysis
+        - condition: "{{ steps.analyze_error.outputs.is_recoverable }}"
+          fallback: backup_processing
+        
+        # For non-recoverable errors, fail with context
+        - condition: "{{ not steps.analyze_error.outputs.is_recoverable }}"
+          fail: |
+            Non-recoverable error in primary processing:
+            {{ error.message }}
+            Analysis: {{ steps.analyze_error.outputs.error_classification }}
+    
+    # Step 2: Backup processing (fallback strategy)
+    - id: backup_processing
+      # Only run if primary failed or was skipped
+      skip_if: "{{ steps.primary_processing.success }}"
+      agent: backup_processor
+      prompt: |
+        Backup processing for data items:
+        {{ inputs.data | json }}
+        
+        Primary processing failed. Using simplified but reliable approach.
+        Ensure basic processing goals are met.
+      outputs:
+        results: array
+        processing_method: string
+      
+      timeout: 5m  # Longer timeout for backup
+      
+      retry:
+        max_attempts: 2  # Fewer retries for backup
+        initial_delay: 2s
+        backoff: linear
+      
+      on_success:
+        - action: update_state
+          updates:
+            fallback_used: true
+            successful_count: "{{ state.successful_count + 1 }}"
+      
+      on_error:
+        - log: "Backup processing also failed: {{ error.message }}"
+        - action: update_state
+          updates:
+            errors_encountered: |
+              {{ state.errors_encountered + [{
+                'type': error.type,
+                'step': 'backup_processing',
+                'timestamp': now(),
+                'message': error.message
+              }] }}
+        
+        # Last resort: return partial results
+        - id: emergency_processing
+          agent: backup_processor
+          prompt: |
+            Emergency processing mode. Extract whatever insights possible from:
+            {{ inputs.data[:3] | json }}  # Process only first 3 items
+            
+            Return best-effort results even if incomplete.
+          outputs:
+            emergency_results: array
+            completeness: float
+    
+    # Step 3: Circuit breaker check for dependent operations
+    - id: dependent_processing
+      # Check circuit breaker state
+      condition: |
+        {{
+          state.circuit_breaker.status == 'closed' or
+          (state.circuit_breaker.status == 'open' and 
+           (now() - state.circuit_breaker.last_failure) > state.circuit_breaker.recovery_timeout)
+        }}
+      
+      agent: primary_processor
+      prompt: |
+        Perform dependent processing on results:
+        {{ steps.backup_processing.outputs.results | default(steps.primary_processing.outputs.results) | json }}
+        
+        Circuit breaker status: {{ state.circuit_breaker.status }}
+      outputs:
+        dependent_results: array
+      
+      on_success:
+        # Reset circuit breaker on success
+        - condition: "{{ state.circuit_breaker.status == 'open' }}"
+          action: update_state
+          updates:
+            circuit_breaker:
+              status: "closed"
+              failure_count: 0
+              last_failure: null
+      
+      on_error:
+        - log: "Dependent processing failed, circuit breaker may open"
+        - condition: "{{ state.circuit_breaker.status == 'open' }}"
+          log: "Circuit breaker is open, skipping dependent operations"
+    
+    # Step 4: Validation with error recovery
+    - id: validate_results
+      agent: validator
+      prompt: |
+        Validate processing results:
+        
+        Primary Results: {{ steps.primary_processing.outputs.results | default('N/A') }}
+        Backup Results: {{ steps.backup_processing.outputs.results | default('N/A') }}
+        Emergency Results: {{ steps.emergency_processing.outputs.emergency_results | default('N/A') }}
+        Dependent Results: {{ steps.dependent_processing.outputs.dependent_results | default('N/A') }}
+        
+        Check for:
+        1. Data completeness
+        2. Result consistency
+        3. Quality standards
+        4. Error indicators
+      outputs:
+        is_valid: boolean
+        validation_score: float
+        issues_found: array
+        recommendations: array
+      
+      on_error:
+        - log: "Validation itself failed: {{ error.message }}"
+        - output:
+            is_valid: false
+            validation_score: 0.0
+            issues_found: ["Validation process failed"]
+            recommendations: ["Manual review required"]
+    
+    # Step 5: Error reporting and recovery recommendations
+    - id: error_summary
+      condition: "{{ state.error_count > 0 or not steps.validate_results.outputs.is_valid }}"
+      agent: error_analyzer
+      prompt: |
+        Generate comprehensive error summary:
+        
+        Total Errors: {{ state.error_count }}
+        Successful Operations: {{ state.successful_count }}
+        Fallback Used: {{ state.fallback_used }}
+        Circuit Breaker Status: {{ state.circuit_breaker.status }}
+        
+        Error Details:
+        {{ state.errors_encountered | json }}
+        
+        Validation Results:
+        Valid: {{ steps.validate_results.outputs.is_valid }}
+        Score: {{ steps.validate_results.outputs.validation_score }}
+        Issues: {{ steps.validate_results.outputs.issues_found | join(', ') }}
+        
+        Provide:
+        1. Root cause analysis
+        2. Impact assessment
+        3. Recovery recommendations
+        4. Prevention strategies
+      outputs:
+        root_cause_analysis: string
+        impact_assessment: string
+        recovery_plan: array
+        prevention_strategies: array
+    
+    # Step 6: Compensation pattern - cleanup on errors
+    - id: cleanup_on_error
+      condition: "{{ state.error_count > 2 }}"
+      agent: primary_processor
+      prompt: |
+        Perform cleanup operations due to multiple errors:
+        
+        Error count: {{ state.error_count }}
+        Failed operations: {{ state.errors_encountered | map(attribute='step') | unique | list }}
+        
+        Clean up any partial states or resources.
+      outputs:
+        cleanup_actions: array
+        resources_freed: array
+
+  outputs:
+    # Processing results (with fallback hierarchy)
+    final_results: |
+      {{
+        steps.primary_processing.outputs.results |
+        default(steps.backup_processing.outputs.results |
+        default(steps.emergency_processing.outputs.emergency_results |
+        default([])))
+      }}
+    
+    # Processing metadata
+    processing_method: |
+      {{
+        'primary' if steps.primary_processing.success
+        else 'backup' if steps.backup_processing.success
+        else 'emergency' if steps.emergency_processing.outputs
+        else 'failed'
+      }}
+    
+    # Error statistics
+    error_summary:
+      total_errors: "{{ state.error_count }}"
+      successful_operations: "{{ state.successful_count }}"
+      fallback_used: "{{ state.fallback_used }}"
+      retry_attempts: "{{ state.retry_attempts }}"
+      circuit_breaker_status: "{{ state.circuit_breaker.status }}"
+    
+    # Quality metrics
+    validation_results: "{{ steps.validate_results.outputs }}"
+    
+    # Error details
+    errors_encountered: "{{ state.errors_encountered }}"
+    
+    # Recovery information
+    recovery_info: "{{ steps.error_summary.outputs | default({}) }}"
+    
+    # Cleanup actions
+    cleanup_performed: "{{ steps.cleanup_on_error.outputs | default({}) }}"
+    
+    # Overall status
+    workflow_status: |
+      {{
+        'success' if steps.validate_results.outputs.is_valid and state.error_count == 0
+        else 'success_with_fallback' if steps.validate_results.outputs.is_valid and state.fallback_used
+        else 'partial_success' if steps.emergency_processing.outputs
+        else 'failed'
+      }}
+    
+    # Recommendations for next run
+    recommendations: |
+      {{
+        (steps.error_summary.outputs.recovery_plan | default([])) +
+        (steps.validate_results.outputs.recommendations | default([]))
+      }}
+    
+    # Performance impact of errors
+    performance_impact:
+      expected_processing_time: "120s"  # Normal processing time
+      actual_processing_time: "{{ (now() - workflow.start_time) | total_seconds }}s"
+      overhead_from_errors: "{{ ((now() - workflow.start_time) | total_seconds) - 120 }}s"
+      efficiency: "{{ (120 / ((now() - workflow.start_time) | total_seconds)) * 100 | round(1) }}%"

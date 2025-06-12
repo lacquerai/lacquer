@@ -1,0 +1,358 @@
+# Workflow demonstrating parallel execution, for-each loops, and result aggregation
+version: "1.0"
+metadata:
+  name: parallel-processing-demo
+  description: Shows various parallel processing patterns and result aggregation
+  author: lacquer-team
+
+agents:
+  analyzer:
+    model: gpt-4
+    temperature: 0.2
+    system_prompt: You analyze data and extract insights with high accuracy.
+  
+  processor:
+    model: gpt-4
+    temperature: 0.3
+    system_prompt: You process individual items efficiently and thoroughly.
+  
+  aggregator:
+    model: gpt-4
+    temperature: 0.1
+    system_prompt: You synthesize multiple results into coherent summaries.
+  
+  validator:
+    model: gpt-4
+    temperature: 0.1
+    system_prompt: You validate results and ensure quality standards.
+
+workflow:
+  inputs:
+    documents:
+      type: array
+      description: List of documents to process
+      required: true
+    
+    categories:
+      type: array
+      description: Analysis categories to apply
+      default: ["sentiment", "topics", "entities", "summary"]
+    
+    max_concurrency:
+      type: integer
+      description: Maximum parallel operations
+      default: 5
+    
+    quality_threshold:
+      type: float
+      description: Minimum quality score for results
+      default: 0.7
+
+  state:
+    processed_count: 0
+    total_documents: "{{ inputs.documents | length }}"
+    quality_issues: []
+
+  steps:
+    # Step 1: Basic parallel processing
+    - id: parallel_document_analysis
+      parallel:
+        # Process each document independently
+        for_each: "{{ inputs.documents }}"
+        as: document
+        index_as: doc_index
+        max_concurrency: "{{ inputs.max_concurrency }}"
+        steps:
+          - id: analyze_document
+            agent: analyzer
+            prompt: |
+              Analyze document {{ doc_index + 1 }} of {{ inputs.documents | length }}:
+              
+              Title: {{ document.title | default('Untitled') }}
+              Content: {{ document.content }}
+              
+              Provide analysis for these categories:
+              {{ inputs.categories | join(', ') }}
+              
+              Return structured results with confidence scores.
+            outputs:
+              analysis: object
+              confidence: float
+              category_scores: object
+          
+          # Update global state after each document
+          - id: update_progress
+            action: update_state
+            updates:
+              processed_count: "{{ state.processed_count + 1 }}"
+    
+    # Step 2: Parallel category-specific analysis
+    - id: category_deep_dive
+      parallel:
+        # Process each category across all documents
+        for_each: "{{ inputs.categories }}"
+        as: category
+        max_concurrency: 3
+        steps:
+          - id: category_analysis
+            agent: analyzer
+            prompt: |
+              Perform deep {{ category }} analysis across all {{ inputs.documents | length }} documents:
+              
+              Documents:
+              {% for doc in inputs.documents %}
+              {{ loop.index }}. {{ doc.title | default('Document ' + loop.index) }}
+                 Preview: {{ doc.content[:200] }}...
+              {% endfor %}
+              
+              Focus specifically on {{ category }} patterns and insights.
+              Provide category-wide trends and notable findings.
+            outputs:
+              category_insights: object
+              trends: array
+              notable_findings: array
+    
+    # Step 3: Map-Reduce pattern for comprehensive analysis
+    - id: comprehensive_insights
+      parallel:
+        # Map phase: process chunks of documents
+        map:
+          over: "{{ inputs.documents | batch(3) }}"  # Process in batches of 3
+          as: doc_batch
+          index_as: batch_index
+          steps:
+            - id: batch_analysis
+              agent: analyzer
+              prompt: |
+                Analyze batch {{ batch_index + 1 }} containing {{ doc_batch | length }} documents:
+                
+                {% for doc in doc_batch %}
+                Document {{ loop.index }}:
+                Title: {{ doc.title | default('Untitled') }}
+                Content: {{ doc.content }}
+                
+                {% endfor %}
+                
+                Extract:
+                1. Common themes across this batch
+                2. Unique insights per document
+                3. Quality indicators
+                4. Relationship patterns
+              outputs:
+                batch_themes: array
+                document_insights: array
+                quality_scores: array
+                relationships: array
+        
+        # Reduce phase: aggregate all batch results
+        reduce:
+          agent: aggregator
+          prompt: |
+            Synthesize insights from {{ map_results | length }} batches:
+            
+            {% for batch_result in map_results %}
+            Batch {{ loop.index }} themes: {{ batch_result.batch_themes | join(', ') }}
+            Quality scores: {{ batch_result.quality_scores | join(', ') }}
+            
+            {% endfor %}
+            
+            Provide:
+            1. Overall themes across all documents
+            2. Quality distribution analysis
+            3. Key insights and patterns
+            4. Recommendations based on findings
+          outputs:
+            overall_themes: array
+            quality_distribution: object
+            key_insights: array
+            recommendations: array
+    
+    # Step 4: Quality validation in parallel
+    - id: parallel_quality_check
+      parallel:
+        for_each: "{{ steps.parallel_document_analysis.outputs }}"
+        as: result
+        index_as: result_index
+        steps:
+          - id: validate_result
+            agent: validator
+            prompt: |
+              Validate analysis result {{ result_index + 1 }}:
+              
+              Analysis: {{ result.analysis | json }}
+              Confidence: {{ result.confidence }}
+              Category scores: {{ result.category_scores | json }}
+              
+              Check for:
+              1. Completeness of analysis
+              2. Confidence score reliability
+              3. Category coverage
+              4. Logical consistency
+              
+              Quality threshold: {{ inputs.quality_threshold }}
+            outputs:
+              is_valid: boolean
+              quality_score: float
+              issues: array
+          
+          # Track quality issues in state
+          - id: track_quality_issues
+            condition: "{{ not steps.validate_result.outputs.is_valid }}"
+            action: update_state
+            updates:
+              quality_issues: |
+                {{ state.quality_issues + [{
+                  'document_index': result_index,
+                  'quality_score': steps.validate_result.outputs.quality_score,
+                  'issues': steps.validate_result.outputs.issues
+                }] }}
+    
+    # Step 5: Conditional parallel reprocessing
+    - id: reprocess_low_quality
+      condition: "{{ state.quality_issues | length > 0 }}"
+      parallel:
+        for_each: "{{ state.quality_issues }}"
+        as: quality_issue
+        max_concurrency: 3
+        steps:
+          - id: reprocess_document
+            agent: processor
+            prompt: |
+              Reprocess document {{ quality_issue.document_index + 1 }} due to quality issues:
+              
+              Original document: {{ inputs.documents[quality_issue.document_index].content }}
+              Quality score: {{ quality_issue.quality_score }}
+              Issues found: {{ quality_issue.issues | join(', ') }}
+              
+              Apply enhanced processing to address these specific issues.
+              Ensure quality meets threshold: {{ inputs.quality_threshold }}
+            outputs:
+              improved_analysis: object
+              new_confidence: float
+              improvements_made: array
+    
+    # Step 6: Final aggregation of all results
+    - id: aggregate_final_results
+      agent: aggregator
+      prompt: |
+        Aggregate all processing results:
+        
+        Document Analysis Results:
+        {{ steps.parallel_document_analysis.outputs | json }}
+        
+        Category Deep Dive:
+        {{ steps.category_deep_dive.outputs | json }}
+        
+        Comprehensive Insights:
+        {{ steps.comprehensive_insights.outputs | json }}
+        
+        Quality Validation:
+        Total documents: {{ state.total_documents }}
+        Quality issues: {{ state.quality_issues | length }}
+        
+        {% if steps.reprocess_low_quality.outputs %}
+        Reprocessing Results:
+        {{ steps.reprocess_low_quality.outputs | json }}
+        {% endif %}
+        
+        Create a comprehensive summary with:
+        1. Processing statistics
+        2. Quality metrics
+        3. Key findings across all analyses
+        4. Recommendations for future processing
+      outputs:
+        final_summary: string
+        processing_stats: object
+        quality_metrics: object
+        all_insights: array
+    
+    # Step 7: Generate parallel reports
+    - id: generate_reports
+      parallel:
+        steps:
+          # Executive summary
+          - id: executive_summary
+            agent: aggregator
+            prompt: |
+              Create an executive summary based on:
+              {{ steps.aggregate_final_results.outputs.final_summary }}
+              
+              Focus on high-level insights and business impact.
+            outputs:
+              summary: string
+          
+          # Technical report
+          - id: technical_report
+            agent: aggregator
+            prompt: |
+              Create a technical report with detailed analysis:
+              {{ steps.aggregate_final_results.outputs.all_insights | json }}
+              
+              Include methodology, confidence intervals, and technical details.
+            outputs:
+              report: string
+          
+          # Quality report
+          - id: quality_report
+            agent: validator
+            prompt: |
+              Generate quality assessment report:
+              
+              Processing stats: {{ steps.aggregate_final_results.outputs.processing_stats | json }}
+              Quality metrics: {{ steps.aggregate_final_results.outputs.quality_metrics | json }}
+              Issues found: {{ state.quality_issues | length }}
+              
+              Provide quality assessment and improvement recommendations.
+            outputs:
+              assessment: string
+
+  outputs:
+    # Main results
+    final_analysis: "{{ steps.aggregate_final_results.outputs.final_summary }}"
+    
+    # Processing statistics
+    documents_processed: "{{ state.total_documents }}"
+    quality_issues_found: "{{ state.quality_issues | length }}"
+    quality_pass_rate: |
+      {{ ((state.total_documents - state.quality_issues | length) / state.total_documents * 100) | round(1) }}%
+    
+    # Detailed results
+    category_insights: |
+      {{
+        steps.category_deep_dive.outputs | 
+        map(attribute='category_insights') | 
+        list
+      }}
+    
+    comprehensive_insights: "{{ steps.comprehensive_insights.outputs }}"
+    
+    # Quality metrics
+    quality_distribution: "{{ steps.aggregate_final_results.outputs.quality_metrics }}"
+    reprocessed_count: "{{ steps.reprocess_low_quality.outputs | length | default(0) }}"
+    
+    # Generated reports
+    reports:
+      executive: "{{ steps.generate_reports.outputs[0].summary }}"
+      technical: "{{ steps.generate_reports.outputs[1].report }}"
+      quality: "{{ steps.generate_reports.outputs[2].assessment }}"
+    
+    # Performance metrics
+    parallel_efficiency: |
+      {{
+        {
+          'total_documents': state.total_documents,
+          'max_concurrency_used': inputs.max_concurrency,
+          'batches_processed': (inputs.documents | length / 3) | round(0, 'ceil'),
+          'categories_analyzed': inputs.categories | length,
+          'parallel_operations': 
+            (inputs.documents | length) +  # Document analysis
+            (inputs.categories | length) +  # Category analysis
+            ((inputs.documents | length / 3) | round(0, 'ceil')) +  # Map-reduce batches
+            (state.quality_issues | length)  # Reprocessing
+        }
+      }}
+    
+    # Success indicators
+    processing_successful: "{{ state.quality_issues | length == 0 or steps.reprocess_low_quality.outputs is defined }}"
+    
+    recommendations: "{{ steps.aggregate_final_results.outputs.all_insights }}"
