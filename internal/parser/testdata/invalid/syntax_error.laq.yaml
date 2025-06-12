@@ -1,0 +1,7 @@
+version: "1.0"
+workflow:
+  steps:
+    - id: test
+      agent: test_agent
+      prompt: "Unclosed quote
+      # This will cause a YAML syntax error

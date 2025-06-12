@@ -1,0 +1,5 @@
+workflow:
+  steps:
+    - id: test
+      agent: test_agent
+      prompt: "Missing version field"
