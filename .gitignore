@@ -140,3 +140,4 @@ kubeconfig
 
 # Agent directory (already in your git status)
 .agent/
+CLAUDE.md
