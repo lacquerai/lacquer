@@ -1,0 +1,33 @@
+version: "1.0"
+
+metadata:
+  name: "test-project"
+  description: "A basic Lacquer workflow"
+  author: "Your Name"
+
+agents:
+  assistant:
+    model: gpt-4
+    temperature: 0.7
+    system_prompt: "You are a helpful AI assistant."
+
+workflow:
+  inputs:
+    topic:
+      type: string
+      description: "The topic to discuss"
+      required: true
+      default: "AI and automation"
+
+  steps:
+    - id: greet
+      agent: assistant
+      prompt: "Hello! Let's talk about {{inputs.topic}}. Give me a brief overview."
+      
+    - id: elaborate
+      agent: assistant
+      prompt: "That's interesting! Can you elaborate on the key benefits of {{inputs.topic}}?"
+
+  outputs:
+    greeting: "{{steps.greet.response}}"
+    elaboration: "{{steps.elaborate.response}}"

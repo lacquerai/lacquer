@@ -1,0 +1,23 @@
+# Lacquer Configuration File
+# This file contains default settings for your Lacquer project
+
+# Logging configuration
+log_level: info
+
+# Output format (text, json, yaml)
+output: text
+
+# Default model configuration
+defaults:
+  model: gpt-4
+  temperature: 0.7
+  max_tokens: 2000
+
+# Environment variables to load
+env_files:
+  - .env
+  - .env.local
+
+# API keys and secrets (use environment variables)
+# openai_api_key: ${OPENAI_API_KEY}
+# anthropic_api_key: ${ANTHROPIC_API_KEY}
