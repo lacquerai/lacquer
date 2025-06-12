@@ -1,0 +1,438 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.lacquer.ai/v1.0/workflow.json",
+  "title": "Lacquer Workflow",
+  "description": "Schema for Lacquer .laq.yaml workflow files",
+  "type": "object",
+  "required": ["version", "workflow"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Lacquer DSL version (currently only 1.0 is supported)"
+    },
+    "metadata": {
+      "$ref": "#/definitions/metadata"
+    },
+    "agents": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z][a-zA-Z0-9_]*$": {
+          "$ref": "#/definitions/agent"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Named agent definitions for reuse in workflow steps"
+    },
+    "workflow": {
+      "$ref": "#/definitions/workflowDef"
+    }
+  },
+  "definitions": {
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Workflow name in kebab-case format"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the workflow"
+        },
+        "author": {
+          "type": "string",
+          "description": "Author name or email address"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tags for categorizing and searching workflows"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+          "description": "Workflow version following semantic versioning"
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": ["model"]
+        },
+        {
+          "required": ["uses"]
+        }
+      ],
+      "properties": {
+        "model": {
+          "type": "string",
+          "enum": [
+            "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo",
+            "claude-3-opus", "claude-3-sonnet", "claude-3-haiku",
+            "gemini-pro", "gemini-pro-vision"
+          ],
+          "description": "AI model to use for this agent"
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "description": "Controls randomness in responses (0.0-2.0)"
+        },
+        "system_prompt": {
+          "type": "string",
+          "description": "System prompt that defines the agent's behavior and expertise"
+        },
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum tokens in the response"
+        },
+        "top_p": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Alternative to temperature for controlling randomness"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/tool"
+          },
+          "description": "Tools available to the agent"
+        },
+        "uses": {
+          "type": "string",
+          "pattern": "^(lacquer/[a-z0-9-]+(@v[0-9]+(\\.[0-9]+)*(\\.[0-9]+)?)?|github\\.com/[^/]+/[^/]+(@[^/]+)?|\\./[^/]+)$",
+          "description": "Reference to a pre-built agent block"
+        },
+        "with": {
+          "type": "object",
+          "description": "Parameters for the pre-built agent"
+        },
+        "policies": {
+          "$ref": "#/definitions/agentPolicies"
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": ["uses"]
+        },
+        {
+          "required": ["script"]
+        },
+        {
+          "required": ["mcp_server"]
+        }
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
+          "description": "Tool name (valid identifier)"
+        },
+        "uses": {
+          "type": "string",
+          "pattern": "^lacquer/[a-z0-9-]+@v[0-9]+(\\.[0-9]+)*(\\.[0-9]+)?$",
+          "description": "Official Lacquer tool reference"
+        },
+        "script": {
+          "type": "string",
+          "description": "Local script path or inline script"
+        },
+        "mcp_server": {
+          "type": "string",
+          "description": "MCP server reference"
+        },
+        "config": {
+          "type": "object",
+          "description": "Tool-specific configuration"
+        }
+      }
+    },
+    "agentPolicies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
+          "description": "Duration in Go format (e.g., 30s, 5m, 1h)"
+        },
+        "require_human_approval": {
+          "type": "boolean"
+        },
+        "cost_limit": {
+          "type": "string",
+          "pattern": "^\\$[0-9]+(\\.[0-9]{2})?$",
+          "description": "Cost limit in dollars (e.g., $5.00)"
+        }
+      }
+    },
+    "workflowDef": {
+      "type": "object",
+      "required": ["steps"],
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z][a-zA-Z0-9_]*$": {
+              "$ref": "#/definitions/inputParam"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Input parameters for the workflow"
+        },
+        "state": {
+          "type": "object",
+          "description": "Initial workflow state variables"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/step"
+          },
+          "description": "Workflow execution steps"
+        },
+        "outputs": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z][a-zA-Z0-9_]*$": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "description": "Workflow output mappings (can be strings or complex expressions)"
+        }
+      }
+    },
+    "inputParam": {
+      "type": "object",
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": ["string", "integer", "boolean", "array", "object"]
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["string", "integer", "boolean", "array", "object"]
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean",
+              "default": false
+            },
+            "default": {
+              "description": "Default value for the parameter"
+            },
+            "pattern": {
+              "type": "string",
+              "description": "Regex pattern for string validation"
+            },
+            "minimum": {
+              "type": "number",
+              "description": "Minimum value for numeric types"
+            },
+            "maximum": {
+              "type": "number",
+              "description": "Maximum value for numeric types"
+            },
+            "min_items": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Minimum items for array type"
+            },
+            "max_items": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Maximum items for array type"
+            },
+            "enum": {
+              "type": "array",
+              "description": "Allowed values for string parameters"
+            }
+          }
+        }
+      ]
+    },
+    "step": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": ["agent", "prompt"]
+        },
+        {
+          "required": ["uses"]
+        },
+        {
+          "required": ["action"]
+        }
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
+          "description": "Unique step identifier"
+        },
+        "agent": {
+          "type": "string",
+          "description": "Agent name to use for this step"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Prompt template for the agent"
+        },
+        "uses": {
+          "type": "string",
+          "pattern": "^(lacquer/[a-z0-9-]+(@v[0-9]+(\\.[0-9]+)*(\\.[0-9]+)?)?|github\\.com/[^/]+/[^/]+(@[^/]+)?|\\./[^/]+)$",
+          "description": "Reference to a reusable block"
+        },
+        "with": {
+          "type": "object",
+          "description": "Parameters for the block"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["human_input", "update_state"],
+          "description": "System action to perform"
+        },
+        "condition": {
+          "type": "string",
+          "description": "Condition for conditional execution"
+        },
+        "skip_if": {
+          "type": "string",
+          "description": "Condition to skip this step"
+        },
+        "outputs": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z][a-zA-Z0-9_]*$": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "array"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "description": "Named outputs from this step"
+        },
+        "timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
+          "description": "Step execution timeout"
+        },
+        "retry": {
+          "$ref": "#/definitions/retryConfig"
+        },
+        "on_error": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/errorHandler"
+          },
+          "description": "Error handling strategies"
+        }
+      }
+    },
+    "retryConfig": {
+      "type": "object",
+      "required": ["max_attempts"],
+      "additionalProperties": false,
+      "properties": {
+        "max_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of retry attempts"
+        },
+        "backoff": {
+          "type": "string",
+          "enum": ["linear", "exponential"],
+          "default": "exponential",
+          "description": "Backoff strategy for retries"
+        },
+        "initial_delay": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
+          "description": "Initial delay before first retry"
+        },
+        "max_delay": {
+          "type": "string",
+          "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)$",
+          "description": "Maximum delay between retries"
+        }
+      }
+    },
+    "errorHandler": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "log": {
+          "type": "string",
+          "description": "Log message template"
+        },
+        "fallback": {
+          "type": "string",
+          "description": "Fallback step to execute"
+        },
+        "output": {
+          "type": "object",
+          "description": "Output values to set on error"
+        },
+        "return": {
+          "type": "object",
+          "description": "Return values to end workflow"
+        }
+      }
+    }
+  }
+}
