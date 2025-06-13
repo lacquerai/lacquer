@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lacquer/lacquer/internal/ast"
@@ -370,20 +371,16 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error 
 		if step.Updates != nil {
 			updates := make(map[string]interface{})
 			for key, value := range step.Updates {
-				if strValue, ok := value.(string); ok {
-					rendered, renderErr := e.templateEngine.Render(strValue, execCtx)
-					if renderErr != nil {
-						log.Warn().
-							Err(renderErr).
-							Str("step_id", step.ID).
-							Str("key", key).
-							Msg("Failed to render state update value")
-						updates[key] = value
-					} else {
-						updates[key] = rendered
-					}
-				} else {
+				rendered, renderErr := e.renderValueRecursively(value, execCtx)
+				if renderErr != nil {
+					log.Warn().
+						Err(renderErr).
+						Str("step_id", step.ID).
+						Str("key", key).
+						Msg("Failed to render state update value")
 					updates[key] = value
+				} else {
+					updates[key] = rendered
 				}
 			}
 			execCtx.UpdateState(updates)
@@ -408,10 +405,10 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 	// Build dependency graph
 	dependencies := e.buildDependencyGraph(steps)
 	
-	// Track step completion and execution
-	completed := make(map[string]bool)
-	executing := make(map[string]bool)
-	stepErrors := make(map[string]error)
+	// Track step completion and execution using sync.Map for thread safety
+	var completed sync.Map
+	var executing sync.Map
+	var stepErrors sync.Map
 	
 	// Channel to limit concurrent executions
 	semaphore := make(chan struct{}, e.config.MaxConcurrentSteps)
@@ -420,28 +417,48 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 	stepDone := make(chan string, len(steps))
 	
 	// Execute steps
-	for len(completed)+len(stepErrors) < len(steps) {
+	for {
+		completedCount := 0
+		completed.Range(func(key, value interface{}) bool {
+			completedCount++
+			return true
+		})
+		errorCount := 0
+		stepErrors.Range(func(key, value interface{}) bool {
+			errorCount++
+			return true
+		})
+		
+		if completedCount+errorCount >= len(steps) {
+			break
+		}
 		if execCtx.IsCancelled() {
 			return execCtx.Context.Err()
 		}
 
 		// Find steps that are ready to execute (dependencies satisfied)
-		readySteps := e.findReadySteps(steps, dependencies, completed, executing, stepErrors)
+		readySteps := e.findReadySteps(steps, dependencies, &completed, &executing, &stepErrors)
 		
 		if len(readySteps) == 0 {
 			// Check if we have any steps currently executing
 			hasExecutingSteps := false
-			for _, isExecuting := range executing {
-				if isExecuting {
+			executing.Range(func(key, value interface{}) bool {
+				if value.(bool) {
 					hasExecutingSteps = true
-					break
+					return false // Stop iteration
 				}
-			}
+				return true
+			})
 			
 			if !hasExecutingSteps {
 				// No steps are executing and none are ready
 				// Check if there are steps that can't proceed due to failed dependencies
-				if len(stepErrors) > 0 {
+				hasErrors := false
+				stepErrors.Range(func(key, value interface{}) bool {
+					hasErrors = true
+					return false // Stop iteration
+				})
+				if hasErrors {
 					// Some steps failed, so dependent steps can't proceed
 					break
 				}
@@ -462,12 +479,14 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 
 		// Launch ready steps concurrently
 		for _, step := range readySteps {
-			if completed[step.ID] || executing[step.ID] {
+			_, isCompleted := completed.Load(step.ID)
+			_, isExecuting := executing.Load(step.ID)
+			if isCompleted || isExecuting {
 				continue // Skip already completed or executing steps
 			}
 			
 			// Mark as executing
-			executing[step.ID] = true
+			executing.Store(step.ID, true)
 			
 			// Acquire semaphore
 			semaphore <- struct{}{}
@@ -482,18 +501,18 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 
 				err := e.executeStep(execCtx, s)
 				if err != nil {
-					stepErrors[s.ID] = err
+					stepErrors.Store(s.ID, err)
 					log.Error().
 						Err(err).
 						Str("run_id", execCtx.RunID).
 						Str("step_id", s.ID).
 						Msg("Step execution failed")
 				} else {
-					completed[s.ID] = true
+					completed.Store(s.ID, true)
 				}
 				
 				// Clear executing flag
-				executing[s.ID] = false
+				executing.Store(s.ID, false)
 				
 				// Notify completion
 				stepDone <- s.ID
@@ -645,16 +664,18 @@ func (e *Executor) extractStepReferences(template string, validStepIDs map[strin
 }
 
 // findReadySteps finds steps that have all their dependencies satisfied
-func (e *Executor) findReadySteps(steps []*ast.Step, dependencies map[string][]string, completed map[string]bool, executing map[string]bool, stepErrors map[string]error) []*ast.Step {
+func (e *Executor) findReadySteps(steps []*ast.Step, dependencies map[string][]string, completed *sync.Map, executing *sync.Map, stepErrors *sync.Map) []*ast.Step {
 	var ready []*ast.Step
 	
 	for _, step := range steps {
-		if completed[step.ID] || executing[step.ID] {
+		_, isCompleted := completed.Load(step.ID)
+		_, isExecuting := executing.Load(step.ID)
+		if isCompleted || isExecuting {
 			continue // Already completed or executing
 		}
 		
 		// Skip failed steps
-		if _, hasFailed := stepErrors[step.ID]; hasFailed {
+		if _, hasFailed := stepErrors.Load(step.ID); hasFailed {
 			continue
 		}
 		
@@ -668,7 +689,7 @@ func (e *Executor) findReadySteps(steps []*ast.Step, dependencies map[string][]s
 		
 		allDepsSatisfied := true
 		for _, dep := range deps {
-			if !completed[dep] {
+			if _, isDepCompleted := completed.Load(dep); !isDepCompleted {
 				allDepsSatisfied = false
 				break
 			}
@@ -753,15 +774,11 @@ func (e *Executor) executeActionStep(execCtx *ExecutionContext, step *ast.Step) 
 		// Render update values using templates
 		updates := make(map[string]interface{})
 		for key, value := range step.Updates {
-			if strValue, ok := value.(string); ok {
-				rendered, err := e.templateEngine.Render(strValue, execCtx)
-				if err != nil {
-					return nil, fmt.Errorf("failed to render update value for %s: %w", key, err)
-				}
-				updates[key] = rendered
-			} else {
-				updates[key] = value
+			rendered, err := e.renderValueRecursively(value, execCtx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to render update value for %s: %w", key, err)
 			}
+			updates[key] = rendered
 		}
 		
 		execCtx.UpdateState(updates)
@@ -835,6 +852,40 @@ func (e *Executor) validateInputs(workflow *ast.Workflow, inputs map[string]inte
 	}
 
 	return nil
+}
+
+// renderValueRecursively renders template variables in nested structures
+func (e *Executor) renderValueRecursively(value interface{}, execCtx *ExecutionContext) (interface{}, error) {
+	switch v := value.(type) {
+	case string:
+		// Render template strings
+		return e.templateEngine.Render(v, execCtx)
+	case map[string]interface{}:
+		// Recursively render nested maps
+		rendered := make(map[string]interface{})
+		for key, val := range v {
+			renderedVal, err := e.renderValueRecursively(val, execCtx)
+			if err != nil {
+				return nil, err
+			}
+			rendered[key] = renderedVal
+		}
+		return rendered, nil
+	case []interface{}:
+		// Recursively render arrays
+		rendered := make([]interface{}, len(v))
+		for i, val := range v {
+			renderedVal, err := e.renderValueRecursively(val, execCtx)
+			if err != nil {
+				return nil, err
+			}
+			rendered[i] = renderedVal
+		}
+		return rendered, nil
+	default:
+		// Return other types as-is (numbers, booleans, etc.)
+		return value, nil
+	}
 }
 
 // getKeys returns the keys of a map as a slice

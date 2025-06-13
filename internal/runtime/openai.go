@@ -37,38 +37,38 @@ type OpenAIConfig struct {
 
 // OpenAIRequest represents a request to the OpenAI API
 type OpenAIRequest struct {
-	Model            string                    `json:"model"`
-	Messages         []OpenAIMessage           `json:"messages"`
-	MaxTokens        *int                      `json:"max_tokens,omitempty"`
-	Temperature      *float64                  `json:"temperature,omitempty"`
-	TopP             *float64                  `json:"top_p,omitempty"`
-	N                int                       `json:"n,omitempty"`
-	Stream           bool                      `json:"stream,omitempty"`
-	Stop             []string                  `json:"stop,omitempty"`
-	PresencePenalty  *float64                  `json:"presence_penalty,omitempty"`
-	FrequencyPenalty *float64                  `json:"frequency_penalty,omitempty"`
-	LogitBias        map[string]float64        `json:"logit_bias,omitempty"`
-	User             string                    `json:"user,omitempty"`
-	Tools            []OpenAITool              `json:"tools,omitempty"`
-	ToolChoice       interface{}               `json:"tool_choice,omitempty"`
-	ResponseFormat   *OpenAIResponseFormat     `json:"response_format,omitempty"`
-	Seed             *int                      `json:"seed,omitempty"`
+	Model            string                `json:"model"`
+	Messages         []OpenAIMessage       `json:"messages"`
+	MaxTokens        *int                  `json:"max_tokens,omitempty"`
+	Temperature      *float64              `json:"temperature,omitempty"`
+	TopP             *float64              `json:"top_p,omitempty"`
+	N                int                   `json:"n,omitempty"`
+	Stream           bool                  `json:"stream,omitempty"`
+	Stop             []string              `json:"stop,omitempty"`
+	PresencePenalty  *float64              `json:"presence_penalty,omitempty"`
+	FrequencyPenalty *float64              `json:"frequency_penalty,omitempty"`
+	LogitBias        map[string]float64    `json:"logit_bias,omitempty"`
+	User             string                `json:"user,omitempty"`
+	Tools            []OpenAITool          `json:"tools,omitempty"`
+	ToolChoice       interface{}           `json:"tool_choice,omitempty"`
+	ResponseFormat   *OpenAIResponseFormat `json:"response_format,omitempty"`
+	Seed             *int                  `json:"seed,omitempty"`
 }
 
 // OpenAIMessage represents a message in the OpenAI API format
 type OpenAIMessage struct {
-	Role         string                 `json:"role"`
-	Content      string                 `json:"content"`
-	Name         string                 `json:"name,omitempty"`
-	ToolCalls    []OpenAIToolCall       `json:"tool_calls,omitempty"`
-	ToolCallID   string                 `json:"tool_call_id,omitempty"`
-	FunctionCall *OpenAIFunctionCall    `json:"function_call,omitempty"`
+	Role         string              `json:"role"`
+	Content      string              `json:"content"`
+	Name         string              `json:"name,omitempty"`
+	ToolCalls    []OpenAIToolCall    `json:"tool_calls,omitempty"`
+	ToolCallID   string              `json:"tool_call_id,omitempty"`
+	FunctionCall *OpenAIFunctionCall `json:"function_call,omitempty"`
 }
 
 // OpenAITool represents a tool/function definition
 type OpenAITool struct {
-	Type     string                `json:"type"`
-	Function *OpenAIFunctionDef    `json:"function,omitempty"`
+	Type     string             `json:"type"`
+	Function *OpenAIFunctionDef `json:"function,omitempty"`
 }
 
 // OpenAIFunctionDef represents a function definition
@@ -98,21 +98,21 @@ type OpenAIResponseFormat struct {
 
 // OpenAIResponse represents the response from OpenAI API
 type OpenAIResponse struct {
-	ID                string                 `json:"id"`
-	Object            string                 `json:"object"`
-	Created           int64                  `json:"created"`
-	Model             string                 `json:"model"`
-	Choices           []OpenAIChoice         `json:"choices"`
-	Usage             OpenAIUsage            `json:"usage"`
-	SystemFingerprint string                 `json:"system_fingerprint,omitempty"`
+	ID                string         `json:"id"`
+	Object            string         `json:"object"`
+	Created           int64          `json:"created"`
+	Model             string         `json:"model"`
+	Choices           []OpenAIChoice `json:"choices"`
+	Usage             OpenAIUsage    `json:"usage"`
+	SystemFingerprint string         `json:"system_fingerprint,omitempty"`
 }
 
 // OpenAIChoice represents a choice in the response
 type OpenAIChoice struct {
-	Index        int                `json:"index"`
-	Message      OpenAIMessage      `json:"message"`
-	FinishReason string             `json:"finish_reason"`
-	LogProbs     *OpenAILogProbs    `json:"logprobs,omitempty"`
+	Index        int             `json:"index"`
+	Message      OpenAIMessage   `json:"message"`
+	FinishReason string          `json:"finish_reason"`
+	LogProbs     *OpenAILogProbs `json:"logprobs,omitempty"`
 }
 
 // OpenAILogProbs represents log probabilities
@@ -343,7 +343,7 @@ func (p *OpenAIProvider) makeAPICall(ctx context.Context, request *OpenAIRequest
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 		httpReq.Header.Set("User-Agent", p.config.UserAgent)
-		
+
 		if p.config.OrgID != "" {
 			httpReq.Header.Set("OpenAI-Organization", p.config.OrgID)
 		}
@@ -408,28 +408,28 @@ func (p *OpenAIProvider) calculateCost(model string, usage OpenAIUsage) float64 
 		prompt     float64
 		completion float64
 	}{
-		"gpt-4":                    {0.03, 0.06},
-		"gpt-4-0314":              {0.03, 0.06},
-		"gpt-4-0613":              {0.03, 0.06},
-		"gpt-4-32k":               {0.06, 0.12},
-		"gpt-4-32k-0314":          {0.06, 0.12},
-		"gpt-4-32k-0613":          {0.06, 0.12},
-		"gpt-4-turbo":             {0.01, 0.03},
-		"gpt-4-turbo-2024-04-09":  {0.01, 0.03},
-		"gpt-4-turbo-preview":     {0.01, 0.03},
-		"gpt-4-0125-preview":      {0.01, 0.03},
-		"gpt-4-1106-preview":      {0.01, 0.03},
-		"gpt-4o":                  {0.005, 0.015},
-		"gpt-4o-2024-05-13":       {0.005, 0.015},
-		"gpt-4o-mini":             {0.00015, 0.0006},
-		"gpt-4o-mini-2024-07-18":  {0.00015, 0.0006},
-		"gpt-3.5-turbo":           {0.0015, 0.002},
-		"gpt-3.5-turbo-0125":      {0.0005, 0.0015},
-		"gpt-3.5-turbo-1106":      {0.001, 0.002},
-		"gpt-3.5-turbo-0613":      {0.0015, 0.002},
-		"gpt-3.5-turbo-16k":       {0.003, 0.004},
-		"gpt-3.5-turbo-16k-0613":  {0.003, 0.004},
-		"gpt-3.5-turbo-instruct":  {0.0015, 0.002},
+		"gpt-4":                  {0.03, 0.06},
+		"gpt-4-0314":             {0.03, 0.06},
+		"gpt-4-0613":             {0.03, 0.06},
+		"gpt-4-32k":              {0.06, 0.12},
+		"gpt-4-32k-0314":         {0.06, 0.12},
+		"gpt-4-32k-0613":         {0.06, 0.12},
+		"gpt-4-turbo":            {0.01, 0.03},
+		"gpt-4-turbo-2024-04-09": {0.01, 0.03},
+		"gpt-4-turbo-preview":    {0.01, 0.03},
+		"gpt-4-0125-preview":     {0.01, 0.03},
+		"gpt-4-1106-preview":     {0.01, 0.03},
+		"gpt-4o":                 {0.005, 0.015},
+		"gpt-4o-2024-05-13":      {0.005, 0.015},
+		"gpt-4o-mini":            {0.00015, 0.0006},
+		"gpt-4o-mini-2024-07-18": {0.00015, 0.0006},
+		"gpt-3.5-turbo":          {0.0015, 0.002},
+		"gpt-3.5-turbo-0125":     {0.0005, 0.0015},
+		"gpt-3.5-turbo-1106":     {0.001, 0.002},
+		"gpt-3.5-turbo-0613":     {0.0015, 0.002},
+		"gpt-3.5-turbo-16k":      {0.003, 0.004},
+		"gpt-3.5-turbo-16k-0613": {0.003, 0.004},
+		"gpt-3.5-turbo-instruct": {0.0015, 0.002},
 	}
 
 	cost, exists := costs[model]
