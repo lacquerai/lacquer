@@ -125,10 +125,8 @@ func validateWorkflows(args []string) {
 				if showAll {
 					Success(fmt.Sprintf("%s (%v)", file, result.Duration))
 				}
-			} else {
-				// Just show the file name and status, detailed errors will be shown in summary
-				Error(fmt.Sprintf("%s (%v)", file, result.Duration))
 			}
+			// Invalid results will be shown in the detailed summary section
 		}
 	}
 
