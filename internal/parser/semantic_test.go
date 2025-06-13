@@ -170,7 +170,7 @@ func TestSemanticValidator_ValidateWorkflow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			validator := NewSemanticValidator(true)
+			validator := NewSemanticValidator()
 			result := validator.ValidateWorkflow(tt.workflow)
 
 			if tt.wantErr {
@@ -186,7 +186,7 @@ func TestSemanticValidator_ValidateWorkflow(t *testing.T) {
 }
 
 func TestSemanticValidator_ValidateStepDependencies(t *testing.T) {
-	validator := NewSemanticValidator(true)
+	validator := NewSemanticValidator()
 
 	t.Run("no circular dependencies", func(t *testing.T) {
 		workflow := &ast.Workflow{
@@ -262,7 +262,7 @@ func TestSemanticValidator_ValidateStepDependencies(t *testing.T) {
 }
 
 func TestSemanticValidator_ValidateVariableReferences(t *testing.T) {
-	validator := NewSemanticValidator(true)
+	validator := NewSemanticValidator()
 
 	t.Run("valid variable references", func(t *testing.T) {
 		workflow := &ast.Workflow{
@@ -331,7 +331,7 @@ func TestSemanticValidator_ValidateVariableReferences(t *testing.T) {
 }
 
 func TestSemanticValidator_ValidateBlockReferences(t *testing.T) {
-	validator := NewSemanticValidator(true)
+	validator := NewSemanticValidator()
 
 	tests := []struct {
 		name      string
@@ -404,7 +404,7 @@ func TestSemanticValidator_ValidateBlockReferences(t *testing.T) {
 }
 
 func TestSemanticValidator_ValidateControlFlow(t *testing.T) {
-	validator := NewSemanticValidator(true)
+	validator := NewSemanticValidator()
 
 	t.Run("balanced parentheses", func(t *testing.T) {
 		workflow := &ast.Workflow{
@@ -471,7 +471,7 @@ func TestSemanticValidator_ValidateControlFlow(t *testing.T) {
 }
 
 func TestSemanticValidator_ExtractVariableReferences(t *testing.T) {
-	validator := NewSemanticValidator(true)
+	validator := NewSemanticValidator()
 
 	tests := []struct {
 		name     string
@@ -514,7 +514,7 @@ func TestSemanticValidator_ExtractVariableReferences(t *testing.T) {
 }
 
 func TestSemanticValidator_ExtractStepDependencies(t *testing.T) {
-	validator := NewSemanticValidator(true)
+	validator := NewSemanticValidator()
 
 	step := &ast.Step{
 		ID:     "test-step",
@@ -533,7 +533,7 @@ func TestSemanticValidator_ExtractStepDependencies(t *testing.T) {
 }
 
 func TestSemanticValidator_HasCycle(t *testing.T) {
-	validator := NewSemanticValidator(true)
+	validator := NewSemanticValidator()
 
 	t.Run("no cycle", func(t *testing.T) {
 		dependencies := map[string][]string{
@@ -565,7 +565,7 @@ func TestSemanticValidator_HasCycle(t *testing.T) {
 }
 
 func TestSemanticValidator_BlockReferenceValidation(t *testing.T) {
-	validator := NewSemanticValidator(true)
+	validator := NewSemanticValidator()
 
 	tests := []struct {
 		name     string

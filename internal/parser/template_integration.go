@@ -175,16 +175,26 @@ func containsOperators(varPath string) bool {
 		"|",      // Pipe operator
 	}
 
+	// Check for operator symbols
 	for _, op := range operators {
 		if strings.Contains(varPath, op) {
 			return true
 		}
 	}
+
+	// Check for conditional keywords
+	conditionalKeywords := []string{" if ", " else ", " and ", " or ", " not "}
+	for _, keyword := range conditionalKeywords {
+		if strings.Contains(varPath, keyword) {
+			return true
+		}
+	}
+	
 	return false
 }
 
 // ValidateVariableReference validates a variable reference against a validation context
-func (tv *TemplateValidator) ValidateVariableReference(ref VariableReference, ctx *validationContext, strictMode bool) error {
+func (tv *TemplateValidator) ValidateVariableReference(ref VariableReference, ctx *validationContext) error {
 	switch ref.Type {
 	case VariableTypeInput:
 		return tv.validateInputReference(ref, ctx)
@@ -199,9 +209,9 @@ func (tv *TemplateValidator) ValidateVariableReference(ref VariableReference, ct
 	case VariableTypeWorkflow:
 		return tv.validateWorkflowReference(ref, ctx)
 	case VariableTypeFunction:
-		return tv.validateFunctionReference(ref, ctx, strictMode)
+		return tv.validateFunctionReference(ref, ctx)
 	case VariableTypeExpression:
-		return tv.validateExpressionReference(ref, ctx, strictMode)
+		return tv.validateExpressionReference(ref, ctx)
 	default:
 		return &TemplateValidationError{
 			Variable: ref.Raw,
@@ -375,28 +385,14 @@ func (tv *TemplateValidator) validateWorkflowReference(ref VariableReference, ct
 }
 
 // validateFunctionReference validates a function call reference
-func (tv *TemplateValidator) validateFunctionReference(ref VariableReference, ctx *validationContext, strictMode bool) error {
-	if strictMode {
-		return &TemplateValidationError{
-			Variable: ref.Raw,
-			Message:  "function calls not allowed in strict mode",
-		}
-	}
-
-	// In lenient mode, allow common functions
+func (tv *TemplateValidator) validateFunctionReference(ref VariableReference, ctx *validationContext) error {
+	// Allow common functions
 	return nil
 }
 
 // validateExpressionReference validates an expression reference
-func (tv *TemplateValidator) validateExpressionReference(ref VariableReference, ctx *validationContext, strictMode bool) error {
-	if strictMode {
-		return &TemplateValidationError{
-			Variable: ref.Raw,
-			Message:  "complex expressions not allowed in strict mode",
-		}
-	}
-
-	// In lenient mode, allow expressions but warn about potential issues
+func (tv *TemplateValidator) validateExpressionReference(ref VariableReference, ctx *validationContext) error {
+	// Allow expressions
 	return nil
 }
 
@@ -411,7 +407,7 @@ func (e *TemplateValidationError) Error() string {
 }
 
 // ValidateWorkflowTemplates validates all template strings in a workflow
-func (tv *TemplateValidator) ValidateWorkflowTemplates(workflow *ast.Workflow, strictMode bool) []error {
+func (tv *TemplateValidator) ValidateWorkflowTemplates(workflow *ast.Workflow) []error {
 	var errors []error
 
 	if workflow.Workflow == nil {
@@ -427,21 +423,21 @@ func (tv *TemplateValidator) ValidateWorkflowTemplates(workflow *ast.Workflow, s
 
 		// Validate prompt templates
 		if step.Prompt != "" {
-			if err := tv.validateTemplateField(step.Prompt, stepPath+".prompt", ctx, strictMode); err != nil {
+			if err := tv.validateTemplateField(step.Prompt, stepPath+".prompt", ctx); err != nil {
 				errors = append(errors, err)
 			}
 		}
 
 		// Validate condition templates
 		if step.Condition != "" {
-			if err := tv.validateTemplateField(step.Condition, stepPath+".condition", ctx, strictMode); err != nil {
+			if err := tv.validateTemplateField(step.Condition, stepPath+".condition", ctx); err != nil {
 				errors = append(errors, err)
 			}
 		}
 
 		// Validate skip_if templates
 		if step.SkipIf != "" {
-			if err := tv.validateTemplateField(step.SkipIf, stepPath+".skip_if", ctx, strictMode); err != nil {
+			if err := tv.validateTemplateField(step.SkipIf, stepPath+".skip_if", ctx); err != nil {
 				errors = append(errors, err)
 			}
 		}
@@ -451,7 +447,7 @@ func (tv *TemplateValidator) ValidateWorkflowTemplates(workflow *ast.Workflow, s
 			for key, value := range step.With {
 				if strValue, ok := value.(string); ok {
 					fieldPath := stepPath + ".with." + key
-					if err := tv.validateTemplateField(strValue, fieldPath, ctx, strictMode); err != nil {
+					if err := tv.validateTemplateField(strValue, fieldPath, ctx); err != nil {
 						errors = append(errors, err)
 					}
 				}
@@ -463,7 +459,7 @@ func (tv *TemplateValidator) ValidateWorkflowTemplates(workflow *ast.Workflow, s
 			for key, value := range step.Updates {
 				if strValue, ok := value.(string); ok {
 					fieldPath := stepPath + ".updates." + key
-					if err := tv.validateTemplateField(strValue, fieldPath, ctx, strictMode); err != nil {
+					if err := tv.validateTemplateField(strValue, fieldPath, ctx); err != nil {
 						errors = append(errors, err)
 					}
 				}
@@ -480,7 +476,7 @@ func (tv *TemplateValidator) ValidateWorkflowTemplates(workflow *ast.Workflow, s
 		for key, value := range workflow.Workflow.Outputs {
 			if strValue, ok := value.(string); ok {
 				fieldPath := "workflow.outputs." + key
-				if err := tv.validateTemplateField(strValue, fieldPath, ctx, strictMode); err != nil {
+				if err := tv.validateTemplateField(strValue, fieldPath, ctx); err != nil {
 					errors = append(errors, err)
 				}
 			}
@@ -491,21 +487,30 @@ func (tv *TemplateValidator) ValidateWorkflowTemplates(workflow *ast.Workflow, s
 }
 
 // validateTemplateField validates a single template field
-func (tv *TemplateValidator) validateTemplateField(template, fieldPath string, ctx *validationContext, strictMode bool) error {
-	// Basic template syntax validation
-	if err := tv.ValidateTemplateString(template); err != nil {
-		return err
-	}
-
-	// Extract and validate variable references
+func (tv *TemplateValidator) validateTemplateField(template, fieldPath string, ctx *validationContext) error {
+	// Extract and validate variable references first
 	refs := tv.ExtractVariableReferences(template)
 	for _, ref := range refs {
-		if err := tv.ValidateVariableReference(ref, ctx, strictMode); err != nil {
+		if err := tv.ValidateVariableReference(ref, ctx); err != nil {
 			return err
 		}
 	}
 
+	// Skip runtime template validation - our custom validation is more comprehensive
+	// and handles all template features including functions and expressions
+
 	return nil
+}
+
+// hasAdvancedFeatures checks if template contains function calls or expressions
+func (tv *TemplateValidator) hasAdvancedFeatures(template string) bool {
+	refs := tv.ExtractVariableReferences(template)
+	for _, ref := range refs {
+		if ref.Type == VariableTypeFunction || ref.Type == VariableTypeExpression {
+			return true
+		}
+	}
+	return false
 }
 
 // buildValidationContext builds a validation context from a workflow

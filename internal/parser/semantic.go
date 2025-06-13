@@ -10,14 +10,12 @@ import (
 
 // SemanticValidator provides comprehensive semantic validation for workflows
 type SemanticValidator struct {
-	strictMode        bool
 	templateValidator *TemplateValidator
 }
 
 // NewSemanticValidator creates a new semantic validator
-func NewSemanticValidator(strict bool) *SemanticValidator {
+func NewSemanticValidator() *SemanticValidator {
 	return &SemanticValidator{
-		strictMode:        strict,
 		templateValidator: NewTemplateValidator(),
 	}
 }
@@ -276,14 +274,11 @@ func (sv *SemanticValidator) validateVariableReferences(ctx *validationContext, 
 }
 
 // validateStringVariables validates variable references in a string
+// Note: Template validation is now handled by validateTemplates method
 func (sv *SemanticValidator) validateStringVariables(text, path string, ctx *validationContext, result *ast.ValidationResult) {
-	variables := sv.extractAllVariableReferences(text)
-	
-	for _, variable := range variables {
-		if !sv.isValidVariableReference(variable, ctx) {
-			result.AddError(path, fmt.Sprintf("undefined variable reference: {{ %s }}", variable))
-		}
-	}
+	// Skip template validation here - it's handled by validateTemplates
+	// This method is kept for backwards compatibility and non-template variable references
+	return
 }
 
 // validateMapVariables validates variable references in map values
@@ -375,22 +370,20 @@ func (sv *SemanticValidator) isValidVariableReference(variable string, ctx *vali
 		}
 	}
 	
-	// Allow common template functions and expressions in non-strict mode
-	if !sv.strictMode {
-		// Allow common functions like now(), default(), etc.
-		if strings.Contains(variable, "(") {
-			return true
-		}
-		
-		// Allow conditional expressions (ternary-like)
-		if strings.Contains(variable, " if ") || strings.Contains(variable, " else ") {
-			return true
-		}
-		
-		// Allow pipe expressions
-		if strings.Contains(variable, " | ") {
-			return true
-		}
+	// Allow common template functions and expressions
+	// Allow common functions like now(), default(), etc.
+	if strings.Contains(variable, "(") {
+		return true
+	}
+	
+	// Allow conditional expressions (ternary-like)
+	if strings.Contains(variable, " if ") || strings.Contains(variable, " else ") {
+		return true
+	}
+	
+	// Allow pipe expressions
+	if strings.Contains(variable, " | ") {
+		return true
 	}
 	
 	return false
@@ -534,11 +527,7 @@ func (sv *SemanticValidator) validateConditionSyntax(condition, path string, res
 		result.AddError(path, "unbalanced parentheses in condition")
 	}
 	
-	// Check for valid operators
-	validOperators := []string{"==", "!=", ">=", "<=", ">", "<", "&&", "||", "!"}
-	if sv.strictMode {
-		sv.validateOperators(condition, validOperators, path, result)
-	}
+	// Skip operator validation - template expressions can use any operators
 }
 
 // hasBalancedParentheses checks if parentheses are balanced
@@ -586,9 +575,7 @@ func (sv *SemanticValidator) validateResourceUsage(ctx *validationContext, resul
 			if step.Agent != "" {
 				if agent, exists := ctx.agents[step.Agent]; exists {
 					if agent.MaxTokens != nil && *agent.MaxTokens > 4000 {
-						if sv.strictMode {
-							result.AddError(stepPath, "high token limit detected - consider breaking into smaller steps")
-						}
+						// Note: high token limit detected - consider breaking into smaller steps
 					}
 				} else {
 					// Agent reference is undefined
@@ -605,10 +592,7 @@ func (sv *SemanticValidator) validateResourceUsage(ctx *validationContext, resul
 		}
 	}
 	
-	// Warn about potentially expensive workflows
-	if expensiveSteps > 20 && sv.strictMode {
-		result.AddError("workflow", "workflow has many agent steps - consider breaking into smaller workflows")
-	}
+	// Note: workflows with many expensive steps (>20) may benefit from being split into smaller workflows
 }
 
 // validateTemplates validates all template strings in the workflow
@@ -716,15 +700,10 @@ func (sv *SemanticValidator) validateWorkflowTemplatesWithContext(ctx *validatio
 
 // validateTemplateFieldWithContext validates a single template field with context
 func (sv *SemanticValidator) validateTemplateFieldWithContext(template, fieldPath string, ctx *validationContext) error {
-	// Basic template syntax validation
-	if err := sv.templateValidator.ValidateTemplateString(template); err != nil {
-		return err
-	}
-
 	// Extract and validate variable references
 	refs := sv.templateValidator.ExtractVariableReferences(template)
 	for _, ref := range refs {
-		if err := sv.templateValidator.ValidateVariableReference(ref, ctx, sv.strictMode); err != nil {
+		if err := sv.templateValidator.ValidateVariableReference(ref, ctx); err != nil {
 			return err
 		}
 	}

@@ -15,14 +15,8 @@ func TestNewYAMLParser(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, parser)
 	assert.NotNil(t, parser.validator)
-	assert.True(t, parser.strict)
 }
 
-func TestNewYAMLParser_WithOptions(t *testing.T) {
-	parser, err := NewYAMLParser(WithStrict(false))
-	require.NoError(t, err)
-	assert.False(t, parser.strict)
-}
 
 func TestYAMLParser_ParseFile_ValidFiles(t *testing.T) {
 	parser, err := NewYAMLParser()
@@ -263,19 +257,6 @@ func TestYAMLParser_LargeFile(t *testing.T) {
 	_, err = parser.ParseFile(tmpFile)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "File too large")
-}
-
-func TestYAMLParser_SetStrict(t *testing.T) {
-	parser, err := NewYAMLParser()
-	require.NoError(t, err)
-
-	assert.True(t, parser.strict)
-	
-	parser.SetStrict(false)
-	assert.False(t, parser.strict)
-	
-	parser.SetStrict(true)
-	assert.True(t, parser.strict)
 }
 
 // Benchmark tests

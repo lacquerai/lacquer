@@ -19,25 +19,17 @@ type Parser interface {
 	ParseBytes(data []byte) (*ast.Workflow, error)
 	ParseReader(r io.Reader) (*ast.Workflow, error)
 	ValidateOnly(data []byte) error
-	SetStrict(strict bool)
 }
 
 // YAMLParser implements the Parser interface using go-yaml/v3
 type YAMLParser struct {
 	validator         *schema.Validator
 	semanticValidator *SemanticValidator
-	strict            bool
 }
 
 // ParserOption configures the YAML parser
 type ParserOption func(*YAMLParser)
 
-// WithStrict enables strict parsing mode
-func WithStrict(strict bool) ParserOption {
-	return func(p *YAMLParser) {
-		p.strict = strict
-	}
-}
 
 // WithValidator sets a custom schema validator
 func WithValidator(validator *schema.Validator) ParserOption {
@@ -55,9 +47,7 @@ func WithSemanticValidator(validator *SemanticValidator) ParserOption {
 
 // NewYAMLParser creates a new YAML parser with the given options
 func NewYAMLParser(opts ...ParserOption) (*YAMLParser, error) {
-	parser := &YAMLParser{
-		strict: true, // Default to strict mode
-	}
+	parser := &YAMLParser{}
 	
 	// Apply options
 	for _, opt := range opts {
@@ -75,19 +65,12 @@ func NewYAMLParser(opts ...ParserOption) (*YAMLParser, error) {
 	
 	// Create semantic validator
 	if parser.semanticValidator == nil {
-		parser.semanticValidator = NewSemanticValidator(parser.strict)
+		parser.semanticValidator = NewSemanticValidator()
 	}
 	
 	return parser, nil
 }
 
-// SetStrict enables or disables strict parsing mode
-func (p *YAMLParser) SetStrict(strict bool) {
-	p.strict = strict
-	if p.semanticValidator != nil {
-		p.semanticValidator.strictMode = strict
-	}
-}
 
 // ParseFile parses a workflow file
 func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {

@@ -215,6 +215,7 @@ func TestComprehensiveParser_ErrorPositioning(t *testing.T) {
 
 // TestComprehensiveParser_RealWorldExamples tests parsing of real-world example files
 func TestComprehensiveParser_RealWorldExamples(t *testing.T) {
+	// Parser now allows all template features by default
 	parser, err := NewYAMLParser()
 	require.NoError(t, err)
 
@@ -367,34 +368,28 @@ func TestComprehensiveParser_PerformanceValidation(t *testing.T) {
 	}
 }
 
-// TestComprehensiveParser_StrictModeComparison tests behavior differences between strict and non-strict modes
-func TestComprehensiveParser_StrictModeComparison(t *testing.T) {
-	strictParser, err := NewYAMLParser(WithStrict(true))
-	require.NoError(t, err)
-	
-	lenientParser, err := NewYAMLParser(WithStrict(false))
+// TestComprehensiveParser_TemplateFeatures tests that all template features are allowed
+func TestComprehensiveParser_TemplateFeatures(t *testing.T) {
+	parser, err := NewYAMLParser()
 	require.NoError(t, err)
 
 	testCases := []struct {
 		name                 string
 		filename             string
-		expectStrictToFail   bool
-		expectLenientToPass  bool
+		expectToPass         bool
 		description          string
 	}{
 		{
 			name:                 "Advanced templating",
 			filename:             "testdata/strict_mode/advanced_templating.laq.yaml",
-			expectStrictToFail:   true,
-			expectLenientToPass:  true,
-			description:          "Complex template expressions should work in lenient mode",
+			expectToPass:         true,
+			description:          "Complex template expressions should work",
 		},
 		{
 			name:                 "Function calls in variables",
 			filename:             "testdata/strict_mode/function_calls.laq.yaml",
-			expectStrictToFail:   true,
-			expectLenientToPass:  true,
-			description:          "Function calls should be allowed in lenient mode",
+			expectToPass:         true,
+			description:          "Function calls should be allowed",
 		},
 	}
 
@@ -406,19 +401,12 @@ func TestComprehensiveParser_StrictModeComparison(t *testing.T) {
 				return
 			}
 
-			_, strictErr := strictParser.ParseFile(tc.filename)
-			_, lenientErr := lenientParser.ParseFile(tc.filename)
+			_, err := parser.ParseFile(tc.filename)
 			
-			if tc.expectStrictToFail {
-				assert.Error(t, strictErr, "Expected strict mode to reject %s: %s", tc.filename, tc.description)
+			if tc.expectToPass {
+				assert.NoError(t, err, "Expected parser to accept %s: %s", tc.filename, tc.description)
 			} else {
-				assert.NoError(t, strictErr, "Expected strict mode to accept %s: %s", tc.filename, tc.description)
-			}
-			
-			if tc.expectLenientToPass {
-				assert.NoError(t, lenientErr, "Expected lenient mode to accept %s: %s", tc.filename, tc.description)
-			} else {
-				assert.Error(t, lenientErr, "Expected lenient mode to reject %s: %s", tc.filename, tc.description)
+				assert.Error(t, err, "Expected parser to reject %s: %s", tc.filename, tc.description)
 			}
 		})
 	}

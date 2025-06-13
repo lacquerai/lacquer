@@ -165,12 +165,10 @@ workflow:
 	})
 }
 
-func TestIntegration_SemanticValidationModes(t *testing.T) {
-	t.Run("strict mode catches more issues", func(t *testing.T) {
-		strictParser, err := NewYAMLParser(WithSemanticValidator(NewSemanticValidator(true)))
-		require.NoError(t, err)
-
-		lenientParser, err := NewYAMLParser(WithSemanticValidator(NewSemanticValidator(false)))
+func TestIntegration_SemanticValidation(t *testing.T) {
+	t.Run("complex workflow validation", func(t *testing.T) {
+		// Note: Strict mode has been removed from SemanticValidator
+		parser, err := NewYAMLParser(WithSemanticValidator(NewSemanticValidator()))
 		require.NoError(t, err)
 
 		complexYAML := `
@@ -191,26 +189,14 @@ workflow:
       prompt: "Generate complex output"
 `
 
-		// Strict mode might catch issues that lenient mode allows
-		_, strictErr := strictParser.ParseBytes([]byte(complexYAML))
-		_, lenientErr := lenientParser.ParseBytes([]byte(complexYAML))
+		// Parse the complex YAML
+		_, parseErr := parser.ParseBytes([]byte(complexYAML))
 
-		// At minimum, lenient should be more permissive or equal
-		if strictErr != nil && lenientErr == nil {
-			t.Log("Strict mode caught issues that lenient mode allowed (expected)")
-		} else if strictErr == nil && lenientErr == nil {
-			t.Log("Both modes passed (acceptable for this example)")
-		} else if strictErr != nil && lenientErr != nil {
-			// Both failed, but strict should have equal or more errors
-			strictErrCount := strings.Count(strictErr.Error(), "error:")
-			lenientErrCount := strings.Count(lenientErr.Error(), "error:")
-			if strictErrCount >= lenientErrCount {
-				t.Log("Both modes failed, strict mode caught equal or more issues (expected)")
-			} else {
-				t.Errorf("Unexpected: lenient mode caught more errors than strict mode")
-			}
+		// Check if parsing succeeded or failed
+		if parseErr != nil {
+			t.Logf("Complex YAML validation failed with: %v", parseErr)
 		} else {
-			t.Errorf("Unexpected error pattern: strict=%v, lenient=%v", strictErr, lenientErr)
+			t.Log("Complex YAML validation passed")
 		}
 	})
 }

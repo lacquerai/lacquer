@@ -67,15 +67,11 @@ func (vr *ValidationResult) ToError() error {
 
 // Validator provides comprehensive validation for AST structures
 type Validator struct {
-	// Options for validation behavior
-	StrictMode bool
 }
 
 // NewValidator creates a new AST validator
 func NewValidator() *Validator {
-	return &Validator{
-		StrictMode: true,
-	}
+	return &Validator{}
 }
 
 // ValidateWorkflow performs comprehensive validation of a workflow
