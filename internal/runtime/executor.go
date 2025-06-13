@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lacquer/lacquer/internal/ast"
@@ -57,7 +58,7 @@ type ExecutorConfig struct {
 // DefaultExecutorConfig returns a sensible default configuration
 func DefaultExecutorConfig() *ExecutorConfig {
 	return &ExecutorConfig{
-		MaxConcurrentSteps:   1, // Sequential execution for MVP
+		MaxConcurrentSteps:   3, // Enable concurrent execution with reasonable limit
 		DefaultTimeout:       5 * time.Minute,
 		EnableRetries:        true,
 		MaxRetries:           3,
@@ -267,42 +268,17 @@ func (e *Executor) Execute(ctx context.Context, workflow *ast.Workflow, inputs m
 		return nil, fmt.Errorf("input validation failed: %w", err)
 	}
 
-	// Execute workflow steps sequentially
-	for i, step := range workflow.Workflow.Steps {
-		if execCtx.IsCancelled() {
-			log.Info().Str("run_id", execCtx.RunID).Msg("Workflow execution cancelled")
-			break
-		}
-
-		execCtx.CurrentStepIndex = i
-		
-		log.Debug().
+	// Execute workflow steps with concurrency support
+	if err := e.executeStepsWithConcurrency(execCtx, workflow.Workflow.Steps); err != nil {
+		log.Error().
+			Err(err).
 			Str("run_id", execCtx.RunID).
-			Str("step_id", step.ID).
-			Int("step_index", i+1).
-			Int("total_steps", execCtx.TotalSteps).
-			Msg("Executing step")
-
-		if err := e.executeStep(execCtx, step); err != nil {
-			log.Error().
-				Err(err).
-				Str("run_id", execCtx.RunID).
-				Str("step_id", step.ID).
-				Msg("Step execution failed")
-			
-			// Mark step as failed
-			result := &StepResult{
-				StepID:    step.ID,
-				Status:    StepStatusFailed,
-				StartTime: time.Now(),
-				EndTime:   time.Now(),
-				Error:     err,
-			}
-			execCtx.SetStepResult(step.ID, result)
-			
-			// Stop execution on error for MVP (no error recovery yet)
-			break
-		}
+			Msg("Workflow execution failed")
+		return &ExecutionSummary{
+			RunID:    execCtx.RunID,
+			Status:   ExecutionStatusFailed,
+			Duration: time.Since(execCtx.StartTime),
+		}, err
 	}
 
 	summary := execCtx.GetExecutionSummary()
@@ -420,6 +396,290 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error 
 	execCtx.IncrementCurrentStep()
 	
 	return err
+}
+
+// executeStepsWithConcurrency executes steps with support for concurrent execution
+func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps []*ast.Step) error {
+	if e.config.MaxConcurrentSteps <= 1 {
+		// Fall back to sequential execution
+		return e.executeStepsSequentially(execCtx, steps)
+	}
+
+	// Build dependency graph
+	dependencies := e.buildDependencyGraph(steps)
+	
+	// Track step completion and execution
+	completed := make(map[string]bool)
+	executing := make(map[string]bool)
+	stepErrors := make(map[string]error)
+	
+	// Channel to limit concurrent executions
+	semaphore := make(chan struct{}, e.config.MaxConcurrentSteps)
+	
+	// Channel for step completion notifications
+	stepDone := make(chan string, len(steps))
+	
+	// Execute steps
+	for len(completed)+len(stepErrors) < len(steps) {
+		if execCtx.IsCancelled() {
+			return execCtx.Context.Err()
+		}
+
+		// Find steps that are ready to execute (dependencies satisfied)
+		readySteps := e.findReadySteps(steps, dependencies, completed, executing, stepErrors)
+		
+		if len(readySteps) == 0 {
+			// Check if we have any steps currently executing
+			hasExecutingSteps := false
+			for _, isExecuting := range executing {
+				if isExecuting {
+					hasExecutingSteps = true
+					break
+				}
+			}
+			
+			if !hasExecutingSteps {
+				// No steps are executing and none are ready
+				// Check if there are steps that can't proceed due to failed dependencies
+				if len(stepErrors) > 0 {
+					// Some steps failed, so dependent steps can't proceed
+					break
+				}
+				// Otherwise it's a deadlock
+				return fmt.Errorf("workflow execution deadlocked: no steps ready and none executing")
+			}
+			
+			// Wait for a step to complete
+			select {
+			case stepID := <-stepDone:
+				// Step completed, continue to next iteration
+				_ = stepID
+			case <-execCtx.Context.Done():
+				return execCtx.Context.Err()
+			}
+			continue
+		}
+
+		// Launch ready steps concurrently
+		for _, step := range readySteps {
+			if completed[step.ID] || executing[step.ID] {
+				continue // Skip already completed or executing steps
+			}
+			
+			// Mark as executing
+			executing[step.ID] = true
+			
+			// Acquire semaphore
+			semaphore <- struct{}{}
+			
+			go func(s *ast.Step) {
+				defer func() { <-semaphore }() // Release semaphore
+				
+				log.Debug().
+					Str("run_id", execCtx.RunID).
+					Str("step_id", s.ID).
+					Msg("Executing step concurrently")
+
+				err := e.executeStep(execCtx, s)
+				if err != nil {
+					stepErrors[s.ID] = err
+					log.Error().
+						Err(err).
+						Str("run_id", execCtx.RunID).
+						Str("step_id", s.ID).
+						Msg("Step execution failed")
+				} else {
+					completed[s.ID] = true
+				}
+				
+				// Clear executing flag
+				executing[s.ID] = false
+				
+				// Notify completion
+				stepDone <- s.ID
+			}(step)
+		}
+	}
+
+	// Don't return errors for failed steps - let the workflow complete
+	// The ExecutionSummary will have the correct status based on step results
+	return nil
+}
+
+// executeStepsSequentially executes steps one by one (fallback for sequential execution)
+func (e *Executor) executeStepsSequentially(execCtx *ExecutionContext, steps []*ast.Step) error {
+	for i, step := range steps {
+		if execCtx.IsCancelled() {
+			log.Info().Str("run_id", execCtx.RunID).Msg("Workflow execution cancelled")
+			break
+		}
+
+		execCtx.CurrentStepIndex = i
+		
+		log.Debug().
+			Str("run_id", execCtx.RunID).
+			Str("step_id", step.ID).
+			Int("step_index", i+1).
+			Int("total_steps", execCtx.TotalSteps).
+			Msg("Executing step")
+
+		if err := e.executeStep(execCtx, step); err != nil {
+			log.Error().
+				Err(err).
+				Str("run_id", execCtx.RunID).
+				Str("step_id", step.ID).
+				Msg("Step execution failed")
+			
+			// Mark step as failed
+			result := &StepResult{
+				StepID:    step.ID,
+				Status:    StepStatusFailed,
+				StartTime: time.Now(),
+				EndTime:   time.Now(),
+				Error:     err,
+			}
+			execCtx.SetStepResult(step.ID, result)
+			
+			// Stop execution on error for MVP (no error recovery yet)
+			return err
+		}
+	}
+	return nil
+}
+
+// buildDependencyGraph analyzes steps to determine dependencies based on template variable usage
+func (e *Executor) buildDependencyGraph(steps []*ast.Step) map[string][]string {
+	dependencies := make(map[string][]string)
+	
+	for _, step := range steps {
+		deps := e.findStepDependencies(step, steps)
+		if len(deps) > 0 {
+			dependencies[step.ID] = deps
+		}
+	}
+	
+	return dependencies
+}
+
+// findStepDependencies finds which other steps this step depends on by analyzing template variables
+func (e *Executor) findStepDependencies(step *ast.Step, allSteps []*ast.Step) []string {
+	var dependencies []string
+	
+	// Create a map of step IDs for quick lookup
+	stepIDs := make(map[string]bool)
+	for _, s := range allSteps {
+		stepIDs[s.ID] = true
+	}
+	
+	// Check template variables in prompt
+	if step.Prompt != "" {
+		deps := e.extractStepReferences(step.Prompt, stepIDs)
+		dependencies = append(dependencies, deps...)
+	}
+	
+	// Check template variables in condition
+	if step.Condition != "" {
+		deps := e.extractStepReferences(step.Condition, stepIDs)
+		dependencies = append(dependencies, deps...)
+	}
+	
+	// Check template variables in skip condition
+	if step.SkipIf != "" {
+		deps := e.extractStepReferences(step.SkipIf, stepIDs)
+		dependencies = append(dependencies, deps...)
+	}
+	
+	// Check template variables in updates
+	if step.Updates != nil {
+		for _, value := range step.Updates {
+			if strValue, ok := value.(string); ok {
+				deps := e.extractStepReferences(strValue, stepIDs)
+				dependencies = append(dependencies, deps...)
+			}
+		}
+	}
+	
+	// Remove duplicates
+	unique := make(map[string]bool)
+	var result []string
+	for _, dep := range dependencies {
+		if !unique[dep] {
+			unique[dep] = true
+			result = append(result, dep)
+		}
+	}
+	
+	return result
+}
+
+// extractStepReferences extracts step references like {{ steps.stepname.response }} from template strings
+func (e *Executor) extractStepReferences(template string, validStepIDs map[string]bool) []string {
+	var dependencies []string
+	
+	// Use strings.Contains to find patterns - simpler and more reliable
+	for stepID := range validStepIDs {
+		// Look for patterns like {{ steps.stepID.response }} or {{ steps.stepID.output }}
+		pattern := "{{ steps." + stepID + "."
+		if strings.Contains(template, pattern) {
+			dependencies = append(dependencies, stepID)
+		}
+		
+		// Also check for just {{ steps.stepID }} (without property)
+		simplePattern := "{{ steps." + stepID + " }}"
+		if strings.Contains(template, simplePattern) {
+			// Check if not already added
+			found := false
+			for _, dep := range dependencies {
+				if dep == stepID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				dependencies = append(dependencies, stepID)
+			}
+		}
+	}
+	
+	return dependencies
+}
+
+// findReadySteps finds steps that have all their dependencies satisfied
+func (e *Executor) findReadySteps(steps []*ast.Step, dependencies map[string][]string, completed map[string]bool, executing map[string]bool, stepErrors map[string]error) []*ast.Step {
+	var ready []*ast.Step
+	
+	for _, step := range steps {
+		if completed[step.ID] || executing[step.ID] {
+			continue // Already completed or executing
+		}
+		
+		// Skip failed steps
+		if _, hasFailed := stepErrors[step.ID]; hasFailed {
+			continue
+		}
+		
+		// Check if all dependencies are satisfied
+		deps, hasDeps := dependencies[step.ID]
+		if !hasDeps {
+			// No dependencies, ready to execute
+			ready = append(ready, step)
+			continue
+		}
+		
+		allDepsSatisfied := true
+		for _, dep := range deps {
+			if !completed[dep] {
+				allDepsSatisfied = false
+				break
+			}
+		}
+		
+		if allDepsSatisfied {
+			ready = append(ready, step)
+		}
+	}
+	
+	return ready
 }
 
 // executeAgentStep executes a step that uses an AI agent

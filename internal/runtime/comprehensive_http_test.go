@@ -60,8 +60,20 @@ func TestRuntimeComprehensive_HTTPMocked(t *testing.T) {
 
 	// Test Anthropic workflow
 	t.Run("Anthropic Claude workflow", func(t *testing.T) {
+		// Create a new executor for this test to register Anthropic provider
+		testExecutor := NewExecutor(nil)
+		
+		// Register mock Anthropic provider since real provider requires API key
+		mockAnthropic := NewMockModelProvider("anthropic", []string{"claude-3-sonnet"})
+		mockAnthropic.SetResponse("Process this topic: machine learning", "Mock Claude response for: Process this topic: machine learning")
+		mockAnthropic.SetResponse("Build on: Mock Claude response for: Process this topic: machine learning", "Mock Claude extended response")
+		mockAnthropic.SetResponse("Finalize: Mock Claude extended response", "Mock Claude final response")
+		
+		err := testExecutor.modelRegistry.RegisterProvider(mockAnthropic)
+		require.NoError(t, err)
+		
 		workflow := createTestWorkflow("claude-3-sonnet", "claude_agent")
-		result, err := executor.Execute(context.Background(), workflow, map[string]interface{}{
+		result, err := testExecutor.Execute(context.Background(), workflow, map[string]interface{}{
 			"topic": "machine learning",
 		})
 
@@ -130,9 +142,11 @@ func TestRuntimeComprehensive_HTTPErrorHandling(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(tc.serverHandler))
 			defer server.Close()
 
+			// Set environment variables BEFORE creating executor
 			t.Setenv("OPENAI_API_KEY", "test-key")
 			t.Setenv("OPENAI_BASE_URL", server.URL)
 
+			// Create executor after setting environment variables
 			executor := NewExecutor(nil)
 			workflow := createTestWorkflow("gpt-4", "error_agent")
 
@@ -190,7 +204,32 @@ func TestRuntimeComprehensive_HTTPRetryLogic(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", server.URL)
 
 	executor := NewExecutor(nil)
-	workflow := createTestWorkflow("gpt-4", "retry_agent")
+	
+	// Create a single-step workflow for retry testing
+	workflow := &ast.Workflow{
+		Version: "1.0",
+		Metadata: &ast.WorkflowMetadata{
+			Name: "retry-test-workflow",
+		},
+		Agents: map[string]*ast.Agent{
+			"retry_agent": {
+				Model:       "gpt-4",
+				Temperature: floatPtr(0.7),
+			},
+		},
+		Workflow: &ast.WorkflowDef{
+			Inputs: map[string]*ast.InputParam{
+				"topic": {Type: "string", Required: true},
+			},
+			Steps: []*ast.Step{
+				{
+					ID:     "retry_step",
+					Agent:  "retry_agent",
+					Prompt: "Process: {{ inputs.topic }}",
+				},
+			},
+		},
+	}
 
 	result, err := executor.Execute(context.Background(), workflow, map[string]interface{}{
 		"topic": "retry test",
@@ -202,9 +241,9 @@ func TestRuntimeComprehensive_HTTPRetryLogic(t *testing.T) {
 	// Verify retry worked - should have made 3 calls
 	assert.Equal(t, 3, callCount)
 
-	step1 := findStepByID(result.Steps, "step1")
-	assert.Equal(t, StepStatusCompleted, step1.Status)
-	assert.Equal(t, "Success after 3 attempts", step1.Response)
+	retryStep := findStepByID(result.Steps, "retry_step")
+	assert.Equal(t, StepStatusCompleted, retryStep.Status)
+	assert.Equal(t, "Success after 3 attempts", retryStep.Response)
 }
 
 // TestRuntimeComprehensive_HTTPConcurrentRequests tests concurrent HTTP requests
