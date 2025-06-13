@@ -1,0 +1,55 @@
+version: "1.0"
+
+metadata:
+  name: "agent-varieties-test"
+  description: "Test different agent configurations"
+
+agents:
+  gpt4_basic:
+    model: "gpt-4"
+    
+  gpt4_configured:
+    model: "gpt-4"
+    temperature: 0.8
+    max_tokens: 2000
+    top_p: 0.9
+    system_prompt: "You are a helpful assistant."
+    
+  claude_basic:
+    model: "claude-3-sonnet"
+    
+  claude_configured:
+    model: "claude-3-opus"
+    temperature: 0.3
+    max_tokens: 4000
+    system_prompt: "You are a research assistant."
+    
+  gemini_basic:
+    model: "gemini-pro"
+    
+  block_agent:
+    uses: "lacquer/research-agent@v2"
+    
+  local_agent:
+    uses: "./agents/custom-agent"
+    
+  github_agent:
+    uses: "github.com/example/ai-agents@v1.0"
+
+workflow:
+  steps:
+    - id: test_gpt4
+      agent: gpt4_basic
+      prompt: "Test GPT-4 basic"
+      
+    - id: test_claude
+      agent: claude_configured
+      prompt: "Test Claude configured"
+      
+    - id: test_block
+      agent: block_agent
+      prompt: "Test block agent"
+      
+    - id: test_local
+      agent: local_agent
+      prompt: "Test local agent"

@@ -1,0 +1,182 @@
+version: "1.0"
+
+metadata:
+  name: "maximum-complexity-workflow"
+  description: "A complex workflow testing parser limits"
+  version: "1.0.0"
+  author: "Test Suite"
+  tags: ["test", "complex", "performance"]
+
+agents:
+  gpt4_agent:
+    model: "gpt-4"
+    temperature: 0.7
+    max_tokens: 4000
+    top_p: 0.9
+    system_prompt: "You are a comprehensive AI assistant."
+    tools:
+      - name: "web_search"
+        uses: "lacquer/web-search@v1"
+      - name: "file_ops"
+        uses: "lacquer/file-writer@v1"
+      - name: "database"
+        uses: "lacquer/postgresql@v1"
+      - name: "custom_script"
+        script: "python complex_processing.py"
+      - name: "mcp_server"
+        mcp_server: "filesystem"
+
+  claude_agent:
+    model: "claude-3-opus"
+    temperature: 0.3
+    max_tokens: 8000
+    system_prompt: "You are a research specialist."
+    
+  gemini_agent:
+    model: "gemini-pro"
+    temperature: 0.5
+    
+  block_agent:
+    uses: "lacquer/research-agent@v2"
+    
+  github_agent:
+    uses: "github.com/example/agents@v1.0"
+
+workflow:
+  inputs:
+    primary_topic:
+      type: "string"
+      required: true
+      description: "Main research topic"
+    secondary_topics:
+      type: "array"
+      items:
+        type: "string"
+      default: []
+    research_depth:
+      type: "integer"
+      minimum: 1
+      maximum: 10
+      default: 3
+    output_format:
+      type: "string"
+      enum: ["json", "markdown", "html", "pdf"]
+      default: "markdown"
+    enable_advanced:
+      type: "boolean"
+      default: false
+      
+  state:
+    progress: 0
+    total_steps: 20
+    results: []
+    metadata:
+      started_at: "{{ now() }}"
+      current_phase: "initialization"
+    config:
+      max_retries: 3
+      timeout: 300
+      
+  steps:
+    - id: initialize
+      agent: gpt4_agent
+      prompt: |
+        Initialize research on topic: {{ inputs.primary_topic }}
+        Secondary topics: {{ inputs.secondary_topics }}
+        Depth level: {{ inputs.research_depth }}
+      retry:
+        max_attempts: 3
+        delay: 5000
+        backoff: "exponential"
+      outputs:
+        research_plan: "{{ output }}"
+        
+    - id: validate_inputs
+      agent: claude_agent
+      prompt: "Validate research parameters: {{ steps.initialize.research_plan }}"
+      condition: "{{ inputs.research_depth }} > 1"
+      
+    - id: primary_research
+      agent: gpt4_agent
+      prompt: |
+        Conduct primary research:
+        Plan: {{ steps.initialize.research_plan }}
+        Topic: {{ inputs.primary_topic }}
+      with:
+        search_depth: "{{ inputs.research_depth }}"
+        format: "{{ inputs.output_format }}"
+        
+    - id: secondary_research
+      agent: claude_agent
+      prompt: "Research secondary topics: {{ inputs.secondary_topics }}"
+      condition: "{{ len(inputs.secondary_topics) }} > 0"
+      
+    - id: advanced_analysis
+      agent: gemini_agent
+      prompt: |
+        Advanced analysis of findings:
+        Primary: {{ steps.primary_research.output }}
+        Secondary: {{ steps.secondary_research.output }}
+      skip_if: "!{{ inputs.enable_advanced }}"
+      
+    - id: data_processing
+      uses: "lacquer/data-processor@v1"
+      with:
+        input_data: "{{ steps.primary_research.output }}"
+        processing_mode: "comprehensive"
+        output_format: "{{ inputs.output_format }}"
+        
+    - id: update_progress
+      action: "update_state"
+      updates:
+        progress: "{{ (step_index + 1) / state.total_steps * 100 }}"
+        metadata.current_phase: "analysis"
+        
+    - id: cross_reference
+      agent: gpt4_agent
+      prompt: |
+        Cross-reference findings:
+        Primary: {{ steps.primary_research.output }}
+        Processed: {{ steps.data_processing.output }}
+        Analysis: {{ steps.advanced_analysis.output }}
+      condition: "{{ state.progress }} > 50"
+      
+    - id: synthesis
+      agent: claude_agent
+      prompt: "Synthesize all findings into coherent report"
+      
+    - id: quality_check
+      agent: gemini_agent
+      prompt: "Quality check the synthesized report: {{ steps.synthesis.output }}"
+      retry:
+        max_attempts: 2
+        delay: 3000
+        
+    - id: format_output
+      uses: "lacquer/formatter@v1"
+      with:
+        content: "{{ steps.synthesis.output }}"
+        format: "{{ inputs.output_format }}"
+        style: "professional"
+        
+    - id: final_validation
+      agent: gpt4_agent
+      prompt: "Final validation of formatted output"
+      condition: "{{ len(steps.format_output.output) }} > 100"
+      
+    - id: save_results
+      uses: "lacquer/file-writer@v1"
+      with:
+        filename: "research_report_{{ inputs.primary_topic }}_{{ now() }}.{{ inputs.output_format }}"
+        content: "{{ steps.format_output.output }}"
+        
+  outputs:
+    final_report: "{{ steps.format_output.output }}"
+    research_metadata:
+      topic: "{{ inputs.primary_topic }}"
+      depth: "{{ inputs.research_depth }}"
+      format: "{{ inputs.output_format }}"
+      progress: "{{ state.progress }}"
+      started_at: "{{ state.metadata.started_at }}"
+      completed_at: "{{ now() }}"
+    file_path: "{{ steps.save_results.file_path }}"

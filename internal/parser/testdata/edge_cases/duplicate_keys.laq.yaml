@@ -1,0 +1,19 @@
+version: "1.0"
+
+metadata:
+  name: "duplicate-keys-test"
+
+agents:
+  agent1:
+    model: "gpt-4"
+  agent1:  # Duplicate agent name - should fail
+    model: "claude-3-sonnet"
+
+workflow:
+  steps:
+    - id: step1
+      agent: agent1
+      prompt: "First step"
+    - id: step1  # Duplicate step ID - should fail
+      agent: agent1
+      prompt: "Second step"

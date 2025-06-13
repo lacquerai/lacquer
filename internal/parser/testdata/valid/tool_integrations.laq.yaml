@@ -1,0 +1,82 @@
+version: "1.0"
+
+metadata:
+  name: "tool-integrations-test"
+  description: "Test various tool integration patterns"
+
+agents:
+  tool_agent:
+    model: "gpt-4"
+    tools:
+      - name: "web_search"
+        uses: "lacquer/web-search@v1"
+        description: "Search the web for information"
+        
+      - name: "file_operations"
+        uses: "lacquer/file-writer@v1"
+        description: "Write files to disk"
+        
+      - name: "database_query"
+        uses: "lacquer/postgresql@v1"
+        description: "Query PostgreSQL database"
+        
+      - name: "custom_script"
+        script: "python scripts/analyzer.py"
+        description: "Run custom analysis script"
+        
+      - name: "mcp_filesystem"
+        mcp_server: "filesystem"
+        description: "Access filesystem via MCP"
+        
+      - name: "mcp_browser"
+        mcp_server: "browser"
+        description: "Control browser via MCP"
+        
+  script_agent:
+    model: "claude-3-sonnet"
+    tools:
+      - name: "data_processor"
+        script: "node processors/data.js"
+        
+      - name: "image_analyzer"
+        script: "python vision/analyze.py"
+        
+  mcp_agent:
+    model: "gpt-4"
+    tools:
+      - name: "slack_integration"
+        mcp_server: "slack"
+        
+      - name: "github_integration"
+        mcp_server: "github"
+
+workflow:
+  steps:
+    - id: multi_tool_step
+      agent: tool_agent
+      prompt: |
+        Use the available tools to:
+        1. Search for information about AI trends
+        2. Save the results to a file
+        3. Query the database for related data
+        
+    - id: script_processing
+      agent: script_agent
+      prompt: "Process the data using custom scripts"
+      
+    - id: mcp_integration
+      agent: mcp_agent
+      prompt: "Use MCP servers for external integrations"
+      
+    - id: tool_step_with_uses
+      uses: "lacquer/redis@v1"
+      with:
+        command: "SET"
+        key: "workflow_result"
+        value: "{{ steps.multi_tool_step.output }}"
+        
+    - id: script_step
+      uses: "./scripts/final_processor.py"
+      with:
+        input_data: "{{ steps.script_processing.output }}"
+        format: "json"

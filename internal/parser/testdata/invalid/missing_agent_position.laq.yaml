@@ -1,0 +1,10 @@
+version: "1.0"
+
+metadata:
+  name: "position-test"
+
+workflow:
+  steps:
+    - id: step1
+      agent: missing_agent
+      prompt: "This agent doesn't exist"

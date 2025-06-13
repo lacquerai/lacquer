@@ -1,0 +1,75 @@
+version: "1.0"
+
+metadata:
+  name: "deep-nesting-test"
+  config:
+    level1:
+      level2:
+        level3:
+          level4:
+            level5:
+              deep_value: "nested configuration"
+              
+agents:
+  nested_agent:
+    model: "gpt-4"
+    config:
+      parameters:
+        advanced:
+          memory:
+            short_term:
+              capacity: 1000
+              decay_rate: 0.1
+            long_term:
+              capacity: 10000
+              persistence: true
+          reasoning:
+            strategy: "chain_of_thought"
+            depth: 5
+            
+workflow:
+  inputs:
+    complex_input:
+      type: "object"
+      properties:
+        data:
+          type: "object"
+          properties:
+            nested:
+              type: "object"
+              properties:
+                deeply:
+                  type: "object"
+                  properties:
+                    buried:
+                      type: "string"
+                      
+  state:
+    complex_state:
+      processing:
+        stage1:
+          status: "pending"
+          data: []
+        stage2:
+          status: "pending"  
+          results:
+            intermediate: []
+            final: []
+            
+  steps:
+    - id: deep_processing
+      agent: nested_agent
+      prompt: "Process deeply nested data structure"
+      with:
+        config:
+          processing:
+            options:
+              depth: 10
+              strategy: "recursive"
+              validation:
+                strict: true
+                rules:
+                  - type: "structure"
+                    level: "deep"
+                  - type: "content"
+                    level: "shallow"

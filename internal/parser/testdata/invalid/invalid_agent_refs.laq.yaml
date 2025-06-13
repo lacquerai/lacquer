@@ -1,0 +1,26 @@
+version: "1.0"
+
+metadata:
+  name: "invalid-agent-refs-test"
+
+agents:
+  valid_agent:
+    model: "gpt-4"
+
+workflow:
+  steps:
+    - id: step1
+      agent: valid_agent
+      prompt: "This should work"
+      
+    - id: step2
+      agent: nonexistent_agent
+      prompt: "This should fail - agent doesn't exist"
+      
+    - id: step3
+      agent: another_missing_agent
+      prompt: "This should also fail"
+      
+    - id: step4
+      agent: ""
+      prompt: "Empty agent name should fail"

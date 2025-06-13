@@ -1,0 +1,24 @@
+version: "1.0"
+
+agents:
+  templating_agent:
+    model: "gpt-4"
+
+workflow:
+  inputs:
+    data:
+      type: "string"
+      default: "test"
+      
+  steps:
+    - id: advanced_template
+      agent: templating_agent
+      prompt: |
+        Using advanced templating features:
+        - Function call: {{ now() }}
+        - Conditional: {{ data if data else 'default' }}
+        - Pipe operation: {{ inputs.data | upper | trim }}
+        - Complex expression: {{ len(inputs.data) > 5 ? 'long' : 'short' }}
+        
+  outputs:
+    result: "{{ steps.advanced_template.output }}"

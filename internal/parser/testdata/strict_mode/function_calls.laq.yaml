@@ -1,0 +1,20 @@
+version: "1.0"
+
+agents:
+  function_agent:
+    model: "gpt-4"
+
+workflow:
+  steps:
+    - id: function_usage
+      agent: function_agent
+      prompt: |
+        Using function calls in templates:
+        - Current time: {{ now() }}
+        - Random UUID: {{ uuid() }}
+        - Default value: {{ default(inputs.missing, 'fallback') }}
+        - String operations: {{ trim(upper(inputs.text)) }}
+        
+  outputs:
+    timestamp: "{{ now() }}"
+    id: "{{ uuid() }}"

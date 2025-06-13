@@ -1,0 +1,75 @@
+version: "1.0"
+
+metadata:
+  name: "variable-interpolation-test"
+  description: "Test complex variable interpolation patterns"
+
+agents:
+  processor:
+    model: "gpt-4"
+
+workflow:
+  inputs:
+    topic:
+      type: "string"
+      required: true
+    format:
+      type: "string"
+      default: "markdown"
+    max_length:
+      type: "integer"
+      default: 1000
+      
+  state:
+    progress: 0
+    results: []
+    metadata:
+      started_at: "{{ now() }}"
+      
+  steps:
+    - id: basic_interpolation
+      agent: processor
+      prompt: "Process the topic: {{ inputs.topic }}"
+      
+    - id: complex_interpolation
+      agent: processor
+      prompt: |
+        Topic: {{ inputs.topic }}
+        Format: {{ inputs.format }}
+        Max length: {{ inputs.max_length }}
+        Current progress: {{ state.progress }}%
+        
+    - id: nested_variables
+      agent: processor
+      prompt: "Previous result summary: {{ steps.basic_interpolation.response }}"
+      
+    - id: conditional_variables
+      agent: processor
+      prompt: "Generate output in format: {{ inputs.format }}"
+      
+    - id: environment_variables
+      agent: processor
+      prompt: "Working in environment: {{ env.NODE_ENV }}"
+      
+    - id: metadata_access
+      agent: processor
+      prompt: |
+        Workflow: {{ metadata.name }}
+        Started: {{ state.metadata.started_at }}
+        
+    - id: array_access
+      agent: processor
+      prompt: "Results available: {{ state.results }}"
+      
+    - id: step_output_variations
+      agent: processor
+      prompt: |
+        Basic output: {{ steps.basic_interpolation.output }}
+        Response: {{ steps.basic_interpolation.response }}
+        Result: {{ steps.basic_interpolation.result }}
+        Content: {{ steps.basic_interpolation.content }}
+        
+  outputs:
+    processed_topic: "{{ steps.basic_interpolation.output }}"
+    full_result: "{{ steps.step_output_variations.output }}"
+    final_progress: "{{ state.progress }}"

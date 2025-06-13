@@ -1,0 +1,11 @@
+version: "1.0"
+
+agents:
+  minimal:
+    model: "gpt-4"
+
+workflow:
+  steps:
+    - id: minimal_step
+      agent: minimal
+      prompt: "Minimal valid workflow"

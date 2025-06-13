@@ -1,0 +1,35 @@
+version: "1.0"
+
+metadata:
+  name: "simple-control-flow-test"
+
+agents:
+  assistant:
+    model: "gpt-4"
+
+workflow:
+  inputs:
+    mode:
+      type: "string"
+      default: "normal"
+      
+  state:
+    counter: 0
+    
+  steps:
+    - id: basic_step
+      agent: assistant
+      prompt: "Basic processing step"
+      
+    - id: conditional_step
+      agent: assistant
+      prompt: "Execute conditional logic based on mode: {{ inputs.mode }}"
+      
+    - id: state_update
+      action: "update_state"
+      updates:
+        counter: 1
+        
+    - id: dependent_step
+      agent: assistant
+      prompt: "Depends on previous state, counter is now: {{ state.counter }}"

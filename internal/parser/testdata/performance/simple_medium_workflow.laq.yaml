@@ -1,0 +1,70 @@
+version: "1.0"
+
+metadata:
+  name: "simple-medium-performance-test"
+
+agents:
+  agent1:
+    model: "gpt-4"
+  agent2:
+    model: "claude-3-sonnet"
+  agent3:
+    model: "gemini-pro"
+
+workflow:
+  inputs:
+    topic:
+      type: "string"
+      default: "test"
+      
+  state:
+    counter: 0
+    
+  steps:
+    - id: step1
+      agent: agent1
+      prompt: "Process topic: {{ inputs.topic }}"
+      
+    - id: step2
+      agent: agent2
+      prompt: "Analyze: {{ steps.step1.output }}"
+      
+    - id: step3
+      agent: agent3
+      prompt: "Review: {{ steps.step2.output }}"
+      
+    - id: step4
+      uses: "lacquer/data-processor@v1"
+      with:
+        data: "{{ steps.step3.output }}"
+        
+    - id: step5
+      agent: agent1
+      prompt: "Final processing: {{ steps.step4.output }}"
+      
+    - id: step6
+      action: "update_state"
+      updates:
+        counter: 1
+        
+    - id: step7
+      agent: agent2
+      prompt: "Summarize results: {{ steps.step5.output }}"
+      
+    - id: step8
+      agent: agent3
+      prompt: "Quality check: {{ steps.step7.output }}"
+      
+    - id: step9
+      uses: "lacquer/formatter@v1"
+      with:
+        content: "{{ steps.step8.output }}"
+        format: "json"
+        
+    - id: step10
+      agent: agent1
+      prompt: "Final validation: {{ steps.step9.output }}"
+      
+  outputs:
+    result: "{{ steps.step10.output }}"
+    counter: "{{ state.counter }}"
