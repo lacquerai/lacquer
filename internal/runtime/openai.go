@@ -158,7 +158,11 @@ func NewOpenAIProvider(config *OpenAIConfig) (*OpenAIProvider, error) {
 	// Set defaults
 	defaults := getDefaultOpenAIConfig()
 	if config.BaseURL == "" {
-		config.BaseURL = defaults.BaseURL
+		if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
+			config.BaseURL = baseURL
+		} else {
+			config.BaseURL = defaults.BaseURL
+		}
 	}
 	if config.Timeout == 0 {
 		config.Timeout = defaults.Timeout

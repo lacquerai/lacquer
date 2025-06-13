@@ -389,9 +389,36 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error 
 				execCtx.SetState(fmt.Sprintf("steps.%s.%s", step.ID, key), value)
 			}
 		}
+		
+		// Process state updates for any step type
+		if step.Updates != nil {
+			updates := make(map[string]interface{})
+			for key, value := range step.Updates {
+				if strValue, ok := value.(string); ok {
+					rendered, renderErr := e.templateEngine.Render(strValue, execCtx)
+					if renderErr != nil {
+						log.Warn().
+							Err(renderErr).
+							Str("step_id", step.ID).
+							Str("key", key).
+							Msg("Failed to render state update value")
+						updates[key] = value
+					} else {
+						updates[key] = rendered
+					}
+				} else {
+					updates[key] = value
+				}
+			}
+			execCtx.UpdateState(updates)
+		}
 	}
 
 	execCtx.SetStepResult(step.ID, result)
+	
+	// Increment current step index after processing the step
+	execCtx.IncrementCurrentStep()
+	
 	return err
 }
 

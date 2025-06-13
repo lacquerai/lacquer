@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -135,7 +136,11 @@ func NewAnthropicProvider(config *AnthropicConfig) (*AnthropicProvider, error) {
 		// Merge with defaults for missing fields
 		defaults := DefaultAnthropicConfig()
 		if config.BaseURL == "" {
-			config.BaseURL = defaults.BaseURL
+			if baseURL := os.Getenv("ANTHROPIC_BASE_URL"); baseURL != "" {
+				config.BaseURL = baseURL
+			} else {
+				config.BaseURL = defaults.BaseURL
+			}
 		}
 		if config.Timeout == 0 {
 			config.Timeout = defaults.Timeout

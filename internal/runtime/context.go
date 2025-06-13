@@ -296,6 +296,12 @@ func (ec *ExecutionContext) getOverallStatus() ExecutionStatus {
 			allCompleted = false
 		case StepStatusPending:
 			allCompleted = false
+		case StepStatusCompleted:
+			// Step is completed, continue
+		case StepStatusSkipped:
+			// Step is skipped, continue
+		default:
+			allCompleted = false
 		}
 	}
 
