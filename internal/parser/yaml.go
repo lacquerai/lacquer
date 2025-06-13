@@ -23,8 +23,9 @@ type Parser interface {
 
 // YAMLParser implements the Parser interface using go-yaml/v3
 type YAMLParser struct {
-	validator *schema.Validator
-	strict    bool
+	validator         *schema.Validator
+	semanticValidator *SemanticValidator
+	strict            bool
 }
 
 // ParserOption configures the YAML parser
@@ -41,6 +42,13 @@ func WithStrict(strict bool) ParserOption {
 func WithValidator(validator *schema.Validator) ParserOption {
 	return func(p *YAMLParser) {
 		p.validator = validator
+	}
+}
+
+// WithSemanticValidator sets a custom semantic validator
+func WithSemanticValidator(validator *SemanticValidator) ParserOption {
+	return func(p *YAMLParser) {
+		p.semanticValidator = validator
 	}
 }
 
@@ -64,12 +72,20 @@ func NewYAMLParser(opts ...ParserOption) (*YAMLParser, error) {
 		parser.validator = validator
 	}
 	
+	// Create semantic validator
+	if parser.semanticValidator == nil {
+		parser.semanticValidator = NewSemanticValidator(parser.strict)
+	}
+	
 	return parser, nil
 }
 
 // SetStrict enables or disables strict parsing mode
 func (p *YAMLParser) SetStrict(strict bool) {
 	p.strict = strict
+	if p.semanticValidator != nil {
+		p.semanticValidator.strictMode = strict
+	}
 }
 
 // ParseFile parses a workflow file
@@ -140,6 +156,13 @@ func (p *YAMLParser) ParseBytes(data []byte) (*ast.Workflow, error) {
 		}
 	}
 	
+	// Perform semantic validation
+	if p.semanticValidator != nil {
+		if err := p.validateSemantics(&workflow); err != nil {
+			return nil, err
+		}
+	}
+	
 	return &workflow, nil
 }
 
@@ -185,6 +208,46 @@ func (p *YAMLParser) validateWorkflow(data []byte) error {
 	}
 	
 	return nil
+}
+
+// validateSemantics performs semantic validation on the parsed workflow
+func (p *YAMLParser) validateSemantics(workflow *ast.Workflow) error {
+	result := p.semanticValidator.ValidateWorkflow(workflow)
+	if result.HasErrors() {
+		var multiErr MultiError
+		for _, validationErr := range result.Errors {
+			parseErr := &ParseError{
+				Message:    validationErr.Message,
+				Position:   ast.Position{Line: 1, Column: 1}, // TODO: Extract position from validation error path
+				Suggestion: generateSemanticSuggestion(validationErr.Message),
+			}
+			multiErr.Add(parseErr)
+		}
+		return multiErr.ToError()
+	}
+	return nil
+}
+
+// generateSemanticSuggestion provides suggestions for semantic validation errors
+func generateSemanticSuggestion(errorMessage string) string {
+	message := strings.ToLower(errorMessage)
+	
+	switch {
+	case strings.Contains(message, "circular dependency"):
+		return "Remove the circular reference by reordering steps or using intermediate variables"
+	case strings.Contains(message, "forward reference"):
+		return "Steps can only reference outputs from previous steps. Reorder your steps or use workflow state"
+	case strings.Contains(message, "undefined variable"):
+		return "Check that the variable is defined in inputs, state, or previous step outputs"
+	case strings.Contains(message, "block reference"):
+		return "Use format: lacquer/block-name@version, github.com/owner/repo@tag, or ./local/path"
+	case strings.Contains(message, "parentheses"):
+		return "Ensure all opening parentheses have matching closing parentheses"
+	case strings.Contains(message, "agent"):
+		return "Ensure the agent is defined in the agents section before using it in steps"
+	default:
+		return "Check the workflow structure and refer to the Lacquer documentation"
+	}
 }
 
 // extractPositionFromPath attempts to find position from JSON path

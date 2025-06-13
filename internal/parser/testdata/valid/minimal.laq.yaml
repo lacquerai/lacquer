@@ -1,4 +1,7 @@
 version: "1.0"
+agents:
+  test_agent:
+    model: "gpt-4"
 workflow:
   steps:
     - id: test

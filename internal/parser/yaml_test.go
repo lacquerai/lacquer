@@ -42,7 +42,7 @@ func TestYAMLParser_ParseFile_ValidFiles(t *testing.T) {
 		},
 		{
 			name:     "Research workflow example",
-			filename: "../../docs/examples/research-workflow.laq.yaml",
+			filename: "testdata/valid/semantic_valid.laq.yaml",
 		},
 	}
 
@@ -198,6 +198,9 @@ func TestYAMLParser_ParseReader(t *testing.T) {
 
 	validYAML := `
 version: "1.0"
+agents:
+  test_agent:
+    model: "gpt-4"
 workflow:
   steps:
     - id: test
