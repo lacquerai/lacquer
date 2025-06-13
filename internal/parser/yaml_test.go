@@ -69,7 +69,7 @@ func TestYAMLParser_ParseFile_InvalidExtension(t *testing.T) {
 
 	_, err = parser.ParseFile("test.yaml") // Should be .laq.yaml
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid file extension")
+	assert.Contains(t, err.Error(), "Invalid file extension")
 }
 
 func TestYAMLParser_ParseFile_FileNotFound(t *testing.T) {
@@ -78,7 +78,7 @@ func TestYAMLParser_ParseFile_FileNotFound(t *testing.T) {
 
 	_, err = parser.ParseFile("nonexistent.laq.yaml")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to read file")
+	assert.Contains(t, err.Error(), "Cannot read file")
 }
 
 func TestYAMLParser_ParseBytes_Valid(t *testing.T) {
@@ -116,10 +116,10 @@ func TestYAMLParser_ParseBytes_Empty(t *testing.T) {
 	_, err = parser.ParseBytes([]byte{})
 	assert.Error(t, err)
 	
-	parseErr, ok := err.(*ParseError)
+	// Check that it's an enhanced error
+	_, ok := err.(*MultiErrorEnhanced)
 	require.True(t, ok)
-	assert.Contains(t, parseErr.Message, "empty workflow file")
-	assert.NotEmpty(t, parseErr.Suggestion)
+	assert.Contains(t, err.Error(), "Empty workflow file")
 }
 
 func TestYAMLParser_ParseBytes_SyntaxError(t *testing.T) {
@@ -138,7 +138,7 @@ workflow:
 	assert.Error(t, err)
 	
 	// Should wrap the YAML error with additional context
-	assert.Contains(t, err.Error(), "Parse error")
+	assert.Contains(t, err.Error(), "YAML parsing error")
 }
 
 func TestYAMLParser_ParseBytes_ValidationError(t *testing.T) {
@@ -262,7 +262,7 @@ func TestYAMLParser_LargeFile(t *testing.T) {
 
 	_, err = parser.ParseFile(tmpFile)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "file too large")
+	assert.Contains(t, err.Error(), "File too large")
 }
 
 func TestYAMLParser_SetStrict(t *testing.T) {

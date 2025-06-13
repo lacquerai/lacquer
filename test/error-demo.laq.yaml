@@ -1,0 +1,23 @@
+metadata:
+  name: error-demo-workflow
+  description: Workflow with intentional errors for testing
+
+agents:
+  assistant:
+    model: gpt-4
+    temperature: 0.7
+
+workflow:
+  steps:
+    - id: step1
+      agent: nonexistent_agent
+      prompt: "Hello world"
+    
+    - id: step2
+      agent: assistant
+      # Missing prompt field
+    
+    - id: step3
+      action: update_state
+      updates:
+        result: "{{ steps.nonexistent_step.response }}"

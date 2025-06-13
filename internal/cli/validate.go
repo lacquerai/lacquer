@@ -56,6 +56,27 @@ type ValidationResult struct {
 	Duration time.Duration `json:"duration_ms" yaml:"duration_ms"`
 	Errors   []string      `json:"errors,omitempty" yaml:"errors,omitempty"`
 	Warnings []string      `json:"warnings,omitempty" yaml:"warnings,omitempty"`
+	Issues   []*ValidationIssue `json:"issues,omitempty" yaml:"issues,omitempty"`
+}
+
+// ValidationIssue represents a detailed validation issue
+type ValidationIssue struct {
+	ID         string        `json:"id" yaml:"id"`
+	Severity   string        `json:"severity" yaml:"severity"`
+	Title      string        `json:"title" yaml:"title"`
+	Message    string        `json:"message" yaml:"message"`
+	Line       int           `json:"line" yaml:"line"`
+	Column     int           `json:"column" yaml:"column"`
+	Category   string        `json:"category" yaml:"category"`
+	Suggestion *IssueSuggestion `json:"suggestion,omitempty" yaml:"suggestion,omitempty"`
+}
+
+// IssueSuggestion provides actionable advice
+type IssueSuggestion struct {
+	Title       string   `json:"title" yaml:"title"`
+	Description string   `json:"description" yaml:"description"`
+	Examples    []string `json:"examples,omitempty" yaml:"examples,omitempty"`
+	DocsURL     string   `json:"docs_url,omitempty" yaml:"docs_url,omitempty"`
 }
 
 // ValidationSummary represents the summary of all validation results
@@ -103,10 +124,8 @@ func validateWorkflows(args []string) {
 					Success(fmt.Sprintf("%s (%v)", file, result.Duration))
 				}
 			} else {
+				// Just show the file name and status, detailed errors will be shown in summary
 				Error(fmt.Sprintf("%s (%v)", file, result.Duration))
-				for _, errMsg := range result.Errors {
-					fmt.Printf("  %s\n", errMsg)
-				}
 			}
 		}
 	}
@@ -151,6 +170,7 @@ func validateSingleFile(p parser.Parser, filename string) ValidationResult {
 		Duration: 0,
 		Errors:   []string{},
 		Warnings: []string{},
+		Issues:   []*ValidationIssue{},
 	}
 
 	// Parse and validate the file
@@ -159,11 +179,30 @@ func validateSingleFile(p parser.Parser, filename string) ValidationResult {
 
 	if err != nil {
 		result.Valid = false
-		result.Errors = append(result.Errors, err.Error())
+		
+		// Check if it's an enhanced error
+		if enhancedErr, ok := err.(*parser.MultiErrorEnhanced); ok {
+			// Process enhanced errors
+			for _, issue := range enhancedErr.GetAllIssues() {
+				validationIssue := convertEnhancedErrorToIssue(issue)
+				result.Issues = append(result.Issues, validationIssue)
+				
+				// Add simple error messages for backward compatibility
+				if issue.Severity == parser.SeverityError {
+					result.Errors = append(result.Errors, issue.Title)
+				} else if issue.Severity == parser.SeverityWarning {
+					result.Warnings = append(result.Warnings, issue.Title)
+				}
+			}
+		} else {
+			// Fallback to simple error handling
+			result.Errors = append(result.Errors, err.Error())
+		}
+		
 		return result
 	}
 
-	// Additional semantic validation
+	// Additional semantic validation (if not already done by parser)
 	if err := workflow.Validate(); err != nil {
 		result.Valid = false
 		result.Errors = append(result.Errors, err.Error())
@@ -173,9 +212,34 @@ func validateSingleFile(p parser.Parser, filename string) ValidationResult {
 		Str("file", filename).
 		Bool("valid", result.Valid).
 		Dur("duration", result.Duration).
+		Int("issues", len(result.Issues)).
 		Msg("Validated workflow file")
 
 	return result
+}
+
+// convertEnhancedErrorToIssue converts an enhanced error to a validation issue
+func convertEnhancedErrorToIssue(err *parser.EnhancedError) *ValidationIssue {
+	issue := &ValidationIssue{
+		ID:       err.ID,
+		Severity: string(err.Severity),
+		Title:    err.Title,
+		Message:  err.Message,
+		Line:     err.Position.Line,
+		Column:   err.Position.Column,
+		Category: err.Category,
+	}
+	
+	if err.Suggestion != nil {
+		issue.Suggestion = &IssueSuggestion{
+			Title:       err.Suggestion.Title,
+			Description: err.Suggestion.Description,
+			Examples:    err.Suggestion.Examples,
+			DocsURL:     err.Suggestion.DocsURL,
+		}
+	}
+	
+	return issue
 }
 
 func collectFiles(args []string, recursive bool) ([]string, error) {
@@ -230,24 +294,95 @@ func printValidationSummary(summary ValidationSummary) {
 			Error(fmt.Sprintf("%d of %d workflow(s) failed validation (%v)", summary.Invalid, summary.Total, summary.Duration))
 		}
 
+		// Show detailed error information for failed files
+		for _, result := range summary.Results {
+			if !result.Valid {
+				printValidationResult(result)
+			}
+		}
+
 		if viper.GetBool("verbose") {
 			fmt.Printf("\nDetailed results:\n")
-			headers := []string{"File", "Status", "Duration"}
+			headers := []string{"File", "Status", "Duration", "Issues"}
 			rows := make([][]string, len(summary.Results))
 			
 			for i, result := range summary.Results {
 				status := "✅ Valid"
+				issues := "0"
 				if !result.Valid {
 					status = "❌ Invalid"
+					issues = fmt.Sprintf("%d", len(result.Issues))
 				}
 				rows[i] = []string{
 					result.File,
 					status,
 					result.Duration.String(),
+					issues,
 				}
 			}
 			
 			printTable(headers, rows)
 		}
 	}
+}
+
+// printValidationResult prints detailed information about a validation result
+func printValidationResult(result ValidationResult) {
+	if result.Valid {
+		return // Don't print valid results in summary
+	}
+
+	fmt.Printf("\n❌ %s (%v)\n", result.File, result.Duration)
+	
+	// Print enhanced error details if available
+	if len(result.Issues) > 0 {
+		for _, issue := range result.Issues {
+			printValidationIssue(issue)
+		}
+	} else {
+		// Fallback to simple error messages
+		for _, errMsg := range result.Errors {
+			fmt.Printf("  %s\n", errMsg)
+		}
+	}
+}
+
+// printValidationIssue prints a detailed validation issue
+func printValidationIssue(issue *ValidationIssue) {
+	// Error header with position
+	severityIcon := "❌"
+	if issue.Severity == "warning" {
+		severityIcon = "⚠️"
+	} else if issue.Severity == "info" {
+		severityIcon = "ℹ️"
+	}
+	
+	fmt.Printf("  %s %s at %d:%d: %s\n", severityIcon, issue.Severity, issue.Line, issue.Column, issue.Title)
+	
+	if issue.Message != "" && issue.Message != issue.Title {
+		fmt.Printf("    %s\n", issue.Message)
+	}
+	
+	if issue.Suggestion != nil {
+		fmt.Printf("    💡 %s", issue.Suggestion.Title)
+		if issue.Suggestion.Description != "" {
+			fmt.Printf(": %s", issue.Suggestion.Description)
+		}
+		fmt.Printf("\n")
+		
+		// Show examples if available
+		if len(issue.Suggestion.Examples) > 0 {
+			fmt.Printf("    Example:\n")
+			for _, example := range issue.Suggestion.Examples {
+				fmt.Printf("      %s\n", example)
+			}
+		}
+		
+		// Show documentation link
+		if issue.Suggestion.DocsURL != "" {
+			fmt.Printf("    📖 See: %s\n", issue.Suggestion.DocsURL)
+		}
+	}
+	
+	fmt.Printf("\n")
 }

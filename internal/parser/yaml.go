@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/lacquer/lacquer/internal/ast"
@@ -90,20 +91,63 @@ func (p *YAMLParser) SetStrict(strict bool) {
 
 // ParseFile parses a workflow file
 func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
+	reporter := NewErrorReporter(nil, filename)
+	
 	// Validate file extension
 	if !isValidWorkflowFile(filename) {
-		return nil, fmt.Errorf("invalid file extension: expected .laq.yaml, got %s", filepath.Ext(filename))
+		reporter.AddError(&EnhancedError{
+			ID:       "file_ext_invalid",
+			Severity: SeverityError,
+			Title:    "Invalid file extension",
+			Message:  fmt.Sprintf("Expected .laq.yaml or .laq.yml, got %s", filepath.Ext(filename)),
+			Position: ast.Position{Line: 1, Column: 1, File: filename},
+			Category: "file",
+			Suggestion: &ErrorSuggestion{
+				Title:       "Use correct file extension",
+				Description: "Lacquer workflow files must have .laq.yaml or .laq.yml extension",
+				Examples:    []string{"my-workflow.laq.yaml", "pipeline.laq.yml"},
+				DocsURL:     "https://docs.lacquer.ai/concepts/files",
+			},
+		})
+		return nil, reporter.ToError()
 	}
 	
 	// Read file
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %s: %w", filename, err)
+		reporter.AddError(&EnhancedError{
+			ID:       "file_read_error",
+			Severity: SeverityError,
+			Title:    "Cannot read file",
+			Message:  err.Error(),
+			Position: ast.Position{Line: 1, Column: 1, File: filename},
+			Category: "file",
+			Suggestion: &ErrorSuggestion{
+				Title:       "Check file permissions",
+				Description: "Ensure the file exists and is readable",
+			},
+		})
+		return nil, reporter.ToError()
 	}
+	
+	// Update reporter with source data
+	reporter.source = data
 	
 	// Validate file size (prevent DoS)
 	if len(data) > 10*1024*1024 { // 10MB limit
-		return nil, fmt.Errorf("file too large: %d bytes (max 10MB)", len(data))
+		reporter.AddError(&EnhancedError{
+			ID:       "file_too_large",
+			Severity: SeverityError,
+			Title:    "File too large",
+			Message:  fmt.Sprintf("File size %d bytes exceeds maximum of 10MB", len(data)),
+			Position: ast.Position{Line: 1, Column: 1, File: filename},
+			Category: "file",
+			Suggestion: &ErrorSuggestion{
+				Title:       "Reduce file size",
+				Description: "Large workflow files can cause performance issues. Consider splitting into smaller workflows.",
+			},
+		})
+		return nil, reporter.ToError()
 	}
 	
 	// Parse the workflow
@@ -121,24 +165,43 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 
 // ParseBytes parses workflow data from bytes
 func (p *YAMLParser) ParseBytes(data []byte) (*ast.Workflow, error) {
+	reporter := NewErrorReporter(data, "")
+	
 	if len(data) == 0 {
-		return nil, &ParseError{
-			Message:  "empty workflow file",
+		reporter.AddError(&EnhancedError{
+			ID:       "empty_file",
+			Severity: SeverityError,
+			Title:    "Empty workflow file",
+			Message:  "Workflow file contains no content",
 			Position: ast.Position{Line: 1, Column: 1},
-			Suggestion: "Add a basic workflow structure with version and workflow fields",
-		}
+			Category: "yaml",
+			Suggestion: &ErrorSuggestion{
+				Title:       "Add basic workflow structure",
+				Description: "Lacquer workflows require at minimum a version and workflow section",
+				Examples: []string{
+					"version: \"1.0\"",
+					"",
+					"workflow:",
+					"  steps:",
+					"    - id: hello",
+					"      prompt: \"Hello, world!\"",
+				},
+				DocsURL: "https://docs.lacquer.ai/getting-started",
+			},
+		})
+		return nil, reporter.ToError()
 	}
 	
 	// First, try to parse using yaml.Node to get position information
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {
-		return nil, WrapYAMLError(err, data, "")
+		return nil, p.enhanceYAMLError(err, data, reporter)
 	}
 	
 	// Parse into workflow struct
 	var workflow ast.Workflow
 	if err := yaml.Unmarshal(data, &workflow); err != nil {
-		return nil, WrapYAMLError(err, data, "")
+		return nil, p.enhanceYAMLError(err, data, reporter)
 	}
 	
 	// Set position information from the root node
@@ -151,14 +214,14 @@ func (p *YAMLParser) ParseBytes(data []byte) (*ast.Workflow, error) {
 	
 	// Validate against schema if validator is available
 	if p.validator != nil {
-		if err := p.validateWorkflow(data); err != nil {
+		if err := p.validateWorkflowEnhanced(data, reporter); err != nil {
 			return nil, err
 		}
 	}
 	
 	// Perform semantic validation
 	if p.semanticValidator != nil {
-		if err := p.validateSemantics(&workflow); err != nil {
+		if err := p.validateSemanticsEnhanced(&workflow, reporter); err != nil {
 			return nil, err
 		}
 	}
@@ -252,9 +315,109 @@ func generateSemanticSuggestion(errorMessage string) string {
 
 // extractPositionFromPath attempts to find position from JSON path
 func extractPositionFromPath(path string, source []byte) ast.Position {
-	// This is a simplified implementation
-	// A more sophisticated version would parse the JSON path and map it to YAML positions
+	if path == "" || path == "/" {
+		return ast.Position{Line: 1, Column: 1}
+	}
 	
+	// Parse the YAML into a tree structure that preserves line numbers
+	var node yaml.Node
+	if err := yaml.Unmarshal(source, &node); err != nil {
+		return ast.Position{Line: 1, Column: 1}
+	}
+	
+	// Navigate through the path to find the target node
+	pos := findNodeByPath(&node, path)
+	if pos.Line > 0 {
+		return pos
+	}
+	
+	// Fallback to the simple method if YAML parsing fails
+	return extractPositionFromPathSimple(path, source)
+}
+
+// findNodeByPath navigates through a YAML node tree using a path
+func findNodeByPath(node *yaml.Node, path string) ast.Position {
+	if path == "" || path == "/" {
+		return ast.Position{Line: node.Line, Column: node.Column}
+	}
+	
+	// Convert different path formats to a standard format
+	pathParts := parsePath(path)
+	
+	// Start from the document node (should be the first node)
+	current := node
+	if current.Kind == yaml.DocumentNode && len(current.Content) > 0 {
+		current = current.Content[0]
+	}
+	
+	// Navigate through each path part
+	for _, part := range pathParts {
+		if current == nil {
+			break
+		}
+		
+		switch current.Kind {
+		case yaml.MappingNode:
+			// Look for the key in the mapping
+			found := false
+			for i := 0; i < len(current.Content); i += 2 {
+				key := current.Content[i]
+				value := current.Content[i+1]
+				
+				if key.Value == part {
+					current = value
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ast.Position{Line: current.Line, Column: current.Column}
+			}
+			
+		case yaml.SequenceNode:
+			// Parse the part as an array index
+			index := 0
+			if _, err := fmt.Sscanf(part, "%d", &index); err != nil {
+				return ast.Position{Line: current.Line, Column: current.Column}
+			}
+			
+			if index >= 0 && index < len(current.Content) {
+				current = current.Content[index]
+			} else {
+				return ast.Position{Line: current.Line, Column: current.Column}
+			}
+			
+		default:
+			// For scalar nodes or unknown types, return current position
+			return ast.Position{Line: current.Line, Column: current.Column}
+		}
+	}
+	
+	if current != nil {
+		return ast.Position{Line: current.Line, Column: current.Column}
+	}
+	
+	return ast.Position{Line: 1, Column: 1}
+}
+
+// parsePath converts different path formats to a uniform slice of parts
+func parsePath(path string) []string {
+	// Handle JSON schema style paths like "/workflow/steps/0/agent"
+	if strings.HasPrefix(path, "/") {
+		return strings.Split(strings.TrimPrefix(path, "/"), "/")
+	}
+	
+	// Handle dot notation with square brackets like "workflow.steps[0].agent"
+	// Replace [index] with .index format first
+	re := regexp.MustCompile(`\[(\d+)\]`)
+	normalized := re.ReplaceAllString(path, ".$1")
+	
+	// Split by dots
+	return strings.Split(normalized, ".")
+}
+
+// extractPositionFromPathSimple is the fallback simple implementation
+func extractPositionFromPathSimple(path string, source []byte) ast.Position {
 	if path == "" || path == "/" {
 		return ast.Position{Line: 1, Column: 1}
 	}
@@ -314,4 +477,99 @@ func (p *YAMLParser) ParseWorkflowNode(node *yaml.Node) (*ast.Workflow, error) {
 // GetSupportedExtensions returns the list of supported file extensions
 func GetSupportedExtensions() []string {
 	return []string{".laq.yaml", ".laq.yml"}
+}
+
+// enhanceYAMLError converts a YAML error to an enhanced error
+func (p *YAMLParser) enhanceYAMLError(err error, data []byte, reporter *ErrorReporter) error {
+	switch yamlErr := err.(type) {
+	case *yaml.TypeError:
+		if len(yamlErr.Errors) > 0 {
+			for _, errMsg := range yamlErr.Errors {
+				pos := extractPositionFromMessage(errMsg, data)
+				reporter.AddError(&EnhancedError{
+					ID:       generateErrorID("yaml_type", pos),
+					Severity: SeverityError,
+					Title:    "YAML type error",
+					Message:  errMsg,
+					Position: pos,
+					Category: "yaml",
+					Suggestion: reporter.generateYAMLSuggestion(errMsg),
+				})
+			}
+		}
+	default:
+		pos := extractPositionFromMessage(err.Error(), data)
+		reporter.AddError(&EnhancedError{
+			ID:       generateErrorID("yaml_parse", pos),
+			Severity: SeverityError,
+			Title:    "YAML parsing error",
+			Message:  err.Error(),
+			Position: pos,
+			Category: "yaml",
+			Suggestion: reporter.generateYAMLSuggestion(err.Error()),
+		})
+	}
+	
+	return reporter.ToError()
+}
+
+// validateWorkflowEnhanced validates the workflow against the schema with enhanced error reporting
+func (p *YAMLParser) validateWorkflowEnhanced(data []byte, reporter *ErrorReporter) error {
+	result, err := p.validator.ValidateBytes(data)
+	if err != nil {
+		reporter.AddError(&EnhancedError{
+			ID:       "schema_validation_failed",
+			Severity: SeverityError,
+			Title:    "Schema validation failed",
+			Message:  err.Error(),
+			Position: ast.Position{Line: 1, Column: 1},
+			Category: "validation",
+		})
+		return reporter.ToError()
+	}
+	
+	if !result.Valid {
+		for _, validationErr := range result.Errors {
+			pos := extractPositionFromPath(validationErr.Path, data)
+			reporter.AddError(&EnhancedError{
+				ID:       generateErrorID("schema", pos),
+				Severity: SeverityError,
+				Title:    "Schema validation error",
+				Message:  validationErr.Message,
+				Position: pos,
+				Category: "schema",
+				Suggestion: reporter.generateSchemaSuggestion(validationErr.Message),
+			})
+		}
+		return reporter.ToError()
+	}
+	
+	return nil
+}
+
+// validateSemanticsEnhanced performs semantic validation with enhanced error reporting
+func (p *YAMLParser) validateSemanticsEnhanced(workflow *ast.Workflow, reporter *ErrorReporter) error {
+	result := p.semanticValidator.ValidateWorkflow(workflow)
+	if result.HasErrors() {
+		for _, validationErr := range result.Errors {
+			// Try to extract position from the validation error context
+			pos := ast.Position{Line: 1, Column: 1}
+			if validationErr.Path != "" {
+				pos = extractPositionFromPath(validationErr.Path, reporter.source)
+			}
+			
+			reporter.AddError(&EnhancedError{
+				ID:       generateErrorID("semantic", pos),
+				Severity: SeverityError,
+				Title:    "Semantic validation error",
+				Message:  validationErr.Message,
+				Position: pos,
+				Category: "semantic",
+				Suggestion: reporter.generateSemanticSuggestion(validationErr.Message),
+			})
+		}
+		return reporter.ToError()
+	}
+	
+	return nil
 }

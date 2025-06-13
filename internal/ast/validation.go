@@ -381,14 +381,7 @@ func (v *Validator) validateCrossReferences(w *Workflow, result *ValidationResul
 		}
 	}
 	
-	// Validate agent references in steps
-	for i, step := range w.Workflow.Steps {
-		stepPath := fmt.Sprintf("workflow.steps[%d]", i)
-		
-		if step.Agent != "" && !agentNames[step.Agent] {
-			result.AddError(stepPath, fmt.Sprintf("undefined agent: %s", step.Agent))
-		}
-	}
+	// Agent references are validated by the semantic validator with better positioning
 }
 
 // Validation helper functions

@@ -579,7 +579,7 @@ func (sv *SemanticValidator) validateResourceUsage(ctx *validationContext, resul
 				expensiveSteps++
 			}
 			
-			// Check for resource-intensive configurations
+			// Check for resource-intensive configurations and validate agent references
 			if step.Agent != "" {
 				if agent, exists := ctx.agents[step.Agent]; exists {
 					if agent.MaxTokens != nil && *agent.MaxTokens > 4000 {
@@ -587,6 +587,9 @@ func (sv *SemanticValidator) validateResourceUsage(ctx *validationContext, resul
 							result.AddError(stepPath, "high token limit detected - consider breaking into smaller steps")
 						}
 					}
+				} else {
+					// Agent reference is undefined
+					result.AddError(stepPath+".agent", fmt.Sprintf("undefined agent: %s", step.Agent))
 				}
 			}
 			

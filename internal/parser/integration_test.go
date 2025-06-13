@@ -202,8 +202,8 @@ workflow:
 			t.Log("Both modes passed (acceptable for this example)")
 		} else if strictErr != nil && lenientErr != nil {
 			// Both failed, but strict should have equal or more errors
-			strictErrCount := strings.Count(strictErr.Error(), "Parse error")
-			lenientErrCount := strings.Count(lenientErr.Error(), "Parse error")
+			strictErrCount := strings.Count(strictErr.Error(), "error:")
+			lenientErrCount := strings.Count(lenientErr.Error(), "error:")
 			if strictErrCount >= lenientErrCount {
 				t.Log("Both modes failed, strict mode caught equal or more issues (expected)")
 			} else {
@@ -243,7 +243,7 @@ workflow:
       prompt: "{{ steps.step1.output }}"
 `,
 				expectedMsg: "circular dependency",
-				expectedSug: "reordering steps",
+				expectedSug: "Remove circular dependencies",
 			},
 			{
 				name: "forward reference",
@@ -262,7 +262,7 @@ workflow:
       prompt: "output"
 `,
 				expectedMsg: "hasn't executed yet",
-				expectedSug: "workflow structure",
+				expectedSug: "Check workflow logic",
 			},
 			{
 				name: "undefined variable",
@@ -278,7 +278,7 @@ workflow:
       prompt: "{{ undefined.var }}"
 `,
 				expectedMsg: "undefined variable",
-				expectedSug: "variable is defined",
+				expectedSug: "Check variable references",
 			},
 		}
 
