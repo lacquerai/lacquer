@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,12 +52,13 @@ func init() {
 
 // ValidationResult represents the result of validating a workflow
 type ValidationResult struct {
-	File     string        `json:"file" yaml:"file"`
-	Valid    bool          `json:"valid" yaml:"valid"`
-	Duration time.Duration `json:"duration_ms" yaml:"duration_ms"`
-	Errors   []string      `json:"errors,omitempty" yaml:"errors,omitempty"`
-	Warnings []string      `json:"warnings,omitempty" yaml:"warnings,omitempty"`
-	Issues   []*ValidationIssue `json:"issues,omitempty" yaml:"issues,omitempty"`
+	File          string                    `json:"file" yaml:"file"`
+	Valid         bool                      `json:"valid" yaml:"valid"`
+	Duration      time.Duration             `json:"duration_ms" yaml:"duration_ms"`
+	Errors        []string                  `json:"errors,omitempty" yaml:"errors,omitempty"`
+	Warnings      []string                  `json:"warnings,omitempty" yaml:"warnings,omitempty"`
+	Issues        []*ValidationIssue        `json:"issues,omitempty" yaml:"issues,omitempty"`
+	EnhancedError *parser.MultiErrorEnhanced `json:"-" yaml:"-"` // For internal use only
 }
 
 // ValidationIssue represents a detailed validation issue
@@ -180,9 +182,13 @@ func validateSingleFile(p parser.Parser, filename string) ValidationResult {
 	if err != nil {
 		result.Valid = false
 		
-		// Check if it's an enhanced error
-		if enhancedErr, ok := err.(*parser.MultiErrorEnhanced); ok {
-			// Process enhanced errors
+		// Check if it's an enhanced error (might be wrapped)
+		var enhancedErr *parser.MultiErrorEnhanced
+		if errors.As(err, &enhancedErr) {
+			// Store the enhanced error directly for full context
+			result.EnhancedError = enhancedErr
+			
+			// Also process individual issues for compatibility
 			for _, issue := range enhancedErr.GetAllIssues() {
 				validationIssue := convertEnhancedErrorToIssue(issue)
 				result.Issues = append(result.Issues, validationIssue)
@@ -335,7 +341,11 @@ func printValidationResult(result ValidationResult) {
 	fmt.Printf("\n❌ %s (%v)\n", result.File, result.Duration)
 	
 	// Print enhanced error details if available
-	if len(result.Issues) > 0 {
+	if result.EnhancedError != nil {
+		for _, issue := range result.EnhancedError.GetAllIssues() {
+			printEnhancedIssue(issue)
+		}
+	} else if len(result.Issues) > 0 {
 		for _, issue := range result.Issues {
 			printValidationIssue(issue)
 		}
@@ -357,14 +367,16 @@ func printValidationIssue(issue *ValidationIssue) {
 		severityIcon = "ℹ️"
 	}
 	
-	fmt.Printf("  %s %s at %d:%d: %s\n", severityIcon, issue.Severity, issue.Line, issue.Column, issue.Title)
+	// Add a separator line before each error (except the first one)
+	fmt.Printf("  ┌─ %s %s at %d:%d: %s\n", severityIcon, issue.Severity, issue.Line, issue.Column, issue.Title)
 	
 	if issue.Message != "" && issue.Message != issue.Title {
-		fmt.Printf("    %s\n", issue.Message)
+		fmt.Printf("  │  %s\n", issue.Message)
 	}
 	
 	if issue.Suggestion != nil {
-		fmt.Printf("    💡 %s", issue.Suggestion.Title)
+		fmt.Printf("  │\n")  // Add spacing before suggestions
+		fmt.Printf("  │  💡 %s", issue.Suggestion.Title)
 		if issue.Suggestion.Description != "" {
 			fmt.Printf(": %s", issue.Suggestion.Description)
 		}
@@ -372,17 +384,85 @@ func printValidationIssue(issue *ValidationIssue) {
 		
 		// Show examples if available
 		if len(issue.Suggestion.Examples) > 0 {
-			fmt.Printf("    Example:\n")
+			fmt.Printf("  │\n")  // Add spacing before examples
+			fmt.Printf("  │  Example:\n")
 			for _, example := range issue.Suggestion.Examples {
-				fmt.Printf("      %s\n", example)
+				fmt.Printf("  │    %s\n", example)
 			}
 		}
 		
 		// Show documentation link
 		if issue.Suggestion.DocsURL != "" {
-			fmt.Printf("    📖 See: %s\n", issue.Suggestion.DocsURL)
+			fmt.Printf("  │\n")  // Add spacing before docs link
+			fmt.Printf("  │  📖 See: %s\n", issue.Suggestion.DocsURL)
 		}
 	}
 	
-	fmt.Printf("\n")
+	fmt.Printf("  └─\n\n")  // Clear end separator with extra spacing
+}
+
+// printEnhancedIssue prints a detailed enhanced error with full context
+func printEnhancedIssue(issue *parser.EnhancedError) {
+	// Error header with position
+	severityIcon := "❌"
+	if issue.Severity == parser.SeverityWarning {
+		severityIcon = "⚠️"
+	} else if issue.Severity == parser.SeverityInfo {
+		severityIcon = "ℹ️"
+	}
+	
+	fmt.Printf("  ┌─ %s %s at %d:%d: %s\n", severityIcon, issue.Severity, issue.Position.Line, issue.Position.Column, issue.Title)
+	
+	if issue.Message != "" && issue.Message != issue.Title {
+		fmt.Printf("  │  %s\n", issue.Message)
+	}
+	
+	// Print source context if available
+	if issue.Context != nil && len(issue.Context.Lines) > 0 {
+		fmt.Printf("  │\n")  // Add spacing before context
+		for _, line := range issue.Context.Lines {
+			if line.IsError {
+				// Highlight the error line
+				fmt.Printf("  │→ %4d | %s\n", line.Number, line.Content)
+				// Add highlighting indicator if available
+				if issue.Context.Highlight.Length > 0 {
+					spaces := fmt.Sprintf("%*s", issue.Context.Highlight.StartColumn-1, "")
+					highlight := fmt.Sprintf("%*s", issue.Context.Highlight.Length, "")
+					for i := range highlight {
+						highlight = highlight[:i] + "^" + highlight[i+1:]
+					}
+					fmt.Printf("  │  %4s   %s%s\n", "", spaces, highlight)
+				}
+			} else {
+				// Regular context line
+				fmt.Printf("  │  %4d | %s\n", line.Number, line.Content)
+			}
+		}
+	}
+	
+	if issue.Suggestion != nil {
+		fmt.Printf("  │\n")  // Add spacing before suggestions
+		fmt.Printf("  │  💡 %s", issue.Suggestion.Title)
+		if issue.Suggestion.Description != "" {
+			fmt.Printf(": %s", issue.Suggestion.Description)
+		}
+		fmt.Printf("\n")
+		
+		// Show examples if available
+		if len(issue.Suggestion.Examples) > 0 {
+			fmt.Printf("  │\n")  // Add spacing before examples
+			fmt.Printf("  │  Example:\n")
+			for _, example := range issue.Suggestion.Examples {
+				fmt.Printf("  │    %s\n", example)
+			}
+		}
+		
+		// Show documentation link
+		if issue.Suggestion.DocsURL != "" {
+			fmt.Printf("  │\n")  // Add spacing before docs link
+			fmt.Printf("  │  📖 See: %s\n", issue.Suggestion.DocsURL)
+		}
+	}
+	
+	fmt.Printf("  └─\n\n")  // Clear end separator with extra spacing
 }
