@@ -18,13 +18,13 @@ import (
 
 // ClaudeCodeProvider implements the ModelProvider interface using Claude Code CLI
 type ClaudeCodeProvider struct {
-	name         string
+	name           string
 	executablePath string
-	workingDir   string
-	models       []string
-	sessions     map[string]*ClaudeCodeSession
-	sessionMutex sync.RWMutex
-	config       *ClaudeCodeConfig
+	workingDir     string
+	models         []string
+	sessions       map[string]*ClaudeCodeSession
+	sessionMutex   sync.RWMutex
+	config         *ClaudeCodeConfig
 }
 
 // ClaudeCodeConfig contains configuration for Claude Code provider
@@ -40,18 +40,18 @@ type ClaudeCodeConfig struct {
 
 // ClaudeCodeSession represents an active Claude Code session
 type ClaudeCodeSession struct {
-	ID          string
-	Process     *exec.Cmd
-	Stdin       io.WriteCloser
-	Stdout      io.ReadCloser
-	Stderr      io.ReadCloser
-	Scanner     *bufio.Scanner
+	ID           string
+	Process      *exec.Cmd
+	Stdin        io.WriteCloser
+	Stdout       io.ReadCloser
+	Stderr       io.ReadCloser
+	Scanner      *bufio.Scanner
 	ErrorScanner *bufio.Scanner
-	CreatedAt   time.Time
-	LastUsed    time.Time
-	WorkingDir  string
-	Mutex       sync.Mutex
-	Active      bool
+	CreatedAt    time.Time
+	LastUsed     time.Time
+	WorkingDir   string
+	Mutex        sync.Mutex
+	Active       bool
 }
 
 // ClaudeCodeResponse represents a response from Claude Code
@@ -140,13 +140,13 @@ func (p *ClaudeCodeProvider) Generate(ctx context.Context, request *ModelRequest
 	if err != nil {
 		// If session failed, try to recreate it once
 		log.Warn().Err(err).Str("session_id", session.ID).Msg("Session failed, attempting to recreate")
-		
+
 		p.closeSession(session.ID)
 		session, err = p.getOrCreateSession(ctx, request.RequestID)
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to recreate Claude Code session: %w", err)
 		}
-		
+
 		response, err = p.sendRequest(ctx, session, request)
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to send request to Claude Code: %w", err)
@@ -240,13 +240,8 @@ func (p *ClaudeCodeProvider) getOrCreateSession(ctx context.Context, requestID s
 func (p *ClaudeCodeProvider) createSessionUnsafe(ctx context.Context, sessionID string) (*ClaudeCodeSession, error) {
 	// Build command arguments
 	args := []string{
-		"--headless",
-		"--no-input-history",
+		"--p",
 		"--model", p.config.Model,
-	}
-
-	if p.config.LogLevel != "" {
-		args = append(args, "--log-level", p.config.LogLevel)
 	}
 
 	// Create command
@@ -357,7 +352,7 @@ func (p *ClaudeCodeProvider) readResponse(session *ClaudeCodeSession) (*ClaudeCo
 	// We need to parse the output to extract the actual response
 	for session.Scanner.Scan() {
 		line := session.Scanner.Text()
-		
+
 		// Skip empty lines and prompts
 		if line == "" || strings.HasPrefix(line, "> ") {
 			continue
@@ -366,17 +361,17 @@ func (p *ClaudeCodeProvider) readResponse(session *ClaudeCodeSession) (*ClaudeCo
 		// Look for response start/end markers or content
 		if strings.Contains(line, "Assistant:") || inResponse {
 			inResponse = true
-			
+
 			// Clean up the line
 			cleaned := strings.TrimSpace(line)
 			if strings.HasPrefix(cleaned, "Assistant:") {
 				cleaned = strings.TrimSpace(strings.TrimPrefix(cleaned, "Assistant:"))
 			}
-			
+
 			if cleaned != "" {
 				responseLines = append(responseLines, cleaned)
 			}
-			
+
 			// Check for natural ending
 			if strings.HasSuffix(line, ".") || strings.HasSuffix(line, "!") || strings.HasSuffix(line, "?") {
 				// Look ahead to see if there's more content
@@ -400,7 +395,7 @@ func (p *ClaudeCodeProvider) readResponse(session *ClaudeCodeSession) (*ClaudeCo
 		SessionID: session.ID,
 		Metadata: map[string]interface{}{
 			"working_dir": session.WorkingDir,
-			"session_id": session.ID,
+			"session_id":  session.ID,
 		},
 	}
 
@@ -490,7 +485,7 @@ func detectClaudeCodeExecutable(configPath string) (string, error) {
 
 	// Try common names
 	candidates := []string{"claude", "claude-code", "claude_code"}
-	
+
 	for _, candidate := range candidates {
 		if path, err := exec.LookPath(candidate); err == nil {
 			return path, nil
@@ -558,24 +553,24 @@ func validateClaudeCodeInstallation(execPath string) error {
 func parseClaudeCodeOutput(output string) (*ClaudeCodeResponse, error) {
 	// Claude Code may output tool usage, code blocks, or plain text
 	// This is a basic parser that can be enhanced based on actual output format
-	
+
 	response := &ClaudeCodeResponse{
-		Content: output,
+		Content:  output,
 		Metadata: make(map[string]interface{}),
 	}
 
 	// Look for tool usage patterns
 	toolPattern := regexp.MustCompile(`(?s)<function_calls>(.*?)</function_calls>`)
 	toolMatches := toolPattern.FindAllStringSubmatch(output, -1)
-	
+
 	for _, match := range toolMatches {
 		if len(match) > 1 {
 			// Parse tool usage
 			toolUse := &ClaudeCodeToolUse{
-				Name: "unknown",
+				Name:       "unknown",
 				Parameters: make(map[string]interface{}),
 			}
-			
+
 			// Basic extraction - this would need to be more sophisticated
 			// for actual Claude Code tool parsing
 			toolContent := match[1]
@@ -586,7 +581,7 @@ func parseClaudeCodeOutput(output string) (*ClaudeCodeResponse, error) {
 			} else if strings.Contains(toolContent, "write") {
 				toolUse.Name = "write"
 			}
-			
+
 			response.ToolUses = append(response.ToolUses, *toolUse)
 		}
 	}

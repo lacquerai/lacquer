@@ -163,6 +163,14 @@ func (ec *ExecutionContext) UpdateState(updates map[string]interface{}) {
 		Msg("State batch updated")
 }
 
+// GetAllState returns a copy of all state variables
+func (ec *ExecutionContext) GetAllState() map[string]interface{} {
+	ec.mu.RLock()
+	defer ec.mu.RUnlock()
+	
+	return CopyMap(ec.State)
+}
+
 // GetStepResult returns the result of a specific step
 func (ec *ExecutionContext) GetStepResult(stepID string) (*StepResult, bool) {
 	ec.mu.RLock()
