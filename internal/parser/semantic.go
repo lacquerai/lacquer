@@ -702,9 +702,18 @@ func (sv *SemanticValidator) validateWorkflowTemplatesWithContext(ctx *validatio
 func (sv *SemanticValidator) validateTemplateFieldWithContext(template, fieldPath string, ctx *validationContext) error {
 	// Extract and validate variable references
 	refs := sv.templateValidator.ExtractVariableReferences(template)
+	var errors []string
+	
 	for _, ref := range refs {
 		if err := sv.templateValidator.ValidateVariableReference(ref, ctx); err != nil {
-			return err
+			errors = append(errors, err.Error())
+		}
+	}
+	
+	if len(errors) > 0 {
+		return &TemplateValidationError{
+			Variable: template,
+			Message:  strings.Join(errors, "; "),
 		}
 	}
 

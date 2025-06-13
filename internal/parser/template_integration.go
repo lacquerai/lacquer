@@ -215,7 +215,7 @@ func (tv *TemplateValidator) ValidateVariableReference(ref VariableReference, ct
 	default:
 		return &TemplateValidationError{
 			Variable: ref.Raw,
-			Message:  "unknown variable scope",
+			Message:  "undefined variable: " + ref.Raw,
 		}
 	}
 }
@@ -232,7 +232,7 @@ func (tv *TemplateValidator) validateInputReference(ref VariableReference, ctx *
 	if ctx.inputs[ref.Target] == nil {
 		return &TemplateValidationError{
 			Variable: ref.Raw,
-			Message:  "undefined input parameter: " + ref.Target,
+			Message:  "undefined variable: " + ref.Raw,
 		}
 	}
 

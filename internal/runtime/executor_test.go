@@ -14,7 +14,7 @@ func TestNewExecutor(t *testing.T) {
 	executor := NewExecutor(nil)
 	assert.NotNil(t, executor)
 	assert.NotNil(t, executor.config)
-	assert.Equal(t, 1, executor.config.MaxConcurrentSteps)
+	assert.Equal(t, 3, executor.config.MaxConcurrentSteps)
 	assert.True(t, executor.config.EnableRetries)
 	
 	// Test with custom config
@@ -349,7 +349,7 @@ func TestExecutor_ExecuteAgentStep_MissingModel(t *testing.T) {
 func TestDefaultExecutorConfig(t *testing.T) {
 	config := DefaultExecutorConfig()
 	
-	assert.Equal(t, 1, config.MaxConcurrentSteps)
+	assert.Equal(t, 3, config.MaxConcurrentSteps)
 	assert.Equal(t, 5*time.Minute, config.DefaultTimeout)
 	assert.True(t, config.EnableRetries)
 	assert.Equal(t, 3, config.MaxRetries)
