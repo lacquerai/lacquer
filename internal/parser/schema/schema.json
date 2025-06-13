@@ -333,6 +333,10 @@
           "enum": ["human_input", "update_state"],
           "description": "System action to perform"
         },
+        "updates": {
+          "type": "object",
+          "description": "State updates to apply (only valid when action is update_state)"
+        },
         "condition": {
           "type": "string",
           "description": "Condition for conditional execution"
