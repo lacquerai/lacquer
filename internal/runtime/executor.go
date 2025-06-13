@@ -9,6 +9,33 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// ExecutionEventType represents the type of execution event
+type ExecutionEventType string
+
+const (
+	EventWorkflowStarted   ExecutionEventType = "workflow_started"
+	EventWorkflowCompleted ExecutionEventType = "workflow_completed"
+	EventWorkflowFailed    ExecutionEventType = "workflow_failed"
+	EventStepStarted       ExecutionEventType = "step_started"
+	EventStepCompleted     ExecutionEventType = "step_completed"
+	EventStepFailed        ExecutionEventType = "step_failed"
+	EventStepSkipped       ExecutionEventType = "step_skipped"
+	EventStepRetrying      ExecutionEventType = "step_retrying"
+)
+
+// ExecutionEvent represents an event during workflow execution
+type ExecutionEvent struct {
+	Type      ExecutionEventType `json:"type"`
+	Timestamp time.Time          `json:"timestamp"`
+	RunID     string             `json:"run_id"`
+	StepID    string             `json:"step_id,omitempty"`
+	StepIndex int                `json:"step_index,omitempty"`
+	Duration  time.Duration      `json:"duration,omitempty"`
+	Error     string             `json:"error,omitempty"`
+	Attempt   int                `json:"attempt,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+}
+
 // Executor is the main workflow execution engine
 type Executor struct {
 	templateEngine *TemplateEngine
@@ -18,23 +45,25 @@ type Executor struct {
 
 // ExecutorConfig contains configuration for the executor
 type ExecutorConfig struct {
-	MaxConcurrentSteps int           `yaml:"max_concurrent_steps"`
-	DefaultTimeout     time.Duration `yaml:"default_timeout"`
-	EnableRetries      bool          `yaml:"enable_retries"`
-	MaxRetries         int           `yaml:"max_retries"`
-	RetryDelay         time.Duration `yaml:"retry_delay"`
-	EnableMetrics      bool          `yaml:"enable_metrics"`
+	MaxConcurrentSteps   int           `yaml:"max_concurrent_steps"`
+	DefaultTimeout       time.Duration `yaml:"default_timeout"`
+	EnableRetries        bool          `yaml:"enable_retries"`
+	MaxRetries           int           `yaml:"max_retries"`
+	RetryDelay           time.Duration `yaml:"retry_delay"`
+	EnableMetrics        bool          `yaml:"enable_metrics"`
+	EnableStateSnapshots bool          `yaml:"enable_state_snapshots"`
 }
 
 // DefaultExecutorConfig returns a sensible default configuration
 func DefaultExecutorConfig() *ExecutorConfig {
 	return &ExecutorConfig{
-		MaxConcurrentSteps: 1, // Sequential execution for MVP
-		DefaultTimeout:     5 * time.Minute,
-		EnableRetries:      true,
-		MaxRetries:         3,
-		RetryDelay:         time.Second,
-		EnableMetrics:      true,
+		MaxConcurrentSteps:   1, // Sequential execution for MVP
+		DefaultTimeout:       5 * time.Minute,
+		EnableRetries:        true,
+		MaxRetries:           3,
+		RetryDelay:           time.Second,
+		EnableMetrics:        true,
+		EnableStateSnapshots: false,
 	}
 }
 
@@ -44,11 +73,176 @@ func NewExecutor(config *ExecutorConfig) *Executor {
 		config = DefaultExecutorConfig()
 	}
 
+	registry := NewModelRegistry()
+	
+	// Initialize and register providers
+	initializeProviders(registry)
+
 	return &Executor{
 		templateEngine: NewTemplateEngine(),
-		modelRegistry:  NewModelRegistry(),
+		modelRegistry:  registry,
 		config:         config,
 	}
+}
+
+// initializeProviders initializes and registers all available model providers
+func initializeProviders(registry *ModelRegistry) {
+	// Register Anthropic provider if API key is available
+	if apiKey := GetAnthropicAPIKeyFromEnv(); apiKey != "" {
+		anthropicProvider, err := NewAnthropicProvider(nil) // Use default config
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize Anthropic provider")
+		} else {
+			if err := registry.RegisterProvider(anthropicProvider); err != nil {
+				log.Warn().Err(err).Msg("Failed to register Anthropic provider")
+			} else {
+				log.Info().Msg("Anthropic provider registered successfully")
+			}
+		}
+	}
+	
+	// Register Claude Code provider if CLI is available
+	claudeCodeProvider, err := NewClaudeCodeProvider(nil) // Use default config
+	if err != nil {
+		log.Debug().Err(err).Msg("Claude Code provider not available")
+	} else {
+		if err := registry.RegisterProvider(claudeCodeProvider); err != nil {
+			log.Warn().Err(err).Msg("Failed to register Claude Code provider")
+		} else {
+			log.Info().Msg("Claude Code provider registered successfully")
+		}
+	}
+	
+	// TODO: Add OpenAI provider when implemented
+	// if apiKey := getOpenAIAPIKeyFromEnv(); apiKey != "" {
+	//     openaiProvider, err := NewOpenAIProvider(nil)
+	//     if err == nil {
+	//         registry.RegisterProvider(openaiProvider)
+	//     }
+	// }
+}
+
+// ExecuteWorkflow runs a workflow with progress events sent to the given channel
+func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContext, progressChan chan<- ExecutionEvent) error {
+	log.Info().
+		Str("workflow", getWorkflowNameFromContext(execCtx)).
+		Str("run_id", execCtx.RunID).
+		Int("total_steps", execCtx.TotalSteps).
+		Msg("Starting workflow execution")
+
+	// Send workflow started event
+	if progressChan != nil {
+		progressChan <- ExecutionEvent{
+			Type:      EventWorkflowStarted,
+			Timestamp: time.Now(),
+			RunID:     execCtx.RunID,
+		}
+	}
+
+	// Execute workflow steps sequentially
+	for i, step := range execCtx.Workflow.Workflow.Steps {
+		if execCtx.IsCancelled() {
+			log.Info().Str("run_id", execCtx.RunID).Msg("Workflow execution cancelled")
+			break
+		}
+
+		execCtx.CurrentStepIndex = i
+		
+		// Send step started event
+		if progressChan != nil {
+			progressChan <- ExecutionEvent{
+				Type:      EventStepStarted,
+				Timestamp: time.Now(),
+				RunID:     execCtx.RunID,
+				StepID:    step.ID,
+				StepIndex: i + 1,
+			}
+		}
+		
+		stepStart := time.Now()
+		err := e.executeStep(execCtx, step)
+		stepDuration := time.Since(stepStart)
+
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("run_id", execCtx.RunID).
+				Str("step_id", step.ID).
+				Msg("Step execution failed")
+			
+			// Send step failed event
+			if progressChan != nil {
+				progressChan <- ExecutionEvent{
+					Type:      EventStepFailed,
+					Timestamp: time.Now(),
+					RunID:     execCtx.RunID,
+					StepID:    step.ID,
+					StepIndex: i + 1,
+					Duration:  stepDuration,
+					Error:     err.Error(),
+				}
+			}
+			
+			// Mark step as failed
+			result := &StepResult{
+				StepID:    step.ID,
+				Status:    StepStatusFailed,
+				StartTime: stepStart,
+				EndTime:   time.Now(),
+				Duration:  stepDuration,
+				Error:     err,
+			}
+			execCtx.SetStepResult(step.ID, result)
+			
+			// Send workflow failed event
+			if progressChan != nil {
+				progressChan <- ExecutionEvent{
+					Type:      EventWorkflowFailed,
+					Timestamp: time.Now(),
+					RunID:     execCtx.RunID,
+					Error:     err.Error(),
+				}
+			}
+			
+			return err
+		} else {
+			// Send step completed event
+			if progressChan != nil {
+				progressChan <- ExecutionEvent{
+					Type:      EventStepCompleted,
+					Timestamp: time.Now(),
+					RunID:     execCtx.RunID,
+					StepID:    step.ID,
+					StepIndex: i + 1,
+					Duration:  stepDuration,
+				}
+			}
+		}
+	}
+
+	// Send workflow completed event
+	if progressChan != nil {
+		progressChan <- ExecutionEvent{
+			Type:      EventWorkflowCompleted,
+			Timestamp: time.Now(),
+			RunID:     execCtx.RunID,
+		}
+	}
+
+	log.Info().
+		Str("run_id", execCtx.RunID).
+		Dur("duration", time.Since(execCtx.StartTime)).
+		Msg("Workflow execution completed successfully")
+
+	return nil
+}
+
+// getWorkflowNameFromContext extracts workflow name from execution context
+func getWorkflowNameFromContext(execCtx *ExecutionContext) string {
+	if execCtx.Workflow.Metadata != nil && execCtx.Workflow.Metadata.Name != "" {
+		return execCtx.Workflow.Metadata.Name
+	}
+	return "Untitled Workflow"
 }
 
 // Execute runs a workflow with the given inputs
