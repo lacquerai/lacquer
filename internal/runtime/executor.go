@@ -113,13 +113,19 @@ func initializeProviders(registry *ModelRegistry) {
 		}
 	}
 	
-	// TODO: Add OpenAI provider when implemented
-	// if apiKey := getOpenAIAPIKeyFromEnv(); apiKey != "" {
-	//     openaiProvider, err := NewOpenAIProvider(nil)
-	//     if err == nil {
-	//         registry.RegisterProvider(openaiProvider)
-	//     }
-	// }
+	// Register OpenAI provider if API key is available
+	if apiKey := GetOpenAIAPIKeyFromEnv(); apiKey != "" {
+		openaiProvider, err := NewOpenAIProvider(nil) // Use default config
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize OpenAI provider")
+		} else {
+			if err := registry.RegisterProvider(openaiProvider); err != nil {
+				log.Warn().Err(err).Msg("Failed to register OpenAI provider")
+			} else {
+				log.Info().Msg("OpenAI provider registered successfully")
+			}
+		}
+	}
 }
 
 // ExecuteWorkflow runs a workflow with progress events sent to the given channel
