@@ -76,13 +76,7 @@ func (p *OutputParser) ParseStepOutput(step *ast.Step, response string) (map[str
 		}
 	}
 
-	// Always include the raw response for fallback access
-	parsedOutputs["response"] = response
-
-	// If we have a default output field defined, ensure it's populated
-	if _, hasOutput := step.Outputs["output"]; hasOutput && parsedOutputs["output"] == nil {
-		parsedOutputs["output"] = response
-	}
+	parsedOutputs["output"] = response
 
 	return parsedOutputs, nil
 }

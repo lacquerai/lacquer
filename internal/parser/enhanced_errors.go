@@ -441,7 +441,7 @@ func (r *ErrorReporter) generateSemanticSuggestion(message string) *ErrorSuggest
 			Description: "Variables must be defined before use",
 			Examples: []string{
 				"# Reference step outputs:",
-				"prompt: \"Previous result: {{ steps.step1.response }}\"",
+				"prompt: \"Previous result: {{ steps.step1.output }}\"",
 				"# Reference inputs:",
 				"prompt: \"Topic: {{ inputs.topic }}\"",
 			},

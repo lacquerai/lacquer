@@ -114,7 +114,6 @@ func (sv *SemanticValidator) buildValidationContext(ctx *validationContext) {
 			}
 			// Default outputs that are always available for steps
 			ctx.variables[fmt.Sprintf("steps.%s.output", step.ID)] = true
-			ctx.variables[fmt.Sprintf("steps.%s.response", step.ID)] = true
 
 			// Add common output patterns that might be generated dynamically
 			commonOutputs := []string{"result", "data", "content", "findings", "summary", "analysis"}

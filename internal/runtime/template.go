@@ -142,15 +142,10 @@ func (te *TemplateEngine) resolveStepField(result *StepResult, field string, rem
 	switch field {
 	case "status":
 		value = string(result.Status)
-	case "response":
-		value = result.Response
 	case "duration":
 		value = result.Duration.String()
 	case "output":
-		if result.Output == nil {
-			return nil, fmt.Errorf("step output is empty")
-		}
-		value = result.Output
+		value = result.Response
 	case "error":
 		if result.Error != nil {
 			value = result.Error.Error()

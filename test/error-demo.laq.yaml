@@ -20,4 +20,4 @@ workflow:
     - id: step3
       action: update_state
       updates:
-        result: "{{ steps.nonexistent_step.response }}"
+        result: "{{ steps.nonexistent_step.output }}"

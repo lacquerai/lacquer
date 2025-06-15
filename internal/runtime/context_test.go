@@ -149,7 +149,7 @@ func TestExecutionContext_StepResultMethods(t *testing.T) {
 		EndTime:   time.Now(),
 		Duration:  100 * time.Millisecond,
 		Output: map[string]interface{}{
-			"response": "Hello, world!",
+			"output": "Hello, world!",
 		},
 	}
 

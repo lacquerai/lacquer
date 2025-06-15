@@ -69,7 +69,7 @@ func TestRuntimeComprehensive_EndToEndWorkflow(t *testing.T) {
 				{
 					ID:     "step2",
 					Agent:  "test_agent",
-					Prompt: "Build on: {{ steps.step1.response }}",
+					Prompt: "Build on: {{ steps.step1.output }}",
 					Updates: map[string]interface{}{
 						"counter": 1,
 						"status":  "processing",
@@ -78,14 +78,14 @@ func TestRuntimeComprehensive_EndToEndWorkflow(t *testing.T) {
 				{
 					ID:     "step3",
 					Agent:  "test_agent",
-					Prompt: "Finalize with format {{ inputs.format }}: {{ steps.step2.response }}",
+					Prompt: "Finalize with format {{ inputs.format }}: {{ steps.step2.output }}",
 					Updates: map[string]interface{}{
 						"status": "completed",
 					},
 				},
 			},
 			Outputs: map[string]interface{}{
-				"result":       "{{ steps.step3.response }}",
+				"result":       "{{ steps.step3.output }}",
 				"step_count":   "{{ state.counter }}",
 				"final_status": "{{ state.status }}",
 			},
@@ -180,12 +180,12 @@ func TestRuntimeComprehensive_VariableInterpolation(t *testing.T) {
 				{
 					ID:     "summary_step",
 					Agent:  "interpolation_agent",
-					Prompt: "Summary for {{ inputs.name }}: {{ steps.greeting_step.response }}",
+					Prompt: "Summary for {{ inputs.name }}: {{ steps.greeting_step.output }}",
 				},
 			},
 			Outputs: map[string]interface{}{
-				"greeting": "{{ steps.greeting_step.response }}",
-				"summary":  "{{ steps.summary_step.response }}",
+				"greeting": "{{ steps.greeting_step.output }}",
+				"summary":  "{{ steps.summary_step.output }}",
 				"metadata": map[string]interface{}{
 					"processed_by": "{{ workflow.run_id }}",
 					"step_count":   "{{ workflow.total_steps }}",
@@ -483,7 +483,7 @@ func TestRuntimeComprehensive_StateManagement(t *testing.T) {
 				{
 					ID:     "update_metadata",
 					Agent:  "state_agent",
-					Prompt: "Updating metadata after {{ steps.increment_counter.response }}",
+					Prompt: "Updating metadata after {{ steps.increment_counter.output }}",
 					Updates: map[string]interface{}{
 						"metadata": map[string]interface{}{
 							"created":    "{{ state.metadata.created }}",
@@ -638,7 +638,7 @@ func TestRuntimeComprehensive_ConcurrentExecution(t *testing.T) {
 				{
 					ID:     "dependent_step",
 					Agent:  "concurrent_agent",
-					Prompt: "Depends on: {{ steps.independent_1.response }}, {{ steps.independent_2.response }}, {{ steps.independent_3.response }}",
+					Prompt: "Depends on: {{ steps.independent_1.output }}, {{ steps.independent_2.output }}, {{ steps.independent_3.output }}",
 				},
 			},
 		},
@@ -1049,7 +1049,7 @@ func TestRuntimeComprehensive_HTTPVariableInterpolation(t *testing.T) {
 				{
 					ID:     "follow_up",
 					Agent:  "interpolation_agent",
-					Prompt: "Based on the greeting: {{ steps.greeting.response }}, continue the conversation about {{ inputs.topic }}.",
+					Prompt: "Based on the greeting: {{ steps.greeting.output }}, continue the conversation about {{ inputs.topic }}.",
 				},
 			},
 		},
@@ -1190,7 +1190,7 @@ func createTestWorkflow(model, agentName string) *ast.Workflow {
 				{
 					ID:     "step2",
 					Agent:  agentName,
-					Prompt: "Build on: {{ steps.step1.response }}",
+					Prompt: "Build on: {{ steps.step1.output }}",
 					Updates: map[string]interface{}{
 						"counter": 1,
 						"status":  "processing",
@@ -1199,7 +1199,7 @@ func createTestWorkflow(model, agentName string) *ast.Workflow {
 				{
 					ID:     "step3",
 					Agent:  agentName,
-					Prompt: "Finalize: {{ steps.step2.response }}",
+					Prompt: "Finalize: {{ steps.step2.output }}",
 					Updates: map[string]interface{}{
 						"status": "completed",
 					},

@@ -239,7 +239,7 @@ steps:
         agent: assistant
         prompt: |
           Improve based on feedback:
-          {{ steps.get_user_input.outputs.response }}
+          {{ steps.get_user_input.outputs.output }}
       
       - id: get_feedback
         action: human_input

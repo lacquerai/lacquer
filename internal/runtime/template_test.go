@@ -101,7 +101,7 @@ func TestTemplateEngine_StepVariables(t *testing.T) {
 	execCtx.SetStepResult("step1", stepResult)
 
 	// Test step response
-	result, err := te.Render("Response: {{ steps.step1.response }}", execCtx)
+	result, err := te.Render("Response: {{ steps.step1.output }}", execCtx)
 	assert.NoError(t, err)
 	assert.Equal(t, "Response: Hello, world!", result)
 
@@ -255,7 +255,7 @@ func TestTemplateEngine_Errors(t *testing.T) {
 	assert.Contains(t, err.Error(), "state variable missing not found")
 
 	// Test missing step
-	_, err = te.Render("{{ steps.missing.response }}", execCtx)
+	_, err = te.Render("{{ steps.missing.output }}", execCtx)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "step missing not found")
 
@@ -271,7 +271,7 @@ func TestTemplateEngine_ValidateTemplate(t *testing.T) {
 	// Test valid templates
 	assert.NoError(t, te.ValidateTemplate("Hello, {{ inputs.name }}!"))
 	assert.NoError(t, te.ValidateTemplate("{{ state.counter }}"))
-	assert.NoError(t, te.ValidateTemplate("{{ steps.step1.response }}"))
+	assert.NoError(t, te.ValidateTemplate("{{ steps.step1.output }}"))
 	assert.NoError(t, te.ValidateTemplate("No variables here"))
 	assert.NoError(t, te.ValidateTemplate(""))
 

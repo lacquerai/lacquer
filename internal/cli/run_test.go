@@ -88,10 +88,8 @@ func TestStepExecutionResultStructure(t *testing.T) {
 	stepResult := StepExecutionResult{
 		StepID:     "step1",
 		Status:     "completed",
-		StartTime:  time.Now(),
-		EndTime:    time.Now(),
 		Duration:   time.Second,
-		Output:     map[string]interface{}{"response": "Hello World"},
+		Output:     map[string]interface{}{"output": "Hello World"},
 		Response:   "Hello World",
 		Retries:    0,
 		TokenUsage: tokenUsage,
@@ -186,7 +184,7 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 		StartTime: time.Now().Add(-2 * time.Second),
 		EndTime:   time.Now().Add(-1 * time.Second),
 		Duration:  time.Second,
-		Output:    map[string]interface{}{"response": "Result 1"},
+		Output:    map[string]interface{}{"output": "Result 1"},
 		Response:  "Result 1",
 		TokenUsage: &runtime.TokenUsage{
 			PromptTokens:     10,
@@ -202,7 +200,7 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 		StartTime: time.Now().Add(-1 * time.Second),
 		EndTime:   time.Now(),
 		Duration:  time.Second,
-		Output:    map[string]interface{}{"response": "Result 2"},
+		Output:    map[string]interface{}{"output": "Result 2"},
 		Response:  "Result 2",
 		TokenUsage: &runtime.TokenUsage{
 			PromptTokens:     20,

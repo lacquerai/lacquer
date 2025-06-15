@@ -30,5 +30,5 @@ workflow:
     - id: echo_results
       action: update_state
       updates:
-        gpt4_response: "{{ steps.test_gpt4.response }}"
-        gpt35_response: "{{ steps.test_gpt35.response }}"
+        gpt4_response: "{{ steps.test_gpt4.output }}"
+        gpt35_response: "{{ steps.test_gpt35.output }}"

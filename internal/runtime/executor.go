@@ -237,6 +237,15 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 		}
 	}
 
+	// Collect workflow outputs if defined
+	if err := e.collectWorkflowOutputs(execCtx); err != nil {
+		log.Error().
+			Err(err).
+			Str("run_id", execCtx.RunID).
+			Msg("Failed to collect workflow outputs")
+		return err
+	}
+
 	// Send workflow completed event
 	if progressChan != nil {
 		progressChan <- ExecutionEvent{
@@ -651,13 +660,13 @@ func (e *Executor) findStepDependencies(step *ast.Step, allSteps []*ast.Step) []
 	return result
 }
 
-// extractStepReferences extracts step references like {{ steps.stepname.response }} from template strings
+// extractStepReferences extracts step references like {{ steps.stepname.output }} from template strings
 func (e *Executor) extractStepReferences(template string, validStepIDs map[string]bool) []string {
 	var dependencies []string
 
 	// Use strings.Contains to find patterns - simpler and more reliable
 	for stepID := range validStepIDs {
-		// Look for patterns like {{ steps.stepID.response }} or {{ steps.stepID.output }}
+		// Look for patterns like {{ steps.stepID.output }}
 		pattern := "{{ steps." + stepID + "."
 		if strings.Contains(template, pattern) {
 			dependencies = append(dependencies, stepID)
@@ -978,6 +987,49 @@ func initializeRequiredProviders(registry *ModelRegistry, requiredProviders map[
 
 		log.Info().Str("provider", providerName).Msg("Provider registered successfully")
 	}
+
+	return nil
+}
+
+// collectWorkflowOutputs collects and renders workflow-level outputs using the template engine
+func (e *Executor) collectWorkflowOutputs(execCtx *ExecutionContext) error {
+	workflowOutputs := execCtx.Workflow.Workflow.Outputs
+	if workflowOutputs == nil || len(workflowOutputs) == 0 {
+		return nil // No outputs defined
+	}
+
+	outputs := make(map[string]interface{})
+
+	for key, valueTemplate := range workflowOutputs {
+		// Convert the template value to a string for rendering
+		templateStr, ok := valueTemplate.(string)
+		if !ok {
+			// If it's not a string template, use the value as-is
+			outputs[key] = valueTemplate
+			continue
+		}
+
+		// Render the template using the template engine
+		renderedValue, err := e.templateEngine.Render(templateStr, execCtx)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("key", key).
+				Str("template", templateStr).
+				Msg("Failed to render workflow output template")
+			return fmt.Errorf("failed to render output '%s': %w", key, err)
+		}
+
+		outputs[key] = renderedValue
+	}
+
+	// Set the rendered outputs in the execution context
+	execCtx.SetWorkflowOutputs(outputs)
+
+	log.Info().
+		Str("run_id", execCtx.RunID).
+		Interface("outputs", outputs).
+		Msg("Workflow outputs collected successfully")
 
 	return nil
 }

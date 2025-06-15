@@ -39,10 +39,10 @@ func TestOutputParser_ParseStepOutput(t *testing.T) {
 			},
 			response: `{"name": "Test Item", "score": 95, "items": ["item1", "item2", "item3"]}`,
 			expected: map[string]interface{}{
-				"name":     "Test Item",
-				"score":    95,
-				"items":    []interface{}{"item1", "item2", "item3"},
-				"response": `{"name": "Test Item", "score": 95, "items": ["item1", "item2", "item3"]}`,
+				"name":   "Test Item",
+				"score":  95,
+				"items":  []interface{}{"item1", "item2", "item3"},
+				"output": `{"name": "Test Item", "score": 95, "items": ["item1", "item2", "item3"]}`,
 			},
 		},
 		{
@@ -59,7 +59,7 @@ func TestOutputParser_ParseStepOutput(t *testing.T) {
 					"key":   "value",
 					"count": float64(42),
 				},
-				"response": "Here is the data:\n```json\n{\"key\": \"value\", \"count\": 42}\n```",
+				"output": "Here is the data:\n```json\n{\"key\": \"value\", \"count\": 42}\n```",
 			},
 		},
 		{
@@ -77,7 +77,7 @@ func TestOutputParser_ParseStepOutput(t *testing.T) {
 				"score":    85,
 				"is_valid": true,
 				"summary":  "Everything looks good!",
-				"response": "After analysis, the score: 85\nThe validation result is_valid: true\nSummary: Everything looks good!",
+				"output":   "After analysis, the score: 85\nThe validation result is_valid: true\nSummary: Everything looks good!",
 			},
 		},
 		{
@@ -95,7 +95,7 @@ func TestOutputParser_ParseStepOutput(t *testing.T) {
 					"Second finding",
 					"Third finding",
 				},
-				"response": "findings:\n- First finding\n- Second finding\n- Third finding",
+				"output": "findings:\n- First finding\n- Second finding\n- Third finding",
 			},
 		},
 		{
@@ -111,7 +111,7 @@ func TestOutputParser_ParseStepOutput(t *testing.T) {
 			expected: map[string]interface{}{
 				"approved":  true,
 				"completed": false,
-				"response":  "The request has been approved: yes\nTask completed: false",
+				"output":    "The request has been approved: yes\nTask completed: false",
 			},
 		},
 		{
@@ -130,7 +130,7 @@ func TestOutputParser_ParseStepOutput(t *testing.T) {
 					"status": "success",
 					"data":   []interface{}{float64(1), float64(2), float64(3)},
 				},
-				"response": `{"result": {"status": "success", "data": [1, 2, 3]}}`,
+				"output": `{"result": {"status": "success", "data": [1, 2, 3]}}`,
 			},
 		},
 		{
@@ -147,7 +147,7 @@ func TestOutputParser_ParseStepOutput(t *testing.T) {
 					map[string]interface{}{"id": float64(1), "name": "Item 1"},
 					map[string]interface{}{"id": float64(2), "name": "Item 2"},
 				},
-				"response": `[{"id": 1, "name": "Item 1"}, {"id": 2, "name": "Item 2"}]`,
+				"output": `[{"id": 1, "name": "Item 1"}, {"id": 2, "name": "Item 2"}]`,
 			},
 		},
 		{
@@ -160,7 +160,7 @@ func TestOutputParser_ParseStepOutput(t *testing.T) {
 			},
 			response: "This is not structured data at all",
 			expected: map[string]interface{}{
-				"response": "This is not structured data at all",
+				"output": "This is not structured data at all",
 			},
 		},
 	}
@@ -356,7 +356,7 @@ func TestOutputParser_SchemaGuidedParsing(t *testing.T) {
 				"name":  "Test Analysis",
 				"score": 95,
 				"tags":  []interface{}{"important", "reviewed", "final"},
-				"response": `{
+				"output": `{
 				"name": "Test Analysis",
 				"score": 95,
 				"tags": ["important", "reviewed", "final"]
@@ -379,7 +379,7 @@ func TestOutputParser_SchemaGuidedParsing(t *testing.T) {
 			expected: map[string]interface{}{
 				"result": "success",
 				"status": "completed",
-				"response": `{
+				"output": `{
 				"result": "success",
 				"status": "completed",
 			}`,
@@ -401,7 +401,7 @@ func TestOutputParser_SchemaGuidedParsing(t *testing.T) {
 			expected: map[string]interface{}{
 				"message": "Hello World",
 				"code":    200,
-				"response": `{
+				"output": `{
 				'message': 'Hello World',
 				'code': 200
 			}`,
@@ -424,7 +424,7 @@ func TestOutputParser_SchemaGuidedParsing(t *testing.T) {
 				"summary":    "Document is well-structured and comprehensive",
 				"confidence": 0.92,
 				"actionable": true,
-				"response": `Based on my analysis, here's the JSON response:
+				"output": `Based on my analysis, here's the JSON response:
 
 ` + "```json\n{\n\t\"summary\": \"Document is well-structured and comprehensive\",\n\t\"confidence\": 0.92,\n\t\"actionable\": true\n}\n```\n\nThis analysis shows high confidence in the assessment.",
 			},

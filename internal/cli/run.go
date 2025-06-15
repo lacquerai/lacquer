@@ -85,6 +85,7 @@ type ExecutionResult struct {
 	StepsTotal    int                    `json:"steps_total" yaml:"steps_total"`
 	StepResults   []StepExecutionResult  `json:"step_results,omitempty" yaml:"step_results,omitempty"`
 	Inputs        map[string]interface{} `json:"inputs" yaml:"inputs"`
+	Outputs       map[string]interface{} `json:"outputs,omitempty" yaml:"outputs,omitempty"`
 	FinalState    map[string]interface{} `json:"final_state,omitempty" yaml:"final_state,omitempty"`
 	Error         string                 `json:"error,omitempty" yaml:"error,omitempty"`
 	TokenUsage    *TokenUsageSummary     `json:"token_usage,omitempty" yaml:"token_usage,omitempty"`
@@ -307,6 +308,9 @@ func progressReporter(progressChan <-chan runtime.ExecutionEvent, result *Execut
 func collectExecutionResults(execCtx *runtime.ExecutionContext, result *ExecutionResult) {
 	summary := execCtx.GetExecutionSummary()
 
+	// Set workflow outputs
+	result.Outputs = summary.Outputs
+
 	// Convert step results
 	result.StepResults = make([]StepExecutionResult, 0, len(summary.Steps))
 	tokenSummary := &TokenUsageSummary{}
@@ -440,6 +444,14 @@ func printExecutionSummary(result ExecutionResult) {
 		}
 
 		printTable(headers, rows)
+	}
+
+	// Show workflow outputs if they exist and workflow completed successfully
+	if result.Status == "completed" && len(result.Outputs) > 0 {
+		fmt.Printf("\n📤 Outputs:\n")
+		for k, v := range result.Outputs {
+			fmt.Printf("  %s = %v\n", k, v)
+		}
 	}
 
 	// Show final state if verbose and not empty

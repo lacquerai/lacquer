@@ -268,8 +268,8 @@ workflow:
       prompt: "That's interesting! Can you elaborate on the key benefits of {{inputs.topic}}?"
 
   outputs:
-    greeting: "{{steps.greet.response}}"
-    elaboration: "{{steps.elaborate.response}}"
+    greeting: "{{steps.greet.output}}"
+    elaboration: "{{steps.elaborate.output}}"
 `
 
 const basicReadme = `# {{PROJECT_NAME}}
@@ -344,9 +344,9 @@ workflow:
       prompt: "Create a concise executive summary of the research on {{inputs.research_topic}}"
 
   outputs:
-    search_results: "{{steps.search.response}}"
-    analysis: "{{steps.analyze.response}}"
-    summary: "{{steps.summarize.response}}"
+    search_results: "{{steps.search.output}}"
+    analysis: "{{steps.analyze.output}}"
+    summary: "{{steps.summarize.output}}"
 `
 
 const researchReadme = `# {{PROJECT_NAME}}
@@ -435,7 +435,7 @@ workflow:
     
     - id: deep_dive
       agent: analyst
-      prompt: "Provide a deeper analysis based on the initial findings: {{steps.initial_analysis.response}}"
+      prompt: "Provide a deeper analysis based on the initial findings: {{steps.initial_analysis.output}}"
       condition: "{{steps.initial_analysis.success}}"
       
     - id: recommendations
@@ -448,9 +448,9 @@ workflow:
       skip_if: "{{steps.initial_analysis.success}}"
 
   outputs:
-    analysis: "{{steps.initial_analysis.response || steps.fallback_analysis.response}}"
-    deep_analysis: "{{steps.deep_dive.response}}"
-    recommendations: "{{steps.recommendations.response}}"
+    analysis: "{{steps.initial_analysis.output || steps.fallback_analysis.output}}"
+    deep_analysis: "{{steps.deep_dive.output}}"
+    recommendations: "{{steps.recommendations.output}}"
     metadata:
       priority: "{{inputs.priority}}"
       completed_at: "{{workflow.completed_at}}"

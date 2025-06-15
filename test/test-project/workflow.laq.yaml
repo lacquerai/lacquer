@@ -29,5 +29,5 @@ workflow:
       prompt: "That's interesting! Can you elaborate on the key benefits of {{inputs.topic}}?"
 
   outputs:
-    greeting: "{{steps.greet.response}}"
-    elaboration: "{{steps.elaborate.response}}"
+    greeting: "{{steps.greet.output}}"
+    elaboration: "{{steps.elaborate.output}}"

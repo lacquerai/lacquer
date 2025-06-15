@@ -31,7 +31,7 @@ workflow:
       
     - id: nested_variables
       agent: processor
-      prompt: "Previous result: {{ steps.basic_interpolation.response }}"
+      prompt: "Previous result: {{ steps.basic_interpolation.output }}"
       
     - id: environment_variables
       agent: processor

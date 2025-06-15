@@ -383,8 +383,7 @@ steps:
 ### Accessing Outputs
 
 Always available:
-- `{{ steps.step_id.response }}` - Raw agent response
-- `{{ steps.step_id.output }}` - Default output (same as response if no outputs defined)
+- `{{ steps.step_id.output }}` - Raw agent response
 
 With defined outputs:
 - `{{ steps.step_id.outputs.field_name }}` - Specific parsed field

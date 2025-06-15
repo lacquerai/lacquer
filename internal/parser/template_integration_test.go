@@ -49,7 +49,7 @@ func TestTemplateValidator_ExtractVariableReferences(t *testing.T) {
 		},
 		{
 			name:     "Multiple variables",
-			template: "{{ inputs.topic }} processed by {{ steps.analyze.response }}",
+			template: "{{ inputs.topic }} processed by {{ steps.analyze.output }}",
 			expected: []VariableReference{
 				{
 					Raw:    "inputs.topic",
@@ -59,12 +59,12 @@ func TestTemplateValidator_ExtractVariableReferences(t *testing.T) {
 					Target: "topic",
 				},
 				{
-					Raw:    "steps.analyze.response",
+					Raw:    "steps.analyze.output",
 					Scope:  "steps",
-					Path:   []string{"steps", "analyze", "response"},
+					Path:   []string{"steps", "analyze", "output"},
 					Type:   VariableTypeStep,
 					Target: "analyze",
-					Field:  "response",
+					Field:  "output",
 				},
 			},
 		},
@@ -202,14 +202,14 @@ func TestTemplateValidator_ParseVariableReference(t *testing.T) {
 		},
 		{
 			name:    "Step output",
-			varPath: "steps.analyze.response",
+			varPath: "steps.analyze.output",
 			expected: VariableReference{
-				Raw:    "steps.analyze.response",
+				Raw:    "steps.analyze.output",
 				Scope:  "steps",
-				Path:   []string{"steps", "analyze", "response"},
+				Path:   []string{"steps", "analyze", "output"},
 				Type:   VariableTypeStep,
 				Target: "analyze",
-				Field:  "response",
+				Field:  "output",
 			},
 		},
 		{

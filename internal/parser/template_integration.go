@@ -556,7 +556,6 @@ func (tv *TemplateValidator) buildValidationContext(workflow *ast.Workflow) *val
 func (tv *TemplateValidator) addStepOutputsToContext(step *ast.Step, ctx *validationContext) {
 	// Add default step outputs
 	ctx.variables["steps."+step.ID+".output"] = true
-	ctx.variables["steps."+step.ID+".response"] = true
 	ctx.variables["steps."+step.ID+".result"] = true
 	ctx.variables["steps."+step.ID+".status"] = true
 	ctx.variables["steps."+step.ID+".duration"] = true

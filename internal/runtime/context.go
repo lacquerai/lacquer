@@ -17,8 +17,9 @@ type ExecutionContext struct {
 	StartTime time.Time
 
 	// Input parameters and state
-	Inputs map[string]interface{}
-	State  map[string]interface{}
+	Inputs  map[string]interface{}
+	State   map[string]interface{}
+	Outputs map[string]interface{}
 
 	// Step execution tracking
 	StepResults      map[string]*StepResult
@@ -92,6 +93,7 @@ func NewExecutionContext(ctx context.Context, workflow *ast.Workflow, inputs map
 		StartTime:   time.Now(),
 		Inputs:      inputs,
 		State:       make(map[string]interface{}),
+		Outputs:     make(map[string]interface{}),
 		StepResults: make(map[string]*StepResult),
 		Environment: getEnvironmentVars(),
 		Metadata:    buildMetadata(workflow),
@@ -169,6 +171,25 @@ func (ec *ExecutionContext) GetAllState() map[string]interface{} {
 	defer ec.mu.RUnlock()
 
 	return CopyMap(ec.State)
+}
+
+// SetWorkflowOutputs updates the workflow outputs
+func (ec *ExecutionContext) SetWorkflowOutputs(outputs map[string]interface{}) {
+	ec.mu.Lock()
+	defer ec.mu.Unlock()
+
+	ec.Outputs = outputs
+	ec.Logger.Debug().
+		Interface("outputs", outputs).
+		Msg("Workflow outputs set")
+}
+
+// GetWorkflowOutputs returns a copy of workflow outputs
+func (ec *ExecutionContext) GetWorkflowOutputs() map[string]interface{} {
+	ec.mu.RLock()
+	defer ec.mu.RUnlock()
+
+	return CopyMap(ec.Outputs)
 }
 
 // GetStepResult returns the result of a specific step
@@ -250,6 +271,7 @@ func (ec *ExecutionContext) GetExecutionSummary() ExecutionSummary {
 		Steps:     make([]StepResult, 0, len(ec.StepResults)),
 		Inputs:    ec.Inputs,
 		State:     ec.State,
+		Outputs:   ec.Outputs,
 	}
 
 	// Calculate duration if completed
@@ -328,6 +350,7 @@ type ExecutionSummary struct {
 	Steps         []StepResult           `json:"steps"`
 	Inputs        map[string]interface{} `json:"inputs"`
 	State         map[string]interface{} `json:"state"`
+	Outputs       map[string]interface{} `json:"outputs,omitempty"`
 	TotalTokens   int                    `json:"total_tokens"`
 	EstimatedCost float64                `json:"estimated_cost"`
 }

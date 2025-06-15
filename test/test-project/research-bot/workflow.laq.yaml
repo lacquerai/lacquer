@@ -35,6 +35,6 @@ workflow:
       prompt: "Create a concise executive summary of the research on {{inputs.research_topic}}"
 
   outputs:
-    search_results: "{{steps.search.response}}"
-    analysis: "{{steps.analyze.response}}"
-    summary: "{{steps.summarize.response}}"
+    search_results: "{{steps.search.output}}"
+    analysis: "{{steps.analyze.output}}"
+    summary: "{{steps.summarize.output}}"
