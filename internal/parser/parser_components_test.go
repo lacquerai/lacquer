@@ -24,6 +24,7 @@ func TestParserComponents_SchemaValidation(t *testing.T) {
 version: "1.0"
 agents:
   test_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -39,6 +40,7 @@ workflow:
 			yaml: `
 agents:
   test_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -55,6 +57,7 @@ workflow:
 version: "2.0"
 agents:
   test_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -81,6 +84,7 @@ workflow:
 version: "1.0"
 agents:
   bad_agent:
+    provider: openai
     temperature: 5.0  # Too high
     max_tokens: -100  # Negative
 workflow:
@@ -124,8 +128,10 @@ func TestParserComponents_ASTValidation(t *testing.T) {
 version: "1.0"
 agents:
   helper:
+    provider: openai
     model: "gpt-4"
   analyst:
+    provider: anthropic
     model: "claude-3-sonnet"
 workflow:
   steps:
@@ -145,6 +151,7 @@ workflow:
 version: "1.0"
 agents:
   test_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -164,6 +171,7 @@ workflow:
 version: "1.0"
 agents:
   test_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -227,6 +235,7 @@ func TestParserComponents_SemanticValidation(t *testing.T) {
 version: "1.0"
 agents:
   test_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -246,6 +255,7 @@ workflow:
 version: "1.0"
 agents:
   existing_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -262,6 +272,7 @@ workflow:
 version: "1.0"
 agents:
   test_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -281,6 +292,7 @@ workflow:
 version: "1.0"
 agents:
   test_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -339,6 +351,7 @@ workflow:
 version: "1.0"
 agents:
   test_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -409,6 +422,7 @@ func TestParserComponents_Performance(t *testing.T) {
 version: "1.0"
 agents:
   agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -452,11 +466,14 @@ metadata:
   name: "medium-workflow"
 agents:
   gpt4:
+    provider: openai
     model: "gpt-4"
     temperature: 0.7
   claude:
+    provider: anthropic
     model: "claude-3-sonnet"
   gemini:
+    provider: google
     model: "gemini-pro"
 workflow:
   inputs:

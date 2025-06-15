@@ -24,7 +24,8 @@ func TestSemanticValidator_ValidateWorkflow(t *testing.T) {
 				},
 				Agents: map[string]*ast.Agent{
 					"researcher": {
-						Model: "gpt-4",
+						Provider: "openai",
+						Model:    "gpt-4",
 					},
 				},
 				Workflow: &ast.WorkflowDef{
@@ -45,7 +46,7 @@ func TestSemanticValidator_ValidateWorkflow(t *testing.T) {
 			workflow: &ast.Workflow{
 				Version: "1.0",
 				Agents: map[string]*ast.Agent{
-					"agent1": {Model: "gpt-4"},
+					"agent1": {Provider: "openai", Model: "gpt-4"},
 				},
 				Workflow: &ast.WorkflowDef{
 					Steps: []*ast.Step{
@@ -70,7 +71,7 @@ func TestSemanticValidator_ValidateWorkflow(t *testing.T) {
 			workflow: &ast.Workflow{
 				Version: "1.0",
 				Agents: map[string]*ast.Agent{
-					"agent1": {Model: "gpt-4"},
+					"agent1": {Provider: "openai", Model: "gpt-4"},
 				},
 				Workflow: &ast.WorkflowDef{
 					Steps: []*ast.Step{
@@ -95,7 +96,7 @@ func TestSemanticValidator_ValidateWorkflow(t *testing.T) {
 			workflow: &ast.Workflow{
 				Version: "1.0",
 				Agents: map[string]*ast.Agent{
-					"agent1": {Model: "gpt-4"},
+					"agent1": {Provider: "openai", Model: "gpt-4"},
 				},
 				Workflow: &ast.WorkflowDef{
 					Steps: []*ast.Step{
@@ -147,7 +148,7 @@ func TestSemanticValidator_ValidateWorkflow(t *testing.T) {
 			workflow: &ast.Workflow{
 				Version: "1.0",
 				Agents: map[string]*ast.Agent{
-					"agent1": {Model: "gpt-4"},
+					"agent1": {Provider: "openai", Model: "gpt-4"},
 				},
 				Workflow: &ast.WorkflowDef{
 					State: map[string]interface{}{
@@ -192,7 +193,7 @@ func TestSemanticValidator_ValidateStepDependencies(t *testing.T) {
 		workflow := &ast.Workflow{
 			Version: "1.0",
 			Agents: map[string]*ast.Agent{
-				"agent1": {Model: "gpt-4"},
+				"agent1": {Provider: "openai", Model: "gpt-4"},
 			},
 			Workflow: &ast.WorkflowDef{
 				Steps: []*ast.Step{
@@ -223,7 +224,7 @@ func TestSemanticValidator_ValidateStepDependencies(t *testing.T) {
 		workflow := &ast.Workflow{
 			Version: "1.0",
 			Agents: map[string]*ast.Agent{
-				"agent1": {Model: "gpt-4"},
+				"agent1": {Provider: "openai", Model: "gpt-4"},
 			},
 			Workflow: &ast.WorkflowDef{
 				Steps: []*ast.Step{
@@ -271,7 +272,7 @@ func TestSemanticValidator_ValidateVariableReferences(t *testing.T) {
 				Name: "test-workflow",
 			},
 			Agents: map[string]*ast.Agent{
-				"agent1": {Model: "gpt-4"},
+				"agent1": {Provider: "openai", Model: "gpt-4"},
 			},
 			Workflow: &ast.WorkflowDef{
 				Inputs: map[string]*ast.InputParam{
@@ -303,7 +304,7 @@ func TestSemanticValidator_ValidateVariableReferences(t *testing.T) {
 		workflow := &ast.Workflow{
 			Version: "1.0",
 			Agents: map[string]*ast.Agent{
-				"agent1": {Model: "gpt-4"},
+				"agent1": {Provider: "openai", Model: "gpt-4"},
 			},
 			Workflow: &ast.WorkflowDef{
 				Steps: []*ast.Step{
@@ -410,7 +411,7 @@ func TestSemanticValidator_ValidateControlFlow(t *testing.T) {
 		workflow := &ast.Workflow{
 			Version: "1.0",
 			Agents: map[string]*ast.Agent{
-				"agent1": {Model: "gpt-4"},
+				"agent1": {Provider: "openai", Model: "gpt-4"},
 			},
 			Workflow: &ast.WorkflowDef{
 				Steps: []*ast.Step{
@@ -441,7 +442,7 @@ func TestSemanticValidator_ValidateControlFlow(t *testing.T) {
 		workflow := &ast.Workflow{
 			Version: "1.0",
 			Agents: map[string]*ast.Agent{
-				"agent1": {Model: "gpt-4"},
+				"agent1": {Provider: "openai", Model: "gpt-4"},
 			},
 			Workflow: &ast.WorkflowDef{
 				Steps: []*ast.Step{

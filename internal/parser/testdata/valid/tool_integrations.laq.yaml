@@ -6,6 +6,7 @@ metadata:
 
 agents:
   tool_agent:
+    provider: openai
     model: "gpt-4"
     tools:
       - name: "web_search"
@@ -31,8 +32,9 @@ agents:
       - name: "mcp_browser"
         mcp_server: "browser"
         description: "Control browser via MCP"
-        
+
   script_agent:
+    provider: anthropic
     model: "claude-3-sonnet"
     tools:
       - name: "data_processor"
@@ -42,6 +44,7 @@ agents:
         script: "python vision/analyze.py"
         
   mcp_agent:
+    provider: openai
     model: "gpt-4"
     tools:
       - name: "slack_integration"

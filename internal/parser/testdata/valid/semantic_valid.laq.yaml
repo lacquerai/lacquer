@@ -6,11 +6,13 @@ metadata:
 
 agents:
   researcher:
+    provider: "openai"
     model: "gpt-4"
     temperature: 0.7
     system_prompt: "You are a helpful research assistant."
   
   summarizer:
+    provider: "anthropic"
     model: "claude-3-sonnet"
     max_tokens: 1000
 

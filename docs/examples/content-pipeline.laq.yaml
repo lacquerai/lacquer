@@ -20,6 +20,7 @@ agents:
   
   editor:
     model: gpt-4
+    provider: openai
     temperature: 0.3
     system_prompt: |
       You are a professional editor who:

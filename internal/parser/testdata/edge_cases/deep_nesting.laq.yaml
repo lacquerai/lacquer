@@ -12,6 +12,7 @@ metadata:
               
 agents:
   nested_agent:
+    provider: openai
     model: "gpt-4"
     config:
       parameters:

@@ -74,13 +74,12 @@
         }
       ],
       "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Provider to use for this agent"
+        },
         "model": {
           "type": "string",
-          "enum": [
-            "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo",
-            "claude-3-opus", "claude-3-sonnet", "claude-3-haiku",
-            "gemini-pro", "gemini-pro-vision"
-          ],
           "description": "AI model to use for this agent"
         },
         "temperature": {

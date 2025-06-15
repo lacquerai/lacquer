@@ -8,16 +8,19 @@ metadata:
 agents:
   classifier:
     model: gpt-4
+    provider: openai
     temperature: 0.2
     system_prompt: You are a content classifier that categorizes and rates content.
   
   processor:
     model: gpt-4
+    provider: openai
     temperature: 0.5
     system_prompt: You process content based on its category and requirements.
   
   reviewer:
     model: gpt-4
+    provider: openai
     temperature: 0.3
     system_prompt: You review and validate processed content for quality.
 

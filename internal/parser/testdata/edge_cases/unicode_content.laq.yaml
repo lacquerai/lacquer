@@ -7,6 +7,7 @@ metadata:
 
 agents:
   multilingual_agent:
+    provider: openai
     model: "gpt-4"
     system_prompt: |
       You are a multilingual assistant. You can work with:

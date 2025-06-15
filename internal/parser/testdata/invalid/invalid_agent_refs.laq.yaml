@@ -5,6 +5,7 @@ metadata:
 
 agents:
   valid_agent:
+    provider: openai
     model: "gpt-4"
 
 workflow:

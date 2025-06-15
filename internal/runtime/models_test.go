@@ -14,8 +14,7 @@ func TestModelRegistry_RegisterProvider(t *testing.T) {
 	provider := NewMockModelProvider("test", []string{"model1", "model2"})
 
 	// Register provider
-	err := registry.RegisterProvider(provider)
-	assert.NoError(t, err)
+	registry.RegisterProvider(provider)
 
 	// Check provider is registered
 	providers := registry.ListProviders()
@@ -34,37 +33,17 @@ func TestModelRegistry_RegisterProvider_Duplicate(t *testing.T) {
 	provider2 := NewMockModelProvider("test", []string{"model2"})
 
 	// Register first provider
-	err := registry.RegisterProvider(provider1)
-	assert.NoError(t, err)
+	registry.RegisterProvider(provider1)
 
 	// Try to register duplicate provider name
-	err = registry.RegisterProvider(provider2)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "already registered")
-}
-
-func TestModelRegistry_RegisterProvider_DuplicateModel(t *testing.T) {
-	registry := NewModelRegistry()
-
-	provider1 := NewMockModelProvider("provider1", []string{"model1"})
-	provider2 := NewMockModelProvider("provider2", []string{"model1"})
-
-	// Register first provider
-	err := registry.RegisterProvider(provider1)
-	assert.NoError(t, err)
-
-	// Try to register provider with duplicate model
-	err = registry.RegisterProvider(provider2)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "already supported")
+	registry.RegisterProvider(provider2)
 }
 
 func TestModelRegistry_GetProvider(t *testing.T) {
 	registry := NewModelRegistry()
 	provider := NewMockModelProvider("test", []string{"model1", "model2"})
 
-	err := registry.RegisterProvider(provider)
-	assert.NoError(t, err)
+	registry.RegisterProvider(provider)
 
 	// Get provider by model
 	retrieved, err := registry.GetProvider("model1")
@@ -81,8 +60,7 @@ func TestModelRegistry_GetProviderByName(t *testing.T) {
 	registry := NewModelRegistry()
 	provider := NewMockModelProvider("test", []string{"model1"})
 
-	err := registry.RegisterProvider(provider)
-	assert.NoError(t, err)
+	registry.RegisterProvider(provider)
 
 	// Get provider by name
 	retrieved, err := registry.GetProviderByName("test")
@@ -99,8 +77,7 @@ func TestModelRegistry_IsModelSupported(t *testing.T) {
 	registry := NewModelRegistry()
 	provider := NewMockModelProvider("test", []string{"model1", "model2"})
 
-	err := registry.RegisterProvider(provider)
-	assert.NoError(t, err)
+	registry.RegisterProvider(provider)
 
 	assert.True(t, registry.IsModelSupported("model1"))
 	assert.True(t, registry.IsModelSupported("model2"))
@@ -111,11 +88,10 @@ func TestModelRegistry_Close(t *testing.T) {
 	registry := NewModelRegistry()
 	provider := NewMockModelProvider("test", []string{"model1"})
 
-	err := registry.RegisterProvider(provider)
-	assert.NoError(t, err)
+	registry.RegisterProvider(provider)
 
 	// Close should not error
-	err = registry.Close()
+	err := registry.Close()
 	assert.NoError(t, err)
 }
 

@@ -5,8 +5,10 @@ metadata:
 
 agents:
   agent1:
+    provider: openai
     model: "gpt-4"
   agent1:  # Duplicate agent name - should fail
+    provider: anthropic
     model: "claude-3-sonnet"
 
 workflow:

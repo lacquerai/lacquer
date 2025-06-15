@@ -7,27 +7,53 @@ Agents are the core execution units in Lacquer workflows. They represent AI mode
 ```yaml
 agents:
   my_agent:
+    provider: openai
     model: gpt-4
     temperature: 0.7
 ```
 
 ## Agent Properties
 
+### provider
+**Required**: Yes (when using a model)  
+**Type**: String  
+**Description**: The AI provider for this agent.
+
+Supported providers:
+- `openai` - OpenAI models (GPT-4, GPT-3.5, etc.)
+- `anthropic` - Anthropic models (Claude 3 Opus, Sonnet, Haiku)
+- `google` - Google models (Gemini Pro, etc.)
+- `local` - Local Claude Code CLI
+
+```yaml
+agents:
+  gpt_agent:
+    provider: openai
+    model: gpt-4
+  
+  claude_agent:
+    provider: anthropic
+    model: claude-3-opus
+```
+
 ### model
-**Required**: Yes  
+**Required**: Yes (unless using `uses` for pre-built agents)  
 **Type**: String  
 **Description**: The AI model to use for this agent.
 
-Supported models include:
-- OpenAI: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`
-- Anthropic: `claude-3-opus`, `claude-3-sonnet`, `claude-3-haiku`
-- Google: `gemini-pro`, `gemini-pro-vision`
-- Open source: Various models via providers
+**Note**: Available models are dynamically fetched from each provider's API. The models listed below are examples and may change over time. Lacquer automatically caches the available models list for 24 hours.
+
+Example models by provider:
+- **OpenAI** ([see current models](https://platform.openai.com/docs/models)): `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`
+- **Anthropic** ([see current models](https://docs.anthropic.com/en/docs/models-overview)): `claude-3-opus-20240229`, `claude-3-sonnet-20240229`, `claude-3-haiku-20240307`
+- **Google** ([see current models](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/models)): `gemini-pro`, `gemini-pro-vision`
+- **Local**: `claude-code`
 
 ```yaml
 agents:
   writer:
-    model: claude-3-opus
+    provider: anthropic
+    model: claude-3-opus-20240229
 ```
 
 ### temperature
@@ -39,10 +65,12 @@ agents:
 ```yaml
 agents:
   creative_writer:
+    provider: openai
     model: gpt-4
     temperature: 1.2  # More creative
   
   fact_checker:
+    provider: openai
     model: gpt-4
     temperature: 0.1  # More deterministic
 ```
@@ -55,6 +83,7 @@ agents:
 ```yaml
 agents:
   legal_expert:
+    provider: openai
     model: gpt-4
     temperature: 0.2
     system_prompt: |
@@ -71,6 +100,7 @@ agents:
 ```yaml
 agents:
   summarizer:
+    provider: openai
     model: gpt-4
     max_tokens: 500  # Keep summaries concise
 ```
@@ -83,6 +113,7 @@ agents:
 ```yaml
 agents:
   analyst:
+    provider: openai
     model: gpt-4
     top_p: 0.1  # Very focused responses
 ```
@@ -95,6 +126,7 @@ agents:
 ```yaml
 agents:
   researcher:
+    provider: openai
     model: gpt-4
     tools:
       - name: web_search
@@ -140,6 +172,7 @@ agents:
 ```yaml
 agents:
   researcher:
+    provider: openai
     model: gpt-4
     temperature: 0.3
     system_prompt: |
@@ -159,7 +192,8 @@ agents:
 ```yaml
 agents:
   creative_writer:
-    model: claude-3-opus
+    provider: anthropic
+    model: claude-3-opus-20240229
     temperature: 0.9
     max_tokens: 2000
     system_prompt: |
@@ -174,6 +208,7 @@ agents:
 ```yaml
 agents:
   code_reviewer:
+    provider: openai
     model: gpt-4
     temperature: 0.2
     system_prompt: |
@@ -191,6 +226,7 @@ agents:
 ```yaml
 agents:
   data_analyst:
+    provider: openai
     model: gpt-4
     temperature: 0.1
     system_prompt: |
@@ -213,6 +249,7 @@ Agents can inherit from other agents:
 ```yaml
 agents:
   base_analyst:
+    provider: openai
     model: gpt-4
     temperature: 0.2
     system_prompt: You are a thorough analyst

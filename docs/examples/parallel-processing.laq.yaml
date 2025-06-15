@@ -7,21 +7,25 @@ metadata:
 
 agents:
   analyzer:
+    provider: openai
     model: gpt-4
     temperature: 0.2
     system_prompt: You analyze data and extract insights with high accuracy.
   
   processor:
+    provider: openai
     model: gpt-4
     temperature: 0.3
     system_prompt: You process individual items efficiently and thoroughly.
   
   aggregator:
+    provider: openai
     model: gpt-4
     temperature: 0.1
     system_prompt: You synthesize multiple results into coherent summaries.
   
   validator:
+    provider: openai
     model: gpt-4
     temperature: 0.1
     system_prompt: You validate results and ensure quality standards.

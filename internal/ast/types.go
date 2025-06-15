@@ -122,6 +122,7 @@ type WorkflowMetadata struct {
 
 // Agent represents an AI agent configuration
 type Agent struct {
+	Provider     string                 `yaml:"provider,omitempty" json:"provider,omitempty" validate:"omitempty,oneof=anthropic openai local"`
 	Model        string                 `yaml:"model,omitempty" json:"model,omitempty"`
 	Temperature  *float64               `yaml:"temperature,omitempty" json:"temperature,omitempty" validate:"omitempty,min=0,max=2"`
 	SystemPrompt string                 `yaml:"system_prompt,omitempty" json:"system_prompt,omitempty"`

@@ -9,6 +9,7 @@ metadata:
 
 agents:
   gpt4_agent:
+    provider: openai
     model: "gpt-4"
     temperature: 0.7
     max_tokens: 4000
@@ -27,12 +28,14 @@ agents:
         mcp_server: "filesystem"
 
   claude_agent:
+    provider: anthropic
     model: "claude-3-opus"
     temperature: 0.3
     max_tokens: 8000
     system_prompt: "You are a research specialist."
     
   gemini_agent:
+    provider: google
     model: "gemini-pro"
     temperature: 0.5
     

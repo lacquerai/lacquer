@@ -116,6 +116,22 @@ type AnthropicErrorResponse struct {
 	Error AnthropicError `json:"error"`
 }
 
+// AnthropicModelsResponse represents the response from the /v1/models endpoint
+type AnthropicModelsResponse struct {
+	Data    []AnthropicModelInfo `json:"data"`
+	FirstID string               `json:"first_id,omitempty"`
+	LastID  string               `json:"last_id,omitempty"`
+	HasMore bool                 `json:"has_more"`
+}
+
+// AnthropicModelInfo represents a single model from the Anthropic API
+type AnthropicModelInfo struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	Type        string `json:"type"`
+}
+
 // Default configuration for Anthropic
 func DefaultAnthropicConfig() *AnthropicConfig {
 	return &AnthropicConfig{
@@ -226,6 +242,69 @@ func (p *AnthropicProvider) GetName() string {
 // SupportedModels returns the list of supported models
 func (p *AnthropicProvider) SupportedModels() []string {
 	return p.models
+}
+
+// ListModels dynamically fetches available models from the Anthropic API
+func (p *AnthropicProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	url := fmt.Sprintf("%s/v1/models", p.baseURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set required headers
+	req.Header.Set("x-api-key", p.apiKey)
+	req.Header.Set("anthropic-version", p.config.AnthropicVersion)
+	req.Header.Set("Content-Type", "application/json")
+	if p.config.UserAgent != "" {
+		req.Header.Set("User-Agent", p.config.UserAgent)
+	}
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make API request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errorResp AnthropicErrorResponse
+		if jsonErr := json.Unmarshal(body, &errorResp); jsonErr == nil {
+			return nil, fmt.Errorf("Anthropic API error (%d): %s", resp.StatusCode, errorResp.Error.Message)
+		}
+		return nil, fmt.Errorf("Anthropic API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var modelsResp AnthropicModelsResponse
+	if err := json.Unmarshal(body, &modelsResp); err != nil {
+		return nil, fmt.Errorf("failed to parse models response: %w", err)
+	}
+
+	// Convert Anthropic model info to our standard format
+	models := make([]ModelInfo, len(modelsResp.Data))
+	for i, model := range modelsResp.Data {
+		models[i] = ModelInfo{
+			ID:          model.ID,
+			Name:        model.DisplayName,
+			Provider:    p.name,
+			CreatedAt:   model.CreatedAt,
+			Deprecated:  false, // Anthropic doesn't provide this field directly
+			Description: "",    // Not available in basic response
+			Features:    []string{"text-generation", "chat"},
+		}
+	}
+
+	log.Debug().
+		Int("model_count", len(models)).
+		Str("provider", p.name).
+		Msg("Successfully fetched models from Anthropic API")
+
+	return models, nil
 }
 
 // IsModelSupported checks if a model is supported

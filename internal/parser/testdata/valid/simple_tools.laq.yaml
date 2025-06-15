@@ -5,6 +5,7 @@ metadata:
 
 agents:
   tool_agent:
+    provider: openai
     model: "gpt-4"
     tools:
       - name: "web_search"

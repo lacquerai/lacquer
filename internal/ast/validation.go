@@ -153,11 +153,28 @@ func (v *Validator) validateAgent(agent *Agent, path string, result *ValidationR
 		return
 	}
 
-	// Validate model if specified
+	// Validate model and provider if specified
 	if agent.Model != "" {
-		if !isValidModel(agent.Model) {
-			result.AddFieldError(path, "model", fmt.Sprintf("unsupported model: %s", agent.Model))
+		// Provider is required when using a model
+		if agent.Provider == "" {
+			result.AddFieldError(path, "provider", "provider is required when using a model")
+		} else {
+			// Validate provider value
+			validProviders := []string{"anthropic", "openai", "google", "local"}
+			isValidProvider := false
+			for _, provider := range validProviders {
+				if agent.Provider == provider {
+					isValidProvider = true
+					break
+				}
+			}
+			if !isValidProvider {
+				result.AddFieldError(path, "provider", fmt.Sprintf("provider must be one of: %v", validProviders))
+			}
 		}
+
+		// Note: Model validation will now be done dynamically against provider's available models
+		// We'll remove the static isValidModel check in favor of runtime validation
 	}
 
 	// Validate uses reference if specified
@@ -410,12 +427,10 @@ func isValidSemVer(s string) bool {
 
 // isValidModel checks if a model name is supported
 func isValidModel(model string) bool {
-	validModels := []string{
-		"gpt-4", "gpt-4-turbo", "gpt-3.5-turbo",
-		"claude-3-opus", "claude-3-sonnet", "claude-3-haiku",
-		"gemini-pro", "gemini-pro-vision",
-	}
-	return contains(validModels, model)
+	// TODO: Implement model validation
+	// this should run through all supported models
+
+	return true
 }
 
 // isValidBlockReference checks if a block reference is valid

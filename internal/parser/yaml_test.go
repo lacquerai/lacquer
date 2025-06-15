@@ -84,6 +84,7 @@ metadata:
   name: test-workflow
 agents:
   test_agent:
+    provider: openai
     model: gpt-4
 workflow:
   steps:
@@ -193,6 +194,7 @@ func TestYAMLParser_ParseReader(t *testing.T) {
 version: "1.0"
 agents:
   test_agent:
+    provider: openai
     model: "gpt-4"
 workflow:
   steps:
@@ -269,6 +271,7 @@ metadata:
   name: benchmark-test
 agents:
   test_agent:
+    provider: openai
     model: gpt-4
     temperature: 0.7
 workflow:

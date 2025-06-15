@@ -238,7 +238,7 @@ Requirements:
 - You may include the JSON in a code block, but ensure the JSON itself is valid
 
 Example response format:
-` + "```json\n{\n  \"field1\": \"value1\",\n  \"field2\": 42,\n  \"field3\": [\"item1\", \"item2\"]\n}\n```", schema)
+`+"```json\n{\n  \"field1\": \"value1\",\n  \"field2\": 42,\n  \"field3\": [\"item1\", \"item2\"]\n}\n```", schema)
 }
 
 // GetSchemaExampleResponse generates an example response based on the schema

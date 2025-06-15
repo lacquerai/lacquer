@@ -149,6 +149,22 @@ func (e *OpenAIError) Error() string {
 	return fmt.Sprintf("OpenAI API error: %s (type: %s)", e.ErrorInfo.Message, e.ErrorInfo.Type)
 }
 
+// OpenAIModelsResponse represents the response from the /v1/models endpoint
+type OpenAIModelsResponse struct {
+	Object string            `json:"object"`
+	Data   []OpenAIModelInfo `json:"data"`
+}
+
+// OpenAIModelInfo represents a single model from the OpenAI API
+type OpenAIModelInfo struct {
+	ID         string `json:"id"`
+	Object     string `json:"object"`
+	Created    int64  `json:"created"`
+	OwnedBy    string `json:"owned_by"`
+	Status     string `json:"status,omitempty"`
+	Deprecated bool   `json:"deprecated,omitempty"`
+}
+
 // NewOpenAIProvider creates a new OpenAI provider
 func NewOpenAIProvider(config *OpenAIConfig) (*OpenAIProvider, error) {
 	if config == nil {
@@ -252,6 +268,80 @@ func (p *OpenAIProvider) GetName() string {
 // SupportedModels returns the list of supported models
 func (p *OpenAIProvider) SupportedModels() []string {
 	return p.models
+}
+
+// ListModels dynamically fetches available models from the OpenAI API
+func (p *OpenAIProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	url := fmt.Sprintf("%s/v1/models", p.baseURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set required headers
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.apiKey))
+	req.Header.Set("Content-Type", "application/json")
+	if p.config.UserAgent != "" {
+		req.Header.Set("User-Agent", p.config.UserAgent)
+	}
+	if p.config.OrgID != "" {
+		req.Header.Set("OpenAI-Organization", p.config.OrgID)
+	}
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make API request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var openaiErr OpenAIError
+		if json.Unmarshal(body, &openaiErr) == nil {
+			return nil, &openaiErr
+		}
+		return nil, fmt.Errorf("OpenAI API error: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var modelsResp OpenAIModelsResponse
+	if err := json.Unmarshal(body, &modelsResp); err != nil {
+		return nil, fmt.Errorf("failed to parse models response: %w", err)
+	}
+
+	// Convert OpenAI model info to our standard format
+	models := make([]ModelInfo, len(modelsResp.Data))
+	for i, model := range modelsResp.Data {
+		// Determine features based on model ID
+		features := []string{"text-generation"}
+		if strings.Contains(model.ID, "gpt") {
+			features = append(features, "chat")
+		}
+		if strings.Contains(model.ID, "embedding") {
+			features = []string{"embeddings"}
+		}
+
+		models[i] = ModelInfo{
+			ID:          model.ID,
+			Name:        model.ID, // OpenAI uses ID as display name
+			Provider:    p.name,
+			CreatedAt:   fmt.Sprintf("%d", model.Created),
+			Deprecated:  model.Status == "deprecated" || model.Deprecated,
+			Description: fmt.Sprintf("Model owned by %s", model.OwnedBy),
+			Features:    features,
+		}
+	}
+
+	log.Debug().
+		Int("model_count", len(models)).
+		Str("provider", p.name).
+		Msg("Successfully fetched models from OpenAI API")
+
+	return models, nil
 }
 
 // IsModelSupported checks if a model is supported

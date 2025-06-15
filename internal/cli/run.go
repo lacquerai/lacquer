@@ -195,7 +195,11 @@ func runWorkflow(workflowFile string) {
 		EnableStateSnapshots: saveState,
 	}
 
-	executor := runtime.NewExecutor(executorConfig)
+	executor, err := runtime.NewExecutor(executorConfig, workflow, nil)
+	if err != nil {
+		Error(fmt.Sprintf("Failed to create executor: %v", err))
+		return
+	}
 
 	// Create execution context
 	execCtx := runtime.NewExecutionContext(ctx, workflow, workflowInputs)

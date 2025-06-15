@@ -9,6 +9,7 @@ Tools are functions that agents can call during execution:
 ```yaml
 agents:
   researcher:
+    provider: openai
     model: gpt-4
     tools:
       - name: search_web
@@ -30,6 +31,7 @@ Pre-built, maintained tools with stability guarantees:
 ```yaml
 agents:
   data_agent:
+    provider: openai
     model: gpt-4
     tools:
       # Web search tool
@@ -64,6 +66,7 @@ Custom tools as executable scripts:
 ```yaml
 agents:
   processor:
+    provider: openai
     model: gpt-4
     tools:
       # Python script
@@ -107,6 +110,7 @@ Enterprise integrations via Model Context Protocol:
 ```yaml
 agents:
   enterprise_agent:
+    provider: openai
     model: gpt-4
     tools:
       # Connect to running MCP server
@@ -320,6 +324,7 @@ mcp_servers:
 ```yaml
 agents:
   sales_agent:
+    provider: openai
     model: gpt-4
     tools:
       - name: crm
@@ -351,6 +356,7 @@ steps:
 ```yaml
 agents:
   api_agent:
+    provider: openai
     model: gpt-4
     tools:
       - name: external_api
@@ -408,6 +414,7 @@ tools:
 ```yaml
 agents:
   resilient_agent:
+    provider: openai
     model: gpt-4
     tools:
       - name: primary_search
@@ -492,6 +499,7 @@ steps:
 ```yaml
 agents:
   analyst:
+    provider: openai
     model: gpt-4
     tools:
       - name: fetch_data
@@ -517,6 +525,7 @@ steps:
 ```yaml
 agents:
   smart_agent:
+    provider: openai
     model: gpt-4
     tools:
       - name: cache_lookup

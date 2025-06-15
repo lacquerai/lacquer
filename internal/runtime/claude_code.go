@@ -180,6 +180,29 @@ func (p *ClaudeCodeProvider) SupportedModels() []string {
 	return p.models
 }
 
+// ListModels returns the Claude Code model (single model for local provider)
+func (p *ClaudeCodeProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	// Claude Code provider only supports the "claude-code" model
+	models := []ModelInfo{
+		{
+			ID:          "claude-code",
+			Name:        "Claude Code",
+			Provider:    p.name,
+			CreatedAt:   "",
+			Deprecated:  false,
+			Description: "Claude Code CLI interface for local development",
+			Features:    []string{"text-generation", "chat", "code-analysis", "tool-use"},
+		},
+	}
+
+	log.Debug().
+		Int("model_count", len(models)).
+		Str("provider", p.name).
+		Msg("Returning Claude Code model")
+
+	return models, nil
+}
+
 // IsModelSupported checks if a model is supported
 func (p *ClaudeCodeProvider) IsModelSupported(model string) bool {
 	for _, supported := range p.models {

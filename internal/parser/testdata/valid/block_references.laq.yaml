@@ -6,6 +6,7 @@ metadata:
 
 agents:
   basic_agent:
+    provider: openai
     model: "gpt-4"
     
   lacquer_agent:

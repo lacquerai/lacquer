@@ -71,16 +71,21 @@ func DefaultExecutorConfig() *ExecutorConfig {
 	}
 }
 
-// NewExecutor creates a new workflow executor
-func NewExecutor(config *ExecutorConfig) *Executor {
+// NewExecutor creates a new workflow executor with only required providers
+func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *ModelRegistry) (*Executor, error) {
 	if config == nil {
 		config = DefaultExecutorConfig()
 	}
 
-	registry := NewModelRegistry()
+	if registry == nil {
+		registry = NewModelRegistry()
+	}
 
-	// Initialize and register providers
-	initializeProviders(registry)
+	// Only initialize providers that are used in the workflow
+	requiredProviders := getRequiredProviders(workflow)
+	if err := initializeRequiredProviders(registry, requiredProviders); err != nil {
+		return nil, fmt.Errorf("failed to initialize required providers: %w", err)
+	}
 
 	return &Executor{
 		templateEngine:  NewTemplateEngine(),
@@ -88,7 +93,7 @@ func NewExecutor(config *ExecutorConfig) *Executor {
 		config:          config,
 		outputParser:    NewOutputParser(),
 		schemaGenerator: NewSchemaGenerator(),
-	}
+	}, nil
 }
 
 // initializeProviders initializes and registers all available model providers
@@ -746,10 +751,10 @@ func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (
 		}
 	}
 
-	// Get model provider
-	provider, err := e.modelRegistry.GetProvider(agent.Model)
+	// Get model provider using the provider-aware lookup
+	provider, err := e.modelRegistry.GetProviderForModel(agent.Provider, agent.Model)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to get model provider for %s: %w", agent.Model, err)
+		return "", nil, fmt.Errorf("failed to get provider %s for model %s: %w", agent.Provider, agent.Model, err)
 	}
 
 	// Create model request
@@ -924,4 +929,55 @@ func getKeys(m map[string]interface{}) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// getRequiredProviders extracts the unique set of providers used in a workflow
+func getRequiredProviders(workflow *ast.Workflow) map[string]bool {
+	providers := make(map[string]bool)
+
+	// Check agents for provider usage
+	for _, agent := range workflow.Agents {
+		if agent.Provider != "" {
+			providers[agent.Provider] = true
+		}
+	}
+
+	return providers
+}
+
+// initializeRequiredProviders initializes only the specified providers
+func initializeRequiredProviders(registry *ModelRegistry, requiredProviders map[string]bool) error {
+	for providerName := range requiredProviders {
+		// Check if provider is already registered (e.g., mock providers in tests)
+		if _, err := registry.GetProviderByName(providerName); err == nil {
+			log.Debug().Str("provider", providerName).Msg("Provider already registered, skipping initialization")
+			continue
+		}
+
+		var provider ModelProvider
+		var err error
+
+		switch providerName {
+		case "anthropic":
+			provider, err = NewAnthropicProvider(nil)
+		case "openai":
+			provider, err = NewOpenAIProvider(nil)
+		case "local":
+			provider, err = NewClaudeCodeProvider(nil)
+		default:
+			return fmt.Errorf("unknown provider: %s", providerName)
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to initialize %s provider: %w", providerName, err)
+		}
+
+		if err := registry.RegisterProvider(provider); err != nil {
+			return fmt.Errorf("failed to register %s provider: %w", providerName, err)
+		}
+
+		log.Info().Str("provider", providerName).Msg("Provider registered successfully")
+	}
+
+	return nil
 }

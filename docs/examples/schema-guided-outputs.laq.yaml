@@ -8,6 +8,7 @@ metadata:
 agents:
   analyzer:
     model: claude-3-5-sonnet-20241022
+    provider: anthropic
     temperature: 0.3
     system_prompt: |
       You are a thorough data analyst who provides structured, accurate responses.
@@ -15,6 +16,7 @@ agents:
 
   classifier:
     model: gpt-4
+    provider: openai
     temperature: 0.1
     system_prompt: |
       You are a content classifier that categorizes and scores text content.

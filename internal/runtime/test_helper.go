@@ -12,7 +12,7 @@ import (
 func TestMain(m *testing.M) {
 	// Run tests - logging setup is handled by testhelper package
 	code := m.Run()
-	
+
 	// Exit with the same code as the tests
 	os.Exit(code)
 }

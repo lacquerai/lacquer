@@ -13,6 +13,7 @@ metadata:
 agents:
   # Researcher agent with web search capabilities
   researcher:
+    provider: openai
     model: gpt-4
     temperature: 0.3
     system_prompt: |
@@ -30,6 +31,7 @@ agents:
   
   # Analyst agent for deeper analysis
   analyst:
+    provider: openai
     model: gpt-4
     temperature: 0.2
     system_prompt: |
@@ -41,6 +43,7 @@ agents:
   
   # Summarizer agent for final output
   summarizer:
+    provider: anthropic
     model: claude-3-opus
     temperature: 0.5
     system_prompt: |

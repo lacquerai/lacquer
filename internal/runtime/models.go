@@ -14,14 +14,28 @@ type ModelProvider interface {
 	// GetName returns the provider name
 	GetName() string
 
-	// SupportedModels returns a list of supported model names
+	// SupportedModels returns a list of supported model names (cached, fallback)
 	SupportedModels() []string
+
+	// ListModels dynamically queries available models from the provider API
+	ListModels(ctx context.Context) ([]ModelInfo, error)
 
 	// IsModelSupported checks if a model is supported by this provider
 	IsModelSupported(model string) bool
 
 	// Close cleans up resources
 	Close() error
+}
+
+// ModelInfo represents information about an available model
+type ModelInfo struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name,omitempty"`
+	Provider    string   `json:"provider"`
+	CreatedAt   string   `json:"created_at,omitempty"`
+	Deprecated  bool     `json:"deprecated,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Features    []string `json:"features,omitempty"`
 }
 
 // ModelRequest represents a request to generate text from a model
@@ -77,7 +91,7 @@ func (mr *ModelRegistry) RegisterProvider(provider ModelProvider) error {
 	return nil
 }
 
-// GetProvider returns the provider for a given model
+// GetProvider returns the provider for a given model (legacy method for backward compatibility)
 func (mr *ModelRegistry) GetProvider(model string) (ModelProvider, error) {
 	mr.mu.RLock()
 	defer mr.mu.RUnlock()
@@ -90,6 +104,24 @@ func (mr *ModelRegistry) GetProvider(model string) (ModelProvider, error) {
 	provider, exists := mr.providers[providerName]
 	if !exists {
 		return nil, fmt.Errorf("provider %s not found", providerName)
+	}
+
+	return provider, nil
+}
+
+// GetProviderForModel returns the provider for a specific model from a specific provider
+func (mr *ModelRegistry) GetProviderForModel(providerName, model string) (ModelProvider, error) {
+	mr.mu.RLock()
+	defer mr.mu.RUnlock()
+
+	provider, exists := mr.providers[providerName]
+	if !exists {
+		return nil, fmt.Errorf("provider %s not found", providerName)
+	}
+
+	// Check if the provider supports this model
+	if !provider.IsModelSupported(model) {
+		return nil, fmt.Errorf("model %s not supported by provider %s", model, providerName)
 	}
 
 	return provider, nil
@@ -170,6 +202,11 @@ func NewMockModelProvider(name string, models []string) *MockModelProvider {
 		supportedModels: models,
 		responses:       make(map[string]string),
 	}
+}
+
+// ListModels returns the supported models
+func (mp *MockModelProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	return nil, nil
 }
 
 // SetResponse sets a mock response for a specific prompt

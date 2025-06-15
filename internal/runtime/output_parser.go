@@ -23,10 +23,10 @@ type OutputParser struct {
 // NewOutputParser creates a new output parser instance
 func NewOutputParser() *OutputParser {
 	return &OutputParser{
-		jsonPattern:     regexp.MustCompile(`(?s)\{.*\}|\[.*\]`),
+		jsonPattern:      regexp.MustCompile(`(?s)\{.*\}|\[.*\]`),
 		codeBlockPattern: regexp.MustCompile("(?s)```(?:json)?\\s*\\n([\\s\\S]*?)\\n```"),
-		listPattern:     regexp.MustCompile(`(?m)^[\s-\*]+(.+)$`),
-		keyValuePattern: regexp.MustCompile(`(?m)^([a-zA-Z_]\w*):\s*(.+)$`),
+		listPattern:      regexp.MustCompile(`(?m)^[\s-\*]+(.+)$`),
+		keyValuePattern:  regexp.MustCompile(`(?m)^([a-zA-Z_]\w*):\s*(.+)$`),
 	}
 }
 
@@ -41,7 +41,7 @@ func (p *OutputParser) ParseStepOutput(step *ast.Step, response string) (map[str
 
 	// Try to parse the response based on output definitions
 	parsedOutputs := make(map[string]interface{})
-	
+
 	// For schema-guided responses, prioritize JSON parsing with better error handling
 	if p.isSchemaGuidedResponse(response) {
 		if jsonData := p.extractJSON(response); jsonData != nil {
@@ -49,7 +49,7 @@ func (p *OutputParser) ParseStepOutput(step *ast.Step, response string) (map[str
 				parsedOutputs = mapped
 			}
 		}
-		
+
 		// If JSON parsing failed but response looks like it should be JSON, try to fix common issues
 		if len(parsedOutputs) == 0 && p.looksLikeJSON(response) {
 			if fixedJSON := p.attemptJSONFix(response); fixedJSON != nil {
@@ -131,7 +131,7 @@ func (p *OutputParser) mapJSONToOutputs(outputs map[string]interface{}, jsonData
 		if hasDirectMapping {
 			return result
 		}
-		
+
 		// If there's only one output field and no direct mapping, assign the whole object
 		if len(outputs) == 1 {
 			for key, outputDef := range outputs {
@@ -186,7 +186,7 @@ func (p *OutputParser) extractValueForKey(key string, outputDef interface{}, res
 		if len(matches) > 1 {
 			return p.parseList(matches[1])
 		}
-		
+
 		// Alternative: look for "key findings:" or similar followed by list
 		altPattern := regexp.MustCompile(fmt.Sprintf(`(?si)%s[:\s]*\n((?:[\s-\*•]+.+(?:\n|$))+)`, regexp.QuoteMeta(key)))
 		matches = altPattern.FindStringSubmatch(response)
@@ -262,13 +262,13 @@ func (p *OutputParser) parseBoolean(value string) bool {
 func (p *OutputParser) parseList(text string) []interface{} {
 	items := make([]interface{}, 0) // Initialize empty slice instead of nil
 	lines := strings.Split(text, "\n")
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		// Remove list markers
 		if strings.HasPrefix(line, "-") {
 			line = strings.TrimSpace(line[1:])
@@ -277,19 +277,19 @@ func (p *OutputParser) parseList(text string) []interface{} {
 		} else if strings.HasPrefix(line, "•") {
 			line = strings.TrimSpace(line[1:])
 		}
-		
+
 		if line != "" {
 			items = append(items, line)
 		}
 	}
-	
+
 	return items
 }
 
 // coerceType attempts to coerce a value to match the expected output type
 func (p *OutputParser) coerceType(value interface{}, outputDef interface{}) interface{} {
 	expectedType := p.getExpectedType(outputDef)
-	
+
 	switch expectedType {
 	case "string":
 		return fmt.Sprintf("%v", value)
@@ -328,7 +328,7 @@ func (p *OutputParser) coerceType(value interface{}, outputDef interface{}) inte
 			}
 		}
 	}
-	
+
 	return value
 }
 
@@ -343,36 +343,36 @@ func (p *OutputParser) isSchemaGuidedResponse(response string) bool {
 		"JSON object",
 		"valid JSON",
 	}
-	
+
 	lowerResponse := strings.ToLower(response)
 	for _, indicator := range indicators {
 		if strings.Contains(lowerResponse, strings.ToLower(indicator)) {
 			return true
 		}
 	}
-	
+
 	// Also check if response starts/ends with JSON-like structure
 	trimmed := strings.TrimSpace(response)
 	return (strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")) ||
-		   (strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]"))
+		(strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]"))
 }
 
 // looksLikeJSON determines if the response appears to be intended as JSON
 func (p *OutputParser) looksLikeJSON(response string) bool {
 	trimmed := strings.TrimSpace(response)
-	
+
 	// Check for JSON-like structure
 	hasJSONStructure := (strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")) ||
-		                (strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]"))
-	
+		(strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]"))
+
 	// Check for JSON-like content patterns (including single quotes)
-	hasJSONContent := strings.Contains(response, "\":") || 
-	                  strings.Contains(response, "\": ") ||
-	                  strings.Contains(response, "':") || 
-	                  strings.Contains(response, "': ") ||
-	                  (strings.Contains(response, "\"") && strings.Contains(response, ":")) ||
-	                  (strings.Contains(response, "'") && strings.Contains(response, ":"))
-	
+	hasJSONContent := strings.Contains(response, "\":") ||
+		strings.Contains(response, "\": ") ||
+		strings.Contains(response, "':") ||
+		strings.Contains(response, "': ") ||
+		(strings.Contains(response, "\"") && strings.Contains(response, ":")) ||
+		(strings.Contains(response, "'") && strings.Contains(response, ":"))
+
 	return hasJSONStructure && hasJSONContent
 }
 
@@ -383,17 +383,17 @@ func (p *OutputParser) attemptJSONFix(response string) interface{} {
 	if len(codeBlockMatches) > 1 {
 		response = codeBlockMatches[1]
 	}
-	
+
 	response = strings.TrimSpace(response)
-	
+
 	// Try multiple fixing strategies in sequence
 	fixes := []func(string) string{
-		p.fixSingleQuotes,     // Do this first before other quote-related fixes
+		p.fixSingleQuotes, // Do this first before other quote-related fixes
 		p.fixTrailingCommas,
 		p.fixUnquotedKeys,
 		p.fixNewlinesInStrings,
 	}
-	
+
 	current := response
 	for _, fix := range fixes {
 		current = fix(current)
@@ -403,7 +403,7 @@ func (p *OutputParser) attemptJSONFix(response string) interface{} {
 			return result
 		}
 	}
-	
+
 	return nil
 }
 
@@ -432,13 +432,13 @@ func (p *OutputParser) fixNewlinesInStrings(jsonStr string) string {
 	// This is a basic implementation - a full solution would need proper parsing
 	lines := strings.Split(jsonStr, "\n")
 	var result []string
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			result = append(result, line)
 		}
 	}
-	
+
 	return strings.Join(result, " ")
 }

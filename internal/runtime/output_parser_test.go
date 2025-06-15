@@ -353,9 +353,9 @@ func TestOutputParser_SchemaGuidedParsing(t *testing.T) {
 				"tags": ["important", "reviewed", "final"]
 			}`,
 			expected: map[string]interface{}{
-				"name":     "Test Analysis",
-				"score":    95,
-				"tags":     []interface{}{"important", "reviewed", "final"},
+				"name":  "Test Analysis",
+				"score": 95,
+				"tags":  []interface{}{"important", "reviewed", "final"},
 				"response": `{
 				"name": "Test Analysis",
 				"score": 95,
@@ -377,8 +377,8 @@ func TestOutputParser_SchemaGuidedParsing(t *testing.T) {
 				"status": "completed",
 			}`,
 			expected: map[string]interface{}{
-				"result":   "success",
-				"status":   "completed",
+				"result": "success",
+				"status": "completed",
 				"response": `{
 				"result": "success",
 				"status": "completed",
@@ -399,8 +399,8 @@ func TestOutputParser_SchemaGuidedParsing(t *testing.T) {
 				'code': 200
 			}`,
 			expected: map[string]interface{}{
-				"message":  "Hello World",
-				"code":     200,
+				"message": "Hello World",
+				"code":    200,
 				"response": `{
 				'message': 'Hello World',
 				'code': 200
@@ -412,9 +412,9 @@ func TestOutputParser_SchemaGuidedParsing(t *testing.T) {
 			step: &ast.Step{
 				ID: "test-step",
 				Outputs: map[string]interface{}{
-					"summary":     "string",
-					"confidence":  "float",
-					"actionable":  "boolean",
+					"summary":    "string",
+					"confidence": "float",
+					"actionable": "boolean",
 				},
 			},
 			response: `Based on my analysis, here's the JSON response:

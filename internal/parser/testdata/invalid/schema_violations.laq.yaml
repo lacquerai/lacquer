@@ -5,6 +5,7 @@ metadata:
 
 agents:
   bad_agent:
+    provider: openai
     model: "invalid-model-name"
     temperature: 5.0  # Should be <= 2.0
     max_tokens: -100  # Should be positive

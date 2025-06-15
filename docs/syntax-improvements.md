@@ -103,6 +103,7 @@ agents:
 ```yaml
 agents:
   researcher:
+    provider: openai
     model: gpt-4
     tools:
       # Shorthand for simple cases

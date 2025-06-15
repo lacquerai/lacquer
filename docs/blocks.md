@@ -296,6 +296,7 @@ inputs:
 workflow:
   agents:
     analyzer:
+      provider: openai
       model: gpt-4
       temperature: 0.1
       system_prompt: |
@@ -555,6 +556,7 @@ inputs:
 workflow:
   agents:
     processor:
+      provider: openai
       model: "{{ inputs.config.mode == 'fast' ? 'gpt-3.5-turbo' : 'gpt-4' }}"
       temperature: "{{ inputs.config.mode == 'thorough' ? 0.2 : 0.5 }}"
 ```

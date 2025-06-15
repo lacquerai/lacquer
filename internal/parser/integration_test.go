@@ -19,6 +19,7 @@ metadata:
   name: test-workflow
 agents:
   researcher:
+    provider: openai
     model: gpt-4
 workflow:
   inputs:
@@ -48,6 +49,7 @@ metadata:
   name: circular-test
 agents:
   agent1:
+    provider: openai
     model: gpt-4
 workflow:
   steps:
@@ -71,6 +73,7 @@ metadata:
 agents:
   agent1:
     model: gpt-4
+    provider: openai
 workflow:
   steps:
     - id: step1
@@ -93,6 +96,7 @@ metadata:
 agents:
   agent1:
     model: gpt-4
+    provider: openai
 workflow:
   steps:
     - id: step1
@@ -112,6 +116,7 @@ metadata:
 agents:
   agent1:
     model: gpt-4
+    provider: openai
 workflow:
   steps:
     - id: step1
@@ -178,6 +183,7 @@ metadata:
 agents:
   agent1:
     model: gpt-4
+    provider: openai
 workflow:
   steps:
     - id: step1
@@ -219,6 +225,7 @@ version: "1.0"
 agents:
   agent1:
     model: gpt-4
+    provider: openai
 workflow:
   steps:
     - id: step1
@@ -238,6 +245,7 @@ version: "1.0"
 agents:
   agent1:
     model: gpt-4
+    provider: openai
 workflow:
   steps:
     - id: step1
@@ -257,6 +265,7 @@ version: "1.0"
 agents:
   agent1:
     model: gpt-4
+    provider: openai
 workflow:
   steps:
     - id: step1

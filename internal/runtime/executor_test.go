@@ -10,8 +10,25 @@ import (
 )
 
 func TestNewExecutor(t *testing.T) {
+	// Create a simple test workflow with an agent
+	workflow := &ast.Workflow{
+		Version: "1.0",
+		Agents: map[string]*ast.Agent{
+			"test_agent": {
+				Provider: "local",
+				Model:    "claude-code",
+			},
+		},
+		Workflow: &ast.WorkflowDef{
+			Steps: []*ast.Step{
+				{ID: "step1", Agent: "test_agent", Prompt: "test"},
+			},
+		},
+	}
+
 	// Test with default config
-	executor := NewExecutor(nil)
+	executor, err := NewExecutor(nil, workflow, nil)
+	assert.NoError(t, err)
 	assert.NotNil(t, executor)
 	assert.NotNil(t, executor.config)
 	assert.Equal(t, 3, executor.config.MaxConcurrentSteps)
@@ -23,15 +40,20 @@ func TestNewExecutor(t *testing.T) {
 		DefaultTimeout:     10 * time.Second,
 		EnableRetries:      false,
 	}
-	executor = NewExecutor(config)
+	executor, err = NewExecutor(config, workflow, nil)
+	assert.NoError(t, err)
 	assert.Equal(t, config, executor.config)
 }
 
 func TestExecutor_ValidateInputs(t *testing.T) {
-	executor := NewExecutor(nil)
-
 	workflow := &ast.Workflow{
 		Version: "1.0",
+		Agents: map[string]*ast.Agent{
+			"test_agent": {
+				Provider: "local",
+				Model:    "claude-code",
+			},
+		},
 		Workflow: &ast.WorkflowDef{
 			Inputs: map[string]*ast.InputParam{
 				"required_param": {
@@ -54,11 +76,14 @@ func TestExecutor_ValidateInputs(t *testing.T) {
 		},
 	}
 
+	executor, err := NewExecutor(nil, workflow, nil)
+	assert.NoError(t, err)
+
 	// Test valid inputs
 	inputs := map[string]interface{}{
 		"required_param": "provided_value",
 	}
-	err := executor.validateInputs(workflow, inputs)
+	err = executor.validateInputs(workflow, inputs)
 	assert.NoError(t, err)
 
 	// Check that defaults were applied
@@ -72,10 +97,14 @@ func TestExecutor_ValidateInputs(t *testing.T) {
 }
 
 func TestExecutor_EvaluateSkipCondition(t *testing.T) {
-	executor := NewExecutor(nil)
-
 	workflow := &ast.Workflow{
 		Version: "1.0",
+		Agents: map[string]*ast.Agent{
+			"agent1": {
+				Provider: "local",
+				Model:    "claude-code",
+			},
+		},
 		Workflow: &ast.WorkflowDef{
 			State: map[string]interface{}{
 				"skip_flag": true,
@@ -86,6 +115,9 @@ func TestExecutor_EvaluateSkipCondition(t *testing.T) {
 			},
 		},
 	}
+
+	executor, err := NewExecutor(nil, workflow, nil)
+	assert.NoError(t, err)
 
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
@@ -134,8 +166,6 @@ func TestExecutor_EvaluateSkipCondition(t *testing.T) {
 }
 
 func TestExecutor_ExecuteActionStep_UpdateState(t *testing.T) {
-	executor := NewExecutor(nil)
-
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -147,6 +177,9 @@ func TestExecutor_ExecuteActionStep_UpdateState(t *testing.T) {
 			},
 		},
 	}
+
+	executor, err := NewExecutor(nil, workflow, nil)
+	assert.NoError(t, err)
 
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, map[string]interface{}{
@@ -182,8 +215,6 @@ func TestExecutor_ExecuteActionStep_UpdateState(t *testing.T) {
 }
 
 func TestExecutor_ExecuteActionStep_HumanInput(t *testing.T) {
-	executor := NewExecutor(nil)
-
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -192,6 +223,8 @@ func TestExecutor_ExecuteActionStep_HumanInput(t *testing.T) {
 			},
 		},
 	}
+	executor, err := NewExecutor(nil, workflow, nil)
+	assert.NoError(t, err)
 
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
@@ -208,8 +241,6 @@ func TestExecutor_ExecuteActionStep_HumanInput(t *testing.T) {
 }
 
 func TestExecutor_ExecuteActionStep_UnknownAction(t *testing.T) {
-	executor := NewExecutor(nil)
-
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -218,6 +249,9 @@ func TestExecutor_ExecuteActionStep_UnknownAction(t *testing.T) {
 			},
 		},
 	}
+
+	executor, err := NewExecutor(nil, workflow, nil)
+	assert.NoError(t, err)
 
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
@@ -227,13 +261,12 @@ func TestExecutor_ExecuteActionStep_UnknownAction(t *testing.T) {
 		Action: "unknown_action",
 	}
 
-	_, err := executor.executeActionStep(execCtx, step)
+	_, err = executor.executeActionStep(execCtx, step)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown action")
 }
 
 func TestExecutor_ExecuteBlockStep(t *testing.T) {
-	executor := NewExecutor(nil)
 
 	workflow := &ast.Workflow{
 		Version: "1.0",
@@ -243,6 +276,8 @@ func TestExecutor_ExecuteBlockStep(t *testing.T) {
 			},
 		},
 	}
+	executor, err := NewExecutor(nil, workflow, nil)
+	assert.NoError(t, err)
 
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
@@ -259,18 +294,14 @@ func TestExecutor_ExecuteBlockStep(t *testing.T) {
 }
 
 func TestExecutor_ExecuteAgentStep(t *testing.T) {
-	executor := NewExecutor(nil)
 
 	// Register mock provider
-	mockProvider := NewMockModelProvider("mock", []string{"test-model"})
-	mockProvider.SetResponse("Hello, Alice!", "Hello, Alice! How can I help?")
-	err := executor.modelRegistry.RegisterProvider(mockProvider)
-	assert.NoError(t, err)
 
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Agents: map[string]*ast.Agent{
 			"test_agent": {
+				Provider:     "mock",
 				Model:        "test-model",
 				SystemPrompt: "You are helpful",
 			},
@@ -281,6 +312,12 @@ func TestExecutor_ExecuteAgentStep(t *testing.T) {
 			},
 		},
 	}
+	registry := NewModelRegistry()
+	mockProvider := NewMockModelProvider("mock", []string{"test-model"})
+	mockProvider.SetResponse("Hello, Alice!", "Hello, Alice! How can I help?")
+	registry.RegisterProvider(mockProvider)
+	executor, err := NewExecutor(nil, workflow, registry)
+	assert.NoError(t, err)
 
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, map[string]interface{}{
@@ -297,7 +334,6 @@ func TestExecutor_ExecuteAgentStep(t *testing.T) {
 }
 
 func TestExecutor_ExecuteAgentStep_MissingAgent(t *testing.T) {
-	executor := NewExecutor(nil)
 
 	workflow := &ast.Workflow{
 		Version: "1.0",
@@ -309,24 +345,26 @@ func TestExecutor_ExecuteAgentStep_MissingAgent(t *testing.T) {
 		},
 	}
 
+	executor, err := NewExecutor(nil, workflow, nil)
+	assert.NoError(t, err)
+
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
 
 	step := workflow.Workflow.Steps[0]
 
-	_, _, err := executor.executeAgentStep(execCtx, step)
+	_, _, err = executor.executeAgentStep(execCtx, step)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "agent missing_agent not found")
 }
 
 func TestExecutor_ExecuteAgentStep_MissingModel(t *testing.T) {
-	executor := NewExecutor(nil)
-
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Agents: map[string]*ast.Agent{
 			"test_agent": {
-				Model: "nonexistent-model",
+				Provider: "mock",
+				Model:    "nonexistent-model",
 			},
 		},
 		Workflow: &ast.WorkflowDef{
@@ -336,14 +374,23 @@ func TestExecutor_ExecuteAgentStep_MissingModel(t *testing.T) {
 		},
 	}
 
+	// Create registry and register mock provider that doesn't support the model
+	registry := NewModelRegistry()
+	mockProvider := NewMockModelProvider("mock", []string{"other-model"}) // Doesn't include "nonexistent-model"
+	err := registry.RegisterProvider(mockProvider)
+	assert.NoError(t, err)
+
+	executor, err := NewExecutor(nil, workflow, registry)
+	assert.NoError(t, err)
+
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
 
 	step := workflow.Workflow.Steps[0]
 
-	_, _, err := executor.executeAgentStep(execCtx, step)
+	_, _, err = executor.executeAgentStep(execCtx, step)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get model provider")
+	assert.Contains(t, err.Error(), "model nonexistent-model not supported by provider mock")
 }
 
 func TestDefaultExecutorConfig(t *testing.T) {

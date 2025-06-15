@@ -5,6 +5,7 @@ metadata:
 
 agents:
   processor:
+    provider: "openai"
     model: "gpt-4"
 
 workflow:

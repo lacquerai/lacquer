@@ -6,9 +6,11 @@ metadata:
 
 agents:
   gpt4_basic:
+    provider: "openai"
     model: "gpt-4"
     
   gpt4_configured:
+    provider: "openai"
     model: "gpt-4"
     temperature: 0.8
     max_tokens: 2000
@@ -16,15 +18,18 @@ agents:
     system_prompt: "You are a helpful assistant."
     
   claude_basic:
+    provider: "anthropic"
     model: "claude-3-sonnet"
     
   claude_configured:
+    provider: "anthropic"
     model: "claude-3-opus"
     temperature: 0.3
     max_tokens: 4000
     system_prompt: "You are a research assistant."
     
   gemini_basic:
+    provider: "google"
     model: "gemini-pro"
     
   block_agent:

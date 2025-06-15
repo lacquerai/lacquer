@@ -109,11 +109,13 @@ The `agents` section defines reusable AI agent configurations. See [Agents Docum
 ```yaml
 agents:
   researcher:
+    provider: openai
     model: gpt-4
     temperature: 0.3
   
   writer:
-    model: claude-3-opus
+    provider: anthropic
+    model: claude-3-opus-20240229
     temperature: 0.7
 ```
 
@@ -213,11 +215,13 @@ metadata:
 
 agents:
   researcher:
+    provider: openai
     model: gpt-4
     temperature: 0.3
     system_prompt: You are a thorough researcher
   
   summarizer:
+    provider: openai
     model: gpt-4
     temperature: 0.5
     system_prompt: You create concise summaries

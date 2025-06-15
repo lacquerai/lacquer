@@ -6,6 +6,7 @@ metadata:
 
 agents:
   bad_agent:
+    provider: does-not-exist
     model: 123  # Should be string
     temperature: "0.7"  # Should be number
     max_tokens: "1000"  # Should be number
