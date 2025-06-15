@@ -12,11 +12,11 @@ import (
 
 var (
 	// Global flags
-	cfgFile    string
-	logLevel   string
+	cfgFile      string
+	logLevel     string
 	outputFormat string
-	quiet      bool
-	verbose    bool
+	quiet        bool
+	verbose      bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -45,7 +45,7 @@ func init() {
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.lacquer/config.yaml)")
-	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "disabled", "log level (debug, info, warn, error) (default: disabled)")
 	rootCmd.PersistentFlags().StringVar(&outputFormat, "output", "text", "output format (text, json, yaml)")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "suppress non-essential output")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
@@ -104,7 +104,7 @@ func initLogging() {
 	case "error":
 		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 	default:
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		zerolog.SetGlobalLevel(zerolog.Disabled)
 	}
 
 	// Configure console output for better readability
