@@ -90,6 +90,7 @@ condition:
 agents:
   researcher:
     model: gpt-4
+    provider: openai
     tools:
       - name: search
         uses: lacquer/web-search@v1
@@ -372,6 +373,7 @@ version: "1.0"
 extends: ./base-workflow.laq.yaml
 
 template:
+  provider: openai
   model: gpt-4-turbo
   temperature: 0.3
   input_type: array

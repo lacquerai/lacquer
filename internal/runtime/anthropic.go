@@ -177,7 +177,10 @@ func NewAnthropicProvider(config *AnthropicConfig) (*AnthropicProvider, error) {
 
 	// Validate API key
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("Anthropic API key is required")
+		config.APIKey = GetAnthropicAPIKeyFromEnv()
+		if config.APIKey == "" {
+			return nil, fmt.Errorf("Anthropic API key is required")
+		}
 	}
 
 	// Create HTTP client with timeout
