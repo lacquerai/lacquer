@@ -40,9 +40,11 @@ type ExecutionEvent struct {
 
 // Executor is the main workflow execution engine
 type Executor struct {
-	templateEngine *TemplateEngine
-	modelRegistry  *ModelRegistry
-	config         *ExecutorConfig
+	templateEngine  *TemplateEngine
+	modelRegistry   *ModelRegistry
+	config          *ExecutorConfig
+	outputParser    *OutputParser
+	schemaGenerator *SchemaGenerator
 }
 
 // ExecutorConfig contains configuration for the executor
@@ -81,9 +83,11 @@ func NewExecutor(config *ExecutorConfig) *Executor {
 	initializeProviders(registry)
 
 	return &Executor{
-		templateEngine: NewTemplateEngine(),
-		modelRegistry:  registry,
-		config:         config,
+		templateEngine:  NewTemplateEngine(),
+		modelRegistry:   registry,
+		config:          config,
+		outputParser:    NewOutputParser(),
+		schemaGenerator: NewSchemaGenerator(),
 	}
 }
 
@@ -333,8 +337,18 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error 
 	case step.IsAgentStep():
 		stepResponse, tokenUsage, err = e.executeAgentStep(execCtx, step)
 		if err == nil {
-			stepOutput = map[string]interface{}{
-				"response": stepResponse,
+			// Parse the agent response according to output definitions
+			var parseErr error
+			stepOutput, parseErr = e.outputParser.ParseStepOutput(step, stepResponse)
+			if parseErr != nil {
+				log.Warn().
+					Err(parseErr).
+					Str("step_id", step.ID).
+					Msg("Failed to parse agent output, using raw response")
+				// Fallback to raw response
+				stepOutput = map[string]interface{}{
+					"response": stepResponse,
+				}
 			}
 		}
 
@@ -716,6 +730,20 @@ func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (
 	prompt, err := e.templateEngine.Render(step.Prompt, execCtx)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to render prompt template: %w", err)
+	}
+
+	// Enhance prompt with JSON schema instructions if outputs are defined
+	if step.Outputs != nil && len(step.Outputs) > 0 {
+		schema, schemaErr := e.schemaGenerator.GenerateJSONSchema(step.Outputs)
+		if schemaErr != nil {
+			log.Warn().
+				Err(schemaErr).
+				Str("step_id", step.ID).
+				Msg("Failed to generate JSON schema, proceeding without schema guidance")
+		} else if schema != "" {
+			schemaInstructions := e.schemaGenerator.GeneratePromptInstructions(schema)
+			prompt = prompt + schemaInstructions
+		}
 	}
 
 	// Get model provider
