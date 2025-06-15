@@ -14,7 +14,7 @@ func TestVersionCommand(t *testing.T) {
 }
 
 func TestVersionCommandJSON(t *testing.T) {
-	// Just test that the command executes without error  
+	// Just test that the command executes without error
 	_, err := executeCommand(rootCmd, "version", "--output", "json")
 	assert.NoError(t, err)
 }

@@ -37,7 +37,7 @@ func getEnvironmentVars() map[string]string {
 // buildMetadata creates metadata map from workflow
 func buildMetadata(workflow *ast.Workflow) map[string]interface{} {
 	metadata := make(map[string]interface{})
-	
+
 	if workflow.Metadata != nil {
 		metadata["name"] = workflow.Metadata.Name
 		metadata["description"] = workflow.Metadata.Description
@@ -45,10 +45,10 @@ func buildMetadata(workflow *ast.Workflow) map[string]interface{} {
 		metadata["version"] = workflow.Metadata.Version
 		metadata["tags"] = workflow.Metadata.Tags
 	}
-	
+
 	metadata["workflow_version"] = workflow.Version
 	metadata["source_file"] = workflow.SourceFile
-	
+
 	return metadata
 }
 
@@ -148,10 +148,10 @@ func GetMapValue(m map[string]interface{}, path string) (interface{}, bool) {
 	if path == "" {
 		return nil, false
 	}
-	
+
 	keys := splitPath(path)
 	current := interface{}(m)
-	
+
 	for _, key := range keys {
 		switch val := current.(type) {
 		case map[string]interface{}:
@@ -164,7 +164,7 @@ func GetMapValue(m map[string]interface{}, path string) (interface{}, bool) {
 			return nil, false
 		}
 	}
-	
+
 	return current, true
 }
 
@@ -173,14 +173,14 @@ func SetMapValue(m map[string]interface{}, path string, value interface{}) {
 	if path == "" {
 		return
 	}
-	
+
 	keys := splitPath(path)
 	current := m
-	
+
 	// Navigate to the parent of the target key
 	for i := 0; i < len(keys)-1; i++ {
 		key := keys[i]
-		
+
 		if next, exists := current[key]; exists {
 			if nextMap, ok := next.(map[string]interface{}); ok {
 				current = nextMap
@@ -195,7 +195,7 @@ func SetMapValue(m map[string]interface{}, path string, value interface{}) {
 			current = current[key].(map[string]interface{})
 		}
 	}
-	
+
 	// Set the final value
 	current[keys[len(keys)-1]] = value
 }
@@ -205,10 +205,10 @@ func splitPath(path string) []string {
 	if path == "" {
 		return nil
 	}
-	
+
 	var keys []string
 	current := ""
-	
+
 	for i, char := range path {
 		if char == '.' {
 			if current != "" {
@@ -218,13 +218,13 @@ func splitPath(path string) []string {
 		} else {
 			current += string(char)
 		}
-		
+
 		// Add the last key
 		if i == len(path)-1 && current != "" {
 			keys = append(keys, current)
 		}
 	}
-	
+
 	return keys
 }
 
@@ -233,22 +233,22 @@ func IsValidVariableName(name string) bool {
 	if name == "" {
 		return false
 	}
-	
+
 	// Must start with letter or underscore
 	first := name[0]
 	if !((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || first == '_') {
 		return false
 	}
-	
+
 	// Rest can be letters, digits, or underscores
 	for i := 1; i < len(name); i++ {
 		char := name[i]
-		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || 
-			 (char >= '0' && char <= '9') || char == '_') {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || char == '_') {
 			return false
 		}
 	}
-	
+
 	return true
 }
 

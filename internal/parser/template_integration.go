@@ -59,27 +59,27 @@ func (tv *TemplateValidator) ExtractVariableReferences(template string) []Variab
 
 // VariableReference represents a parsed variable reference
 type VariableReference struct {
-	Raw    string            // Full variable path (e.g., "steps.step1.output")
-	Scope  string            // Variable scope (e.g., "steps", "inputs", "state")
-	Path   []string          // Path components (e.g., ["steps", "step1", "output"])
-	Type   VariableType      // Type of variable reference
-	Target string            // Target identifier (e.g., step ID, input name)
-	Field  string            // Field name (e.g., "output", "response")
+	Raw    string       // Full variable path (e.g., "steps.step1.output")
+	Scope  string       // Variable scope (e.g., "steps", "inputs", "state")
+	Path   []string     // Path components (e.g., ["steps", "step1", "output"])
+	Type   VariableType // Type of variable reference
+	Target string       // Target identifier (e.g., step ID, input name)
+	Field  string       // Field name (e.g., "output", "response")
 }
 
 // VariableType represents the type of variable reference
 type VariableType int
 
 const (
-	VariableTypeUnknown VariableType = iota
-	VariableTypeInput                // inputs.param_name
-	VariableTypeState                // state.key_name
-	VariableTypeStep                 // steps.step_id.field
-	VariableTypeMetadata             // metadata.field_name
-	VariableTypeEnvironment          // env.VAR_NAME
-	VariableTypeWorkflow             // workflow.field_name
-	VariableTypeFunction             // Function calls like now(), uuid()
-	VariableTypeExpression           // Complex expressions with operators
+	VariableTypeUnknown     VariableType = iota
+	VariableTypeInput                    // inputs.param_name
+	VariableTypeState                    // state.key_name
+	VariableTypeStep                     // steps.step_id.field
+	VariableTypeMetadata                 // metadata.field_name
+	VariableTypeEnvironment              // env.VAR_NAME
+	VariableTypeWorkflow                 // workflow.field_name
+	VariableTypeFunction                 // Function calls like now(), uuid()
+	VariableTypeExpression               // Complex expressions with operators
 )
 
 // ParseVariableReference parses a variable path into components
@@ -172,7 +172,7 @@ func containsOperators(varPath string) bool {
 		"&&", "||", "!",
 		"+", "-", "*", "/",
 		"?", ":", // Ternary operator
-		"|",      // Pipe operator
+		"|", // Pipe operator
 	}
 
 	// Check for operator symbols
@@ -189,7 +189,7 @@ func containsOperators(varPath string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 

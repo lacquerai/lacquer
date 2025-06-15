@@ -13,20 +13,20 @@ import (
 
 // RetryConfig defines retry behavior for operations
 type RetryConfig struct {
-	MaxAttempts    int           `yaml:"max_attempts"`
-	InitialDelay   time.Duration `yaml:"initial_delay"`
-	MaxDelay       time.Duration `yaml:"max_delay"`
-	BackoffFactor  float64       `yaml:"backoff_factor"`
-	Jitter         bool          `yaml:"jitter"`
+	MaxAttempts     int           `yaml:"max_attempts"`
+	InitialDelay    time.Duration `yaml:"initial_delay"`
+	MaxDelay        time.Duration `yaml:"max_delay"`
+	BackoffFactor   float64       `yaml:"backoff_factor"`
+	Jitter          bool          `yaml:"jitter"`
 	RetryableErrors []string      `yaml:"retryable_errors"`
 }
 
 // CircuitBreakerConfig defines circuit breaker behavior
 type CircuitBreakerConfig struct {
-	FailureThreshold   int           `yaml:"failure_threshold"`
-	SuccessThreshold   int           `yaml:"success_threshold"`
-	Timeout           time.Duration `yaml:"timeout"`
-	ResetTimeout      time.Duration `yaml:"reset_timeout"`
+	FailureThreshold int           `yaml:"failure_threshold"`
+	SuccessThreshold int           `yaml:"success_threshold"`
+	Timeout          time.Duration `yaml:"timeout"`
+	ResetTimeout     time.Duration `yaml:"reset_timeout"`
 }
 
 // TimeoutConfig defines timeout behavior for operations
@@ -139,7 +139,7 @@ func (s *ExponentialBackoffStrategy) NextDelay(attempt int, lastErr error) time.
 	}
 
 	delay := time.Duration(float64(s.config.InitialDelay) * math.Pow(s.config.BackoffFactor, float64(attempt-1)))
-	
+
 	if delay > s.config.MaxDelay {
 		delay = s.config.MaxDelay
 	}
@@ -176,7 +176,7 @@ func NewRetrier(config *RetryConfig) *Retrier {
 	if config == nil {
 		config = DefaultResilienceConfig().Retry
 	}
-	
+
 	return &Retrier{
 		strategy: NewExponentialBackoffStrategy(config),
 		config:   config,
@@ -186,7 +186,7 @@ func NewRetrier(config *RetryConfig) *Retrier {
 // Execute executes an operation with retry logic
 func (r *Retrier) Execute(ctx context.Context, operation func() error) error {
 	var lastErr error
-	
+
 	for attempt := 1; attempt <= r.config.MaxAttempts; attempt++ {
 		// Check context cancellation before each attempt
 		if ctx.Err() != nil {
@@ -206,13 +206,13 @@ func (r *Retrier) Execute(ctx context.Context, operation func() error) error {
 		}
 
 		lastErr = err
-		
+
 		if !r.strategy.ShouldRetry(attempt, err) {
 			break
 		}
 
 		delay := r.strategy.NextDelay(attempt, err)
-		
+
 		log.Warn().
 			Err(err).
 			Int("attempt", attempt).
@@ -233,7 +233,7 @@ func (r *Retrier) Execute(ctx context.Context, operation func() error) error {
 		Err(lastErr).
 		Int("total_attempts", r.config.MaxAttempts).
 		Msg("Operation failed after all retry attempts")
-	
+
 	return fmt.Errorf("operation failed after %d attempts: %w", r.config.MaxAttempts, lastErr)
 }
 
@@ -266,7 +266,7 @@ type CircuitBreaker struct {
 	failureCount    int
 	successCount    int
 	lastFailureTime time.Time
-	mu             sync.RWMutex
+	mu              sync.RWMutex
 }
 
 // NewCircuitBreaker creates a new circuit breaker
@@ -274,7 +274,7 @@ func NewCircuitBreaker(config *CircuitBreakerConfig) *CircuitBreaker {
 	if config == nil {
 		config = DefaultResilienceConfig().CircuitBreaker
 	}
-	
+
 	return &CircuitBreaker{
 		config: config,
 		state:  StateClosed,
@@ -290,7 +290,7 @@ func (cb *CircuitBreaker) Execute(ctx context.Context, operation func() error) e
 
 	err := operation()
 	cb.recordResult(err)
-	
+
 	return err
 }
 
@@ -357,7 +357,7 @@ func (cb *CircuitBreaker) onSuccess() {
 // onFailure handles failed operations
 func (cb *CircuitBreaker) onFailure() {
 	cb.lastFailureTime = time.Now()
-	
+
 	switch cb.state {
 	case StateClosed:
 		cb.failureCount++
@@ -393,12 +393,12 @@ func (cb *CircuitBreaker) GetFailureCount() int {
 func (cb *CircuitBreaker) Reset() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	
+
 	cb.state = StateClosed
 	cb.failureCount = 0
 	cb.successCount = 0
 	cb.lastFailureTime = time.Time{}
-	
+
 	log.Info().Msg("Circuit breaker reset")
 }
 
@@ -414,7 +414,7 @@ func NewResilienceManager(config *ResilienceConfig) *ResilienceManager {
 	if config == nil {
 		config = DefaultResilienceConfig()
 	}
-	
+
 	return &ResilienceManager{
 		retrier:        NewRetrier(config.Retry),
 		circuitBreaker: NewCircuitBreaker(config.CircuitBreaker),
@@ -443,7 +443,7 @@ func (rm *ResilienceManager) Execute(ctx context.Context, operation func(context
 func (rm *ResilienceManager) ExecuteWithTimeout(ctx context.Context, timeout time.Duration, operation func(context.Context) error) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	
+
 	return rm.Execute(timeoutCtx, operation)
 }
 

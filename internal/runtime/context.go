@@ -12,18 +12,18 @@ import (
 // ExecutionContext contains all the state and metadata for a workflow execution
 type ExecutionContext struct {
 	// Workflow information
-	Workflow *ast.Workflow
-	RunID    string
+	Workflow  *ast.Workflow
+	RunID     string
 	StartTime time.Time
 
 	// Input parameters and state
 	Inputs map[string]interface{}
 	State  map[string]interface{}
-	
+
 	// Step execution tracking
-	StepResults   map[string]*StepResult
+	StepResults      map[string]*StepResult
 	CurrentStepIndex int
-	TotalSteps    int
+	TotalSteps       int
 
 	// Environment and metadata
 	Environment map[string]string
@@ -40,16 +40,16 @@ type ExecutionContext struct {
 
 // StepResult represents the result of executing a single step
 type StepResult struct {
-	StepID      string                 `json:"step_id"`
-	Status      StepStatus             `json:"status"`
-	StartTime   time.Time              `json:"start_time"`
-	EndTime     time.Time              `json:"end_time"`
-	Duration    time.Duration          `json:"duration"`
-	Output      map[string]interface{} `json:"output"`
-	Response    string                 `json:"response,omitempty"`
-	Error       error                  `json:"error,omitempty"`
-	TokenUsage  *TokenUsage            `json:"token_usage,omitempty"`
-	Retries     int                    `json:"retries"`
+	StepID     string                 `json:"step_id"`
+	Status     StepStatus             `json:"status"`
+	StartTime  time.Time              `json:"start_time"`
+	EndTime    time.Time              `json:"end_time"`
+	Duration   time.Duration          `json:"duration"`
+	Output     map[string]interface{} `json:"output"`
+	Response   string                 `json:"response,omitempty"`
+	Error      error                  `json:"error,omitempty"`
+	TokenUsage *TokenUsage            `json:"token_usage,omitempty"`
+	Retries    int                    `json:"retries"`
 }
 
 // StepStatus represents the execution status of a step
@@ -75,30 +75,30 @@ type TokenUsage struct {
 func NewExecutionContext(ctx context.Context, workflow *ast.Workflow, inputs map[string]interface{}) *ExecutionContext {
 	runID := generateRunID()
 	execCtx, cancel := context.WithCancel(ctx)
-	
+
 	workflowName := ""
 	if workflow.Metadata != nil {
 		workflowName = workflow.Metadata.Name
 	}
-	
+
 	logger := zerolog.Ctx(ctx).With().
 		Str("workflow", workflowName).
 		Str("run_id", runID).
 		Logger()
 
 	execContext := &ExecutionContext{
-		Workflow:      workflow,
-		RunID:         runID,
-		StartTime:     time.Now(),
-		Inputs:        inputs,
-		State:         make(map[string]interface{}),
-		StepResults:   make(map[string]*StepResult),
-		Environment:   getEnvironmentVars(),
-		Metadata:      buildMetadata(workflow),
-		Context:       execCtx,
-		Cancel:        cancel,
-		Logger:        logger,
-		TotalSteps:    len(workflow.Workflow.Steps),
+		Workflow:    workflow,
+		RunID:       runID,
+		StartTime:   time.Now(),
+		Inputs:      inputs,
+		State:       make(map[string]interface{}),
+		StepResults: make(map[string]*StepResult),
+		Environment: getEnvironmentVars(),
+		Metadata:    buildMetadata(workflow),
+		Context:     execCtx,
+		Cancel:      cancel,
+		Logger:      logger,
+		TotalSteps:  len(workflow.Workflow.Steps),
 	}
 
 	// Initialize state with workflow defaults
@@ -123,7 +123,7 @@ func NewExecutionContext(ctx context.Context, workflow *ast.Workflow, inputs map
 func (ec *ExecutionContext) GetInput(key string) (interface{}, bool) {
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
-	
+
 	value, exists := ec.Inputs[key]
 	return value, exists
 }
@@ -132,7 +132,7 @@ func (ec *ExecutionContext) GetInput(key string) (interface{}, bool) {
 func (ec *ExecutionContext) GetState(key string) (interface{}, bool) {
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
-	
+
 	value, exists := ec.State[key]
 	return value, exists
 }
@@ -141,7 +141,7 @@ func (ec *ExecutionContext) GetState(key string) (interface{}, bool) {
 func (ec *ExecutionContext) SetState(key string, value interface{}) {
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
-	
+
 	ec.State[key] = value
 	ec.Logger.Debug().
 		Str("key", key).
@@ -153,11 +153,11 @@ func (ec *ExecutionContext) SetState(key string, value interface{}) {
 func (ec *ExecutionContext) UpdateState(updates map[string]interface{}) {
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
-	
+
 	for key, value := range updates {
 		ec.State[key] = value
 	}
-	
+
 	ec.Logger.Debug().
 		Interface("updates", updates).
 		Msg("State batch updated")
@@ -167,7 +167,7 @@ func (ec *ExecutionContext) UpdateState(updates map[string]interface{}) {
 func (ec *ExecutionContext) GetAllState() map[string]interface{} {
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
-	
+
 	return CopyMap(ec.State)
 }
 
@@ -175,7 +175,7 @@ func (ec *ExecutionContext) GetAllState() map[string]interface{} {
 func (ec *ExecutionContext) GetStepResult(stepID string) (*StepResult, bool) {
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
-	
+
 	result, exists := ec.StepResults[stepID]
 	return result, exists
 }
@@ -184,9 +184,9 @@ func (ec *ExecutionContext) GetStepResult(stepID string) (*StepResult, bool) {
 func (ec *ExecutionContext) SetStepResult(stepID string, result *StepResult) {
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
-	
+
 	ec.StepResults[stepID] = result
-	
+
 	ec.Logger.Debug().
 		Str("step_id", stepID).
 		Str("status", string(result.Status)).
@@ -198,7 +198,7 @@ func (ec *ExecutionContext) SetStepResult(stepID string, result *StepResult) {
 func (ec *ExecutionContext) GetEnvironment(key string) (string, bool) {
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
-	
+
 	value, exists := ec.Environment[key]
 	return value, exists
 }
@@ -207,7 +207,7 @@ func (ec *ExecutionContext) GetEnvironment(key string) (string, bool) {
 func (ec *ExecutionContext) GetMetadata(key string) (interface{}, bool) {
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
-	
+
 	value, exists := ec.Metadata[key]
 	return value, exists
 }
@@ -216,7 +216,7 @@ func (ec *ExecutionContext) GetMetadata(key string) (interface{}, bool) {
 func (ec *ExecutionContext) IncrementCurrentStep() {
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
-	
+
 	ec.CurrentStepIndex++
 }
 
@@ -224,7 +224,7 @@ func (ec *ExecutionContext) IncrementCurrentStep() {
 func (ec *ExecutionContext) IsCompleted() bool {
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
-	
+
 	return ec.CurrentStepIndex >= ec.TotalSteps
 }
 
@@ -242,7 +242,7 @@ func (ec *ExecutionContext) IsCancelled() bool {
 func (ec *ExecutionContext) GetExecutionSummary() ExecutionSummary {
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
-	
+
 	summary := ExecutionSummary{
 		RunID:     ec.RunID,
 		StartTime: ec.StartTime,

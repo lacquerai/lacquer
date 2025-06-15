@@ -26,35 +26,35 @@ type AnthropicProvider struct {
 
 // AnthropicConfig contains configuration for the Anthropic provider
 type AnthropicConfig struct {
-	APIKey      string        `yaml:"api_key"`
-	BaseURL     string        `yaml:"base_url"`
-	Timeout     time.Duration `yaml:"timeout"`
-	MaxRetries  int           `yaml:"max_retries"`
-	RetryDelay  time.Duration `yaml:"retry_delay"`
-	UserAgent   string        `yaml:"user_agent"`
-	AnthropicVersion string   `yaml:"anthropic_version"`
+	APIKey           string        `yaml:"api_key"`
+	BaseURL          string        `yaml:"base_url"`
+	Timeout          time.Duration `yaml:"timeout"`
+	MaxRetries       int           `yaml:"max_retries"`
+	RetryDelay       time.Duration `yaml:"retry_delay"`
+	UserAgent        string        `yaml:"user_agent"`
+	AnthropicVersion string        `yaml:"anthropic_version"`
 }
 
 // AnthropicRequest represents a request to the Anthropic API
 type AnthropicRequest struct {
-	Model         string                    `json:"model"`
-	MaxTokens     int                      `json:"max_tokens"`
-	Messages      []AnthropicMessage       `json:"messages"`
-	System        string                   `json:"system,omitempty"`
-	Temperature   *float64                 `json:"temperature,omitempty"`
-	TopP          *float64                 `json:"top_p,omitempty"`
-	TopK          *int                     `json:"top_k,omitempty"`
-	StopSequences []string                 `json:"stop_sequences,omitempty"`
-	Stream        bool                     `json:"stream,omitempty"`
-	Metadata      *AnthropicMetadata       `json:"metadata,omitempty"`
-	Tools         []AnthropicTool          `json:"tools,omitempty"`
-	ToolChoice    *AnthropicToolChoice     `json:"tool_choice,omitempty"`
+	Model         string               `json:"model"`
+	MaxTokens     int                  `json:"max_tokens"`
+	Messages      []AnthropicMessage   `json:"messages"`
+	System        string               `json:"system,omitempty"`
+	Temperature   *float64             `json:"temperature,omitempty"`
+	TopP          *float64             `json:"top_p,omitempty"`
+	TopK          *int                 `json:"top_k,omitempty"`
+	StopSequences []string             `json:"stop_sequences,omitempty"`
+	Stream        bool                 `json:"stream,omitempty"`
+	Metadata      *AnthropicMetadata   `json:"metadata,omitempty"`
+	Tools         []AnthropicTool      `json:"tools,omitempty"`
+	ToolChoice    *AnthropicToolChoice `json:"tool_choice,omitempty"`
 }
 
 // AnthropicMessage represents a message in the conversation
 type AnthropicMessage struct {
-	Role    string                  `json:"role"`
-	Content []AnthropicContent      `json:"content"`
+	Role    string             `json:"role"`
+	Content []AnthropicContent `json:"content"`
 }
 
 // AnthropicContent represents content within a message
@@ -62,11 +62,11 @@ type AnthropicContent struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
 	// For tool use and tool result content types
-	ID       string                 `json:"id,omitempty"`
-	Name     string                 `json:"name,omitempty"`
-	Input    map[string]interface{} `json:"input,omitempty"`
-	Content  string                 `json:"content,omitempty"`
-	IsError  bool                   `json:"is_error,omitempty"`
+	ID      string                 `json:"id,omitempty"`
+	Name    string                 `json:"name,omitempty"`
+	Input   map[string]interface{} `json:"input,omitempty"`
+	Content string                 `json:"content,omitempty"`
+	IsError bool                   `json:"is_error,omitempty"`
 }
 
 // AnthropicTool represents a tool that can be used by the model
@@ -89,14 +89,14 @@ type AnthropicMetadata struct {
 
 // AnthropicResponse represents a response from the Anthropic API
 type AnthropicResponse struct {
-	ID           string               `json:"id"`
-	Type         string               `json:"type"`
-	Role         string               `json:"role"`
-	Content      []AnthropicContent   `json:"content"`
-	Model        string               `json:"model"`
-	StopReason   string               `json:"stop_reason"`
-	StopSequence string               `json:"stop_sequence,omitempty"`
-	Usage        AnthropicUsage       `json:"usage"`
+	ID           string             `json:"id"`
+	Type         string             `json:"type"`
+	Role         string             `json:"role"`
+	Content      []AnthropicContent `json:"content"`
+	Model        string             `json:"model"`
+	StopReason   string             `json:"stop_reason"`
+	StopSequence string             `json:"stop_sequence,omitempty"`
+	Usage        AnthropicUsage     `json:"usage"`
 }
 
 // AnthropicUsage represents token usage information
@@ -244,7 +244,7 @@ func (p *AnthropicProvider) Close() error {
 	if transport, ok := p.httpClient.Transport.(*http.Transport); ok {
 		transport.CloseIdleConnections()
 	}
-	
+
 	log.Info().Msg("Anthropic provider closed")
 	return nil
 }
@@ -343,7 +343,7 @@ func (p *AnthropicProvider) makeAPICall(ctx context.Context, request *AnthropicR
 
 			log.Debug().
 				Int("attempt", attempt).
-				Dur("delay", p.config.RetryDelay * time.Duration(attempt)).
+				Dur("delay", p.config.RetryDelay*time.Duration(attempt)).
 				Msg("Retrying Anthropic API request")
 		}
 
@@ -359,7 +359,7 @@ func (p *AnthropicProvider) makeAPICall(ctx context.Context, request *AnthropicR
 
 		log.Warn().
 			Err(lastErr).
-			Int("attempt", attempt + 1).
+			Int("attempt", attempt+1).
 			Int("max_retries", p.config.MaxRetries).
 			Msg("Anthropic API request failed, retrying")
 	}
@@ -423,11 +423,11 @@ func (p *AnthropicProvider) extractResponseContent(response *AnthropicResponse) 
 // shouldRetry determines if an error should trigger a retry
 func (p *AnthropicProvider) shouldRetry(err error) bool {
 	errStr := err.Error()
-	
+
 	// Retry on network errors
-	if strings.Contains(errStr, "connection") || 
-	   strings.Contains(errStr, "timeout") ||
-	   strings.Contains(errStr, "temporary") {
+	if strings.Contains(errStr, "connection") ||
+		strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "temporary") {
 		return true
 	}
 
@@ -438,9 +438,9 @@ func (p *AnthropicProvider) shouldRetry(err error) bool {
 
 	// Retry on server errors (HTTP 5xx)
 	if strings.Contains(errStr, "500") ||
-	   strings.Contains(errStr, "502") ||
-	   strings.Contains(errStr, "503") ||
-	   strings.Contains(errStr, "504") {
+		strings.Contains(errStr, "502") ||
+		strings.Contains(errStr, "503") ||
+		strings.Contains(errStr, "504") {
 		return true
 	}
 
@@ -455,16 +455,16 @@ func (p *AnthropicProvider) calculateCost(model string, usage AnthropicUsage) fl
 
 	switch model {
 	case "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-20240620":
-		inputCostPer1K = 0.003   // $3 per MTok
-		outputCostPer1K = 0.015  // $15 per MTok
+		inputCostPer1K = 0.003  // $3 per MTok
+		outputCostPer1K = 0.015 // $15 per MTok
 	case "claude-3-opus-20240229":
-		inputCostPer1K = 0.015   // $15 per MTok
-		outputCostPer1K = 0.075  // $75 per MTok
+		inputCostPer1K = 0.015  // $15 per MTok
+		outputCostPer1K = 0.075 // $75 per MTok
 	case "claude-3-sonnet-20240229":
-		inputCostPer1K = 0.003   // $3 per MTok
-		outputCostPer1K = 0.015  // $15 per MTok
+		inputCostPer1K = 0.003  // $3 per MTok
+		outputCostPer1K = 0.015 // $15 per MTok
 	case "claude-3-haiku-20240307":
-		inputCostPer1K = 0.00025 // $0.25 per MTok
+		inputCostPer1K = 0.00025  // $0.25 per MTok
 		outputCostPer1K = 0.00125 // $1.25 per MTok
 	default:
 		// Default to Claude-3.5 Sonnet pricing

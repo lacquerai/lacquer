@@ -15,10 +15,10 @@ import (
 
 // StateManager handles workflow state persistence and management
 type StateManager struct {
-	store        StateStore
-	snapshots    map[string]*StateSnapshot
-	snapshotMux  sync.RWMutex
-	config       *StateConfig
+	store       StateStore
+	snapshots   map[string]*StateSnapshot
+	snapshotMux sync.RWMutex
+	config      *StateConfig
 }
 
 // StateConfig contains configuration for state management
@@ -35,38 +35,38 @@ type StateConfig struct {
 type StateStore interface {
 	// Get retrieves state data for a workflow run
 	Get(runID string) (map[string]interface{}, error)
-	
+
 	// Set stores state data for a workflow run
 	Set(runID string, state map[string]interface{}) error
-	
+
 	// Delete removes state data for a workflow run
 	Delete(runID string) error
-	
+
 	// List returns all stored run IDs
 	List() ([]string, error)
-	
+
 	// SaveSnapshot stores a state snapshot
 	SaveSnapshot(runID string, snapshot *StateSnapshot) error
-	
+
 	// LoadSnapshot retrieves a state snapshot
 	LoadSnapshot(runID string, snapshotID string) (*StateSnapshot, error)
-	
+
 	// ListSnapshots returns all snapshots for a run
 	ListSnapshots(runID string) ([]*StateSnapshot, error)
-	
+
 	// Close closes the state store
 	Close() error
 }
 
 // StateSnapshot represents a point-in-time state capture
 type StateSnapshot struct {
-	ID         string                 `json:"id"`
-	RunID      string                 `json:"run_id"`
-	Timestamp  time.Time              `json:"timestamp"`
-	StepIndex  int                    `json:"step_index"`
-	StepID     string                 `json:"step_id"`
-	State      map[string]interface{} `json:"state"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	ID        string                 `json:"id"`
+	RunID     string                 `json:"run_id"`
+	Timestamp time.Time              `json:"timestamp"`
+	StepIndex int                    `json:"step_index"`
+	StepID    string                 `json:"step_id"`
+	State     map[string]interface{} `json:"state"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // DefaultStateConfig returns default state management configuration
@@ -305,7 +305,7 @@ func (sm *StateManager) cleanupOldSnapshots(runID string) error {
 	// In production, we'd use a proper sorting algorithm
 	// For now, we'll just remove the oldest ones
 	toRemove := len(snapshots) - sm.config.MaxSnapshots
-	
+
 	for i := 0; i < toRemove && i < len(snapshots); i++ {
 		// Remove from memory cache
 		sm.snapshotMux.Lock()
@@ -464,7 +464,7 @@ func (f *FileStateStore) Get(runID string) (map[string]interface{}, error) {
 	defer f.mu.RUnlock()
 
 	statePath := f.getStatePath(runID)
-	
+
 	file, err := os.Open(statePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -489,7 +489,7 @@ func (f *FileStateStore) Set(runID string, state map[string]interface{}) error {
 	defer f.mu.Unlock()
 
 	statePath := f.getStatePath(runID)
-	
+
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(statePath), 0755); err != nil {
 		return fmt.Errorf("failed to create state directory: %w", err)
@@ -574,7 +574,7 @@ func (f *FileStateStore) SaveSnapshot(runID string, snapshot *StateSnapshot) err
 	defer f.mu.Unlock()
 
 	snapshotPath := f.getSnapshotPath(runID, snapshot.ID)
-	
+
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(snapshotPath), 0755); err != nil {
 		return fmt.Errorf("failed to create snapshot directory: %w", err)
@@ -615,7 +615,7 @@ func (f *FileStateStore) LoadSnapshot(runID string, snapshotID string) (*StateSn
 	defer f.mu.RUnlock()
 
 	snapshotPath := f.getSnapshotPath(runID, snapshotID)
-	
+
 	file, err := os.Open(snapshotPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -640,7 +640,7 @@ func (f *FileStateStore) ListSnapshots(runID string) ([]*StateSnapshot, error) {
 	defer f.mu.RUnlock()
 
 	snapshotsDir := f.getSnapshotsDir(runID)
-	
+
 	entries, err := os.ReadDir(snapshotsDir)
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -13,7 +13,7 @@ import (
 func TestExecute(t *testing.T) {
 	// Create a minimal command for testing
 	originalRootCmd := rootCmd
-	
+
 	// Create test command
 	testCmd := &cobra.Command{
 		Use:   "laq",
@@ -22,10 +22,10 @@ func TestExecute(t *testing.T) {
 			// Do nothing
 		},
 	}
-	
+
 	rootCmd = testCmd
 	defer func() { rootCmd = originalRootCmd }()
-	
+
 	// Test execution
 	err := Execute()
 	assert.NoError(t, err)
@@ -59,16 +59,16 @@ func executeCommand(root *cobra.Command, args ...string) (output string, err err
 		Long:  root.Long,
 		Run:   root.Run,
 	}
-	
+
 	// Copy all subcommands
 	for _, subCmd := range root.Commands() {
 		cmd.AddCommand(subCmd)
 	}
-	
+
 	// Copy flags
 	cmd.Flags().AddFlagSet(root.Flags())
 	cmd.PersistentFlags().AddFlagSet(root.PersistentFlags())
-	
+
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -110,7 +110,7 @@ func TestGlobalFlags(t *testing.T) {
 
 func TestCommandAvailability(t *testing.T) {
 	commands := []string{"init", "validate", "version"}
-	
+
 	for _, cmdName := range commands {
 		cmd, _, err := rootCmd.Find([]string{cmdName})
 		assert.NoError(t, err, "Command %s should be available", cmdName)
@@ -123,7 +123,7 @@ func setEnv(t *testing.T, key, value string) {
 	originalValue := os.Getenv(key)
 	err := os.Setenv(key, value)
 	require.NoError(t, err)
-	
+
 	t.Cleanup(func() {
 		if originalValue == "" {
 			os.Unsetenv(key)

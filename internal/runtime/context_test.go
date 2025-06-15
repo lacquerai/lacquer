@@ -42,7 +42,7 @@ func TestNewExecutionContext(t *testing.T) {
 
 	// Test step results initialization
 	assert.Len(t, execCtx.StepResults, 2)
-	
+
 	result1, exists := execCtx.GetStepResult("step1")
 	assert.True(t, exists)
 	assert.Equal(t, "step1", result1.StepID)

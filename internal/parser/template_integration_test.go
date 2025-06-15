@@ -110,9 +110,9 @@ func TestTemplateValidator_ExtractVariableReferences(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			refs := tv.ExtractVariableReferences(tc.template)
-			
+
 			require.Equal(t, len(tc.expected), len(refs), "Expected %d references, got %d", len(tc.expected), len(refs))
-			
+
 			for i, expected := range tc.expected {
 				actual := refs[i]
 				assert.Equal(t, expected.Raw, actual.Raw, "Reference %d: Raw mismatch", i)
@@ -173,7 +173,7 @@ func TestTemplateValidator_ValidateTemplateString(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tv.ValidateTemplateString(tc.template)
-			
+
 			if tc.expectValid {
 				assert.NoError(t, err, "Expected template to be valid")
 			} else {
@@ -280,7 +280,7 @@ func TestTemplateValidator_ParseVariableReference(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ref := ParseVariableReference(tc.varPath)
-			
+
 			assert.Equal(t, tc.expected.Raw, ref.Raw)
 			assert.Equal(t, tc.expected.Scope, ref.Scope)
 			assert.Equal(t, tc.expected.Type, ref.Type)

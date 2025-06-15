@@ -90,15 +90,15 @@ workflow:
 
 	t.Run("add simple error", func(t *testing.T) {
 		reporter := NewErrorReporter(source, "test.yaml")
-		
+
 		reporter.AddSimpleError("Unknown agent 'unknown_agent'", ast.Position{Line: 13, Column: 13}, "semantic")
-		
+
 		assert.True(t, reporter.HasErrors())
 		assert.False(t, reporter.HasWarnings())
-		
+
 		errors := reporter.GetErrors()
 		require.Len(t, errors, 1)
-		
+
 		err := errors[0]
 		assert.Equal(t, SeverityError, err.Severity)
 		assert.Equal(t, "Unknown agent 'unknown_agent'", err.Title)
@@ -110,14 +110,14 @@ workflow:
 
 	t.Run("build context", func(t *testing.T) {
 		reporter := NewErrorReporter(source, "test.yaml")
-		
+
 		// Test context around line 4 (name test-workflow - missing colon)
 		context := reporter.buildContext(ast.Position{Line: 4, Column: 8}, 2)
-		
+
 		require.NotNil(t, context)
 		// The context includes more lines due to the radius, just check that we have content
 		assert.GreaterOrEqual(t, len(context.Lines), 3)
-		
+
 		// Find the error line (line 4)
 		var errorLine *ContextLine
 		for i := range context.Lines {
@@ -126,7 +126,7 @@ workflow:
 				break
 			}
 		}
-		
+
 		require.NotNil(t, errorLine)
 		assert.Equal(t, "  name test-workflow", errorLine.Content)
 		assert.True(t, errorLine.IsError)
@@ -134,20 +134,20 @@ workflow:
 
 	t.Run("to error conversion", func(t *testing.T) {
 		reporter := NewErrorReporter(source, "test.yaml")
-		
+
 		// Add multiple errors
 		reporter.AddSimpleError("First error", ast.Position{Line: 1, Column: 1}, "yaml")
 		reporter.AddSimpleError("Second error", ast.Position{Line: 3, Column: 5}, "schema")
-		
+
 		err := reporter.ToError()
 		require.NotNil(t, err)
-		
+
 		multiErr, ok := err.(*MultiErrorEnhanced)
 		require.True(t, ok)
-		
+
 		assert.Len(t, multiErr.Errors, 2)
 		assert.Equal(t, "test.yaml", multiErr.Filename)
-		
+
 		// Check that errors are sorted by position
 		assert.Equal(t, 1, multiErr.Errors[0].Position.Line)
 		assert.Equal(t, 3, multiErr.Errors[1].Position.Line)
@@ -155,7 +155,7 @@ workflow:
 
 	t.Run("no errors returns nil", func(t *testing.T) {
 		reporter := NewErrorReporter(source, "test.yaml")
-		
+
 		assert.False(t, reporter.HasErrors())
 		assert.Nil(t, reporter.ToError())
 	})
@@ -315,7 +315,7 @@ agents:
 	t.Run("highlight word boundaries", func(t *testing.T) {
 		// Test highlighting "assistant" on line 5, column 3
 		context := reporter.buildContext(ast.Position{Line: 5, Column: 3}, 1)
-		
+
 		require.NotNil(t, context)
 		assert.Equal(t, 3, context.Highlight.StartColumn)
 		assert.Equal(t, 12, context.Highlight.EndColumn) // "assistant" is 9 chars
@@ -325,12 +325,12 @@ agents:
 	t.Run("highlight single character", func(t *testing.T) {
 		// Test highlighting colon on line 1, column 8
 		context := reporter.buildContext(ast.Position{Line: 1, Column: 8}, 0)
-		
+
 		require.NotNil(t, context)
 		// The highlighting extends from the start of the word to the specified position
 		assert.Equal(t, 1, context.Highlight.StartColumn)
-		assert.Equal(t, 8, context.Highlight.EndColumn)  // Including the colon at column 8
-		assert.Equal(t, 7, context.Highlight.Length)     // Length is end - start
+		assert.Equal(t, 8, context.Highlight.EndColumn) // Including the colon at column 8
+		assert.Equal(t, 7, context.Highlight.Length)    // Length is end - start
 	})
 }
 

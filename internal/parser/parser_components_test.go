@@ -97,7 +97,7 @@ workflow:
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := parser.ParseBytes([]byte(tc.yaml))
-			
+
 			if tc.expectValid {
 				assert.NoError(t, err, "Expected valid YAML to pass: %s", tc.description)
 			} else {
@@ -200,7 +200,7 @@ workflow:
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := parser.ParseBytes([]byte(tc.yaml))
-			
+
 			if tc.expectValid {
 				assert.NoError(t, err, "Expected valid YAML to pass: %s", tc.description)
 			} else {
@@ -299,7 +299,7 @@ workflow:
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := parser.ParseBytes([]byte(tc.yaml))
-			
+
 			if tc.expectValid {
 				assert.NoError(t, err, "Expected valid YAML to pass: %s", tc.description)
 			} else {
@@ -315,10 +315,10 @@ func TestParserComponents_ErrorReporting(t *testing.T) {
 	require.NoError(t, err)
 
 	testCases := []struct {
-		name             string
-		yaml             string
-		expectedInError  []string
-		description      string
+		name            string
+		yaml            string
+		expectedInError []string
+		description     string
 	}{
 		{
 			name: "Enhanced error with context",
@@ -330,8 +330,8 @@ workflow:
       agent: missing_agent
       prompt: "Hello"
 `,
-			expectedInError:  []string{"undefined agent", "missing_agent"},
-			description:      "Should provide enhanced error with context for undefined agent",
+			expectedInError: []string{"undefined agent", "missing_agent"},
+			description:     "Should provide enhanced error with context for undefined agent",
 		},
 		{
 			name: "Position information",
@@ -345,8 +345,8 @@ workflow:
     - id: test
       prompt: "Missing agent field"
 `,
-			expectedInError:  []string{"agent", "prompt"},
-			description:      "Should provide position information for validation errors",
+			expectedInError: []string{"agent", "prompt"},
+			description:     "Should provide position information for validation errors",
 		},
 		{
 			name: "Multiple errors",
@@ -361,8 +361,8 @@ workflow:
       agent: missing2
       prompt: "Second error"
 `,
-			expectedInError:  []string{"missing1", "missing2", "undefined agent"},
-			description:      "Should report multiple errors with context",
+			expectedInError: []string{"missing1", "missing2", "undefined agent"},
+			description:     "Should report multiple errors with context",
 		},
 	}
 
@@ -370,18 +370,18 @@ workflow:
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := parser.ParseBytes([]byte(tc.yaml))
 			require.Error(t, err, "Expected parsing to fail: %s", tc.description)
-			
+
 			errStr := err.Error()
 			for _, expected := range tc.expectedInError {
-				assert.Contains(t, errStr, expected, 
+				assert.Contains(t, errStr, expected,
 					"Expected error to contain '%s' for %s", expected, tc.description)
 			}
-			
+
 			// Check if it's an enhanced error
 			if enhancedErr, ok := err.(*MultiErrorEnhanced); ok {
 				issues := enhancedErr.GetAllIssues()
 				assert.NotEmpty(t, issues, "Enhanced error should have issues")
-				
+
 				// Check that issues have position information
 				for _, issue := range issues {
 					assert.Greater(t, issue.Position.Line, 0, "Issue should have line number")
@@ -399,9 +399,9 @@ func TestParserComponents_Performance(t *testing.T) {
 
 	// Test parsing speed with different file sizes
 	testCases := []struct {
-		name     string
-		yaml     string
-		maxMs    int64
+		name  string
+		yaml  string
+		maxMs int64
 	}{
 		{
 			name: "Small workflow",
@@ -419,8 +419,8 @@ workflow:
 			maxMs: 10,
 		},
 		{
-			name: "Medium workflow with multiple agents",
-			yaml: generateMediumWorkflow(),
+			name:  "Medium workflow with multiple agents",
+			yaml:  generateMediumWorkflow(),
 			maxMs: 50,
 		},
 	}
@@ -429,12 +429,12 @@ workflow:
 		t.Run(tc.name, func(t *testing.T) {
 			// Warm up
 			_, _ = parser.ParseBytes([]byte(tc.yaml))
-			
+
 			// Measure performance
 			start := timeNow()
 			_, parseErr := parser.ParseBytes([]byte(tc.yaml))
 			duration := timeSince(start)
-			
+
 			// Allow errors for invalid syntax, but measure time anyway
 			_ = parseErr // Ignore parse errors for performance testing
 			durationMs := duration.Nanoseconds() / 1000000

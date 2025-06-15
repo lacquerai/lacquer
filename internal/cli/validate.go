@@ -45,31 +45,31 @@ var (
 
 func init() {
 	rootCmd.AddCommand(validateCmd)
-	
+
 	validateCmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively validate files in directories")
 	validateCmd.Flags().BoolVar(&showAll, "show-all", false, "show all validation results, including successful ones")
 }
 
 // ValidationResult represents the result of validating a workflow
 type ValidationResult struct {
-	File          string                    `json:"file" yaml:"file"`
-	Valid         bool                      `json:"valid" yaml:"valid"`
-	Duration      time.Duration             `json:"duration_ms" yaml:"duration_ms"`
-	Errors        []string                  `json:"errors,omitempty" yaml:"errors,omitempty"`
-	Warnings      []string                  `json:"warnings,omitempty" yaml:"warnings,omitempty"`
-	Issues        []*ValidationIssue        `json:"issues,omitempty" yaml:"issues,omitempty"`
+	File          string                     `json:"file" yaml:"file"`
+	Valid         bool                       `json:"valid" yaml:"valid"`
+	Duration      time.Duration              `json:"duration_ms" yaml:"duration_ms"`
+	Errors        []string                   `json:"errors,omitempty" yaml:"errors,omitempty"`
+	Warnings      []string                   `json:"warnings,omitempty" yaml:"warnings,omitempty"`
+	Issues        []*ValidationIssue         `json:"issues,omitempty" yaml:"issues,omitempty"`
 	EnhancedError *parser.MultiErrorEnhanced `json:"-" yaml:"-"` // For internal use only
 }
 
 // ValidationIssue represents a detailed validation issue
 type ValidationIssue struct {
-	ID         string        `json:"id" yaml:"id"`
-	Severity   string        `json:"severity" yaml:"severity"`
-	Title      string        `json:"title" yaml:"title"`
-	Message    string        `json:"message" yaml:"message"`
-	Line       int           `json:"line" yaml:"line"`
-	Column     int           `json:"column" yaml:"column"`
-	Category   string        `json:"category" yaml:"category"`
+	ID         string           `json:"id" yaml:"id"`
+	Severity   string           `json:"severity" yaml:"severity"`
+	Title      string           `json:"title" yaml:"title"`
+	Message    string           `json:"message" yaml:"message"`
+	Line       int              `json:"line" yaml:"line"`
+	Column     int              `json:"column" yaml:"column"`
+	Category   string           `json:"category" yaml:"category"`
 	Suggestion *IssueSuggestion `json:"suggestion,omitempty" yaml:"suggestion,omitempty"`
 }
 
@@ -83,16 +83,16 @@ type IssueSuggestion struct {
 
 // ValidationSummary represents the summary of all validation results
 type ValidationSummary struct {
-	Total     int                `json:"total" yaml:"total"`
-	Valid     int                `json:"valid" yaml:"valid"`
-	Invalid   int                `json:"invalid" yaml:"invalid"`
-	Duration  time.Duration      `json:"total_duration_ms" yaml:"total_duration_ms"`
-	Results   []ValidationResult `json:"results" yaml:"results"`
+	Total    int                `json:"total" yaml:"total"`
+	Valid    int                `json:"valid" yaml:"valid"`
+	Invalid  int                `json:"invalid" yaml:"invalid"`
+	Duration time.Duration      `json:"total_duration_ms" yaml:"total_duration_ms"`
+	Results  []ValidationResult `json:"results" yaml:"results"`
 }
 
 func validateWorkflows(args []string) {
 	start := time.Now()
-	
+
 	// Collect files to validate
 	files, err := collectFiles(args, recursive)
 	if err != nil {
@@ -114,11 +114,11 @@ func validateWorkflows(args []string) {
 
 	// Validate each file
 	results := make([]ValidationResult, 0, len(files))
-	
+
 	for _, file := range files {
 		result := validateSingleFile(yamlParser, file)
 		results = append(results, result)
-		
+
 		// Show progress if not quiet and not JSON/YAML output
 		if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
 			if result.Valid {
@@ -179,18 +179,18 @@ func validateSingleFile(p parser.Parser, filename string) ValidationResult {
 
 	if err != nil {
 		result.Valid = false
-		
+
 		// Check if it's an enhanced error (might be wrapped)
 		var enhancedErr *parser.MultiErrorEnhanced
 		if errors.As(err, &enhancedErr) {
 			// Store the enhanced error directly for full context
 			result.EnhancedError = enhancedErr
-			
+
 			// Also process individual issues for compatibility
 			for _, issue := range enhancedErr.GetAllIssues() {
 				validationIssue := convertEnhancedErrorToIssue(issue)
 				result.Issues = append(result.Issues, validationIssue)
-				
+
 				// Add simple error messages for backward compatibility
 				if issue.Severity == parser.SeverityError {
 					result.Errors = append(result.Errors, issue.Title)
@@ -202,7 +202,7 @@ func validateSingleFile(p parser.Parser, filename string) ValidationResult {
 			// Fallback to simple error handling
 			result.Errors = append(result.Errors, err.Error())
 		}
-		
+
 		return result
 	}
 
@@ -233,7 +233,7 @@ func convertEnhancedErrorToIssue(err *parser.EnhancedError) *ValidationIssue {
 		Column:   err.Position.Column,
 		Category: err.Category,
 	}
-	
+
 	if err.Suggestion != nil {
 		issue.Suggestion = &IssueSuggestion{
 			Title:       err.Suggestion.Title,
@@ -242,13 +242,13 @@ func convertEnhancedErrorToIssue(err *parser.EnhancedError) *ValidationIssue {
 			DocsURL:     err.Suggestion.DocsURL,
 		}
 	}
-	
+
 	return issue
 }
 
 func collectFiles(args []string, recursive bool) ([]string, error) {
 	var files []string
-	
+
 	for _, arg := range args {
 		info, err := os.Stat(arg)
 		if err != nil {
@@ -285,7 +285,7 @@ func collectFiles(args []string, recursive bool) ([]string, error) {
 func isLacquerFile(filename string) bool {
 	ext := filepath.Ext(filename)
 	base := strings.TrimSuffix(filepath.Base(filename), ext)
-	
+
 	return (ext == ".yaml" || ext == ".yml") && strings.HasSuffix(base, ".laq")
 }
 
@@ -309,7 +309,7 @@ func printValidationSummary(summary ValidationSummary) {
 			fmt.Printf("\nDetailed results:\n")
 			headers := []string{"File", "Status", "Duration", "Issues"}
 			rows := make([][]string, len(summary.Results))
-			
+
 			for i, result := range summary.Results {
 				status := "✅ Valid"
 				issues := "0"
@@ -324,7 +324,7 @@ func printValidationSummary(summary ValidationSummary) {
 					issues,
 				}
 			}
-			
+
 			printTable(headers, rows)
 		}
 	}
@@ -337,7 +337,7 @@ func printValidationResult(result ValidationResult) {
 	}
 
 	fmt.Printf("\n❌ %s (%v)\n", result.File, result.Duration)
-	
+
 	// Print enhanced error details if available
 	if result.EnhancedError != nil {
 		for _, issue := range result.EnhancedError.GetAllIssues() {
@@ -364,39 +364,39 @@ func printValidationIssue(issue *ValidationIssue) {
 	} else if issue.Severity == "info" {
 		severityIcon = "ℹ️"
 	}
-	
+
 	// Add a separator line before each error (except the first one)
 	fmt.Printf("  ┌─ %s %s at %d:%d: %s\n", severityIcon, issue.Severity, issue.Line, issue.Column, issue.Title)
-	
+
 	if issue.Message != "" && issue.Message != issue.Title {
 		fmt.Printf("  │  %s\n", issue.Message)
 	}
-	
+
 	if issue.Suggestion != nil {
-		fmt.Printf("  │\n")  // Add spacing before suggestions
+		fmt.Printf("  │\n") // Add spacing before suggestions
 		fmt.Printf("  │  💡 %s", issue.Suggestion.Title)
 		if issue.Suggestion.Description != "" {
 			fmt.Printf(": %s", issue.Suggestion.Description)
 		}
 		fmt.Printf("\n")
-		
+
 		// Show examples if available
 		if len(issue.Suggestion.Examples) > 0 {
-			fmt.Printf("  │\n")  // Add spacing before examples
+			fmt.Printf("  │\n") // Add spacing before examples
 			fmt.Printf("  │  Example:\n")
 			for _, example := range issue.Suggestion.Examples {
 				fmt.Printf("  │    %s\n", example)
 			}
 		}
-		
+
 		// Show documentation link
 		if issue.Suggestion.DocsURL != "" {
-			fmt.Printf("  │\n")  // Add spacing before docs link
+			fmt.Printf("  │\n") // Add spacing before docs link
 			fmt.Printf("  │  📖 See: %s\n", issue.Suggestion.DocsURL)
 		}
 	}
-	
-	fmt.Printf("  └─\n\n")  // Clear end separator with extra spacing
+
+	fmt.Printf("  └─\n\n") // Clear end separator with extra spacing
 }
 
 // printEnhancedIssue prints a detailed enhanced error with full context
@@ -408,16 +408,16 @@ func printEnhancedIssue(issue *parser.EnhancedError) {
 	} else if issue.Severity == parser.SeverityInfo {
 		severityIcon = "ℹ️"
 	}
-	
+
 	fmt.Printf("  ┌─ %s %s at %d:%d: %s\n", severityIcon, issue.Severity, issue.Position.Line, issue.Position.Column, issue.Title)
-	
+
 	if issue.Message != "" && issue.Message != issue.Title {
 		fmt.Printf("  │  %s\n", issue.Message)
 	}
-	
+
 	// Print source context if available
 	if issue.Context != nil && len(issue.Context.Lines) > 0 {
-		fmt.Printf("  │\n")  // Add spacing before context
+		fmt.Printf("  │\n") // Add spacing before context
 		for _, line := range issue.Context.Lines {
 			if line.IsError {
 				// Highlight the error line
@@ -437,30 +437,30 @@ func printEnhancedIssue(issue *parser.EnhancedError) {
 			}
 		}
 	}
-	
+
 	if issue.Suggestion != nil {
-		fmt.Printf("  │\n")  // Add spacing before suggestions
+		fmt.Printf("  │\n") // Add spacing before suggestions
 		fmt.Printf("  │  💡 %s", issue.Suggestion.Title)
 		if issue.Suggestion.Description != "" {
 			fmt.Printf(": %s", issue.Suggestion.Description)
 		}
 		fmt.Printf("\n")
-		
+
 		// Show examples if available
 		if len(issue.Suggestion.Examples) > 0 {
-			fmt.Printf("  │\n")  // Add spacing before examples
+			fmt.Printf("  │\n") // Add spacing before examples
 			fmt.Printf("  │  Example:\n")
 			for _, example := range issue.Suggestion.Examples {
 				fmt.Printf("  │    %s\n", example)
 			}
 		}
-		
+
 		// Show documentation link
 		if issue.Suggestion.DocsURL != "" {
-			fmt.Printf("  │\n")  // Add spacing before docs link
+			fmt.Printf("  │\n") // Add spacing before docs link
 			fmt.Printf("  │  📖 See: %s\n", issue.Suggestion.DocsURL)
 		}
 	}
-	
-	fmt.Printf("  └─\n\n")  // Clear end separator with extra spacing
+
+	fmt.Printf("  └─\n\n") // Clear end separator with extra spacing
 }

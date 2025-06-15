@@ -19,22 +19,22 @@ const (
 
 // EnhancedError represents a detailed error with rich context
 type EnhancedError struct {
-	ID         string         `json:"id"`
-	Severity   ErrorSeverity  `json:"severity"`
-	Title      string         `json:"title"`
-	Message    string         `json:"message"`
-	Position   ast.Position   `json:"position"`
-	Context    *ErrorContext  `json:"context,omitempty"`
-	Suggestion *ErrorSuggestion `json:"suggestion,omitempty"`
-	RelatedErrors []string    `json:"related_errors,omitempty"`
-	Category   string         `json:"category"`
+	ID            string           `json:"id"`
+	Severity      ErrorSeverity    `json:"severity"`
+	Title         string           `json:"title"`
+	Message       string           `json:"message"`
+	Position      ast.Position     `json:"position"`
+	Context       *ErrorContext    `json:"context,omitempty"`
+	Suggestion    *ErrorSuggestion `json:"suggestion,omitempty"`
+	RelatedErrors []string         `json:"related_errors,omitempty"`
+	Category      string           `json:"category"`
 }
 
 // ErrorContext provides source code context around the error
 type ErrorContext struct {
-	Lines       []ContextLine `json:"lines"`
-	Highlight   HighlightInfo `json:"highlight"`
-	SourceFile  string        `json:"source_file,omitempty"`
+	Lines      []ContextLine `json:"lines"`
+	Highlight  HighlightInfo `json:"highlight"`
+	SourceFile string        `json:"source_file,omitempty"`
 }
 
 // ContextLine represents a line of source code with context
@@ -62,30 +62,30 @@ type ErrorSuggestion struct {
 
 // SuggestedFix represents a specific fix that could be applied
 type SuggestedFix struct {
-	Description string `json:"description"`
-	OldText     string `json:"old_text,omitempty"`
-	NewText     string `json:"new_text"`
+	Description string        `json:"description"`
+	OldText     string        `json:"old_text,omitempty"`
+	NewText     string        `json:"new_text"`
 	Position    *ast.Position `json:"position,omitempty"`
 }
 
 // Error implements the error interface
 func (e *EnhancedError) Error() string {
 	var result strings.Builder
-	
+
 	// Main error line
 	if e.Position.File != "" {
 		result.WriteString(fmt.Sprintf("%s:%d:%d: ", e.Position.File, e.Position.Line, e.Position.Column))
 	} else {
 		result.WriteString(fmt.Sprintf("%d:%d: ", e.Position.Line, e.Position.Column))
 	}
-	
+
 	// Severity and title
 	result.WriteString(fmt.Sprintf("%s: %s", e.Severity, e.Title))
-	
+
 	if e.Message != "" && e.Message != e.Title {
 		result.WriteString(fmt.Sprintf("\n%s", e.Message))
 	}
-	
+
 	// Context lines
 	if e.Context != nil && len(e.Context.Lines) > 0 {
 		result.WriteString("\n\n")
@@ -103,14 +103,14 @@ func (e *EnhancedError) Error() string {
 			}
 		}
 	}
-	
+
 	// Suggestion
 	if e.Suggestion != nil {
 		result.WriteString(fmt.Sprintf("\nSuggestion: %s", e.Suggestion.Title))
 		if e.Suggestion.Description != "" {
 			result.WriteString(fmt.Sprintf("\n%s", e.Suggestion.Description))
 		}
-		
+
 		// Examples
 		if len(e.Suggestion.Examples) > 0 {
 			result.WriteString("\n\nExample:")
@@ -118,13 +118,13 @@ func (e *EnhancedError) Error() string {
 				result.WriteString(fmt.Sprintf("\n  %s", example))
 			}
 		}
-		
+
 		// Documentation link
 		if e.Suggestion.DocsURL != "" {
 			result.WriteString(fmt.Sprintf("\n\nSee: %s", e.Suggestion.DocsURL))
 		}
 	}
-	
+
 	return result.String()
 }
 
@@ -151,12 +151,12 @@ func (r *ErrorReporter) AddError(err *EnhancedError) {
 	if err.Position.File == "" && r.filename != "" {
 		err.Position.File = r.filename
 	}
-	
+
 	// Add context if not present
 	if err.Context == nil && r.source != nil {
 		err.Context = r.buildContext(err.Position, 2)
 	}
-	
+
 	switch err.Severity {
 	case SeverityError:
 		r.errors = append(r.errors, err)
@@ -168,12 +168,12 @@ func (r *ErrorReporter) AddError(err *EnhancedError) {
 // AddSimpleError adds a simple error with automatic enhancement
 func (r *ErrorReporter) AddSimpleError(message string, pos ast.Position, category string) {
 	err := &EnhancedError{
-		ID:       generateErrorID(category, pos),
-		Severity: SeverityError,
-		Title:    message,
-		Message:  "",
-		Position: pos,
-		Category: category,
+		ID:         generateErrorID(category, pos),
+		Severity:   SeverityError,
+		Title:      message,
+		Message:    "",
+		Position:   pos,
+		Category:   category,
 		Suggestion: r.generateSuggestion(message, category),
 	}
 	r.AddError(err)
@@ -204,7 +204,7 @@ func (r *ErrorReporter) ToError() error {
 	if !r.HasErrors() {
 		return nil
 	}
-	
+
 	// Sort errors by position
 	sort.Slice(r.errors, func(i, j int) bool {
 		a, b := r.errors[i].Position, r.errors[j].Position
@@ -213,7 +213,7 @@ func (r *ErrorReporter) ToError() error {
 		}
 		return a.Column < b.Column
 	})
-	
+
 	return &MultiErrorEnhanced{
 		Errors:   r.errors,
 		Warnings: r.warnings,
@@ -226,15 +226,15 @@ func (r *ErrorReporter) buildContext(pos ast.Position, radius int) *ErrorContext
 	if r.source == nil {
 		return nil
 	}
-	
+
 	lines := strings.Split(string(r.source), "\n")
 	if pos.Line < 1 || pos.Line > len(lines) {
 		return nil
 	}
-	
+
 	start := max(1, pos.Line-radius)
 	end := min(len(lines), pos.Line+radius)
-	
+
 	contextLines := make([]ContextLine, 0, end-start+1)
 	for i := start; i <= end; i++ {
 		if i > len(lines) {
@@ -246,14 +246,14 @@ func (r *ErrorReporter) buildContext(pos ast.Position, radius int) *ErrorContext
 			IsError: i == pos.Line,
 		})
 	}
-	
+
 	// Calculate highlight info
 	highlight := HighlightInfo{
 		StartColumn: pos.Column,
 		EndColumn:   pos.Column,
 		Length:      1,
 	}
-	
+
 	// Try to highlight the whole word/token if possible
 	if pos.Line <= len(lines) && pos.Column > 0 {
 		line := lines[pos.Line-1]
@@ -261,17 +261,17 @@ func (r *ErrorReporter) buildContext(pos ast.Position, radius int) *ErrorContext
 			// Find word boundaries
 			start := pos.Column - 1
 			end := pos.Column - 1
-			
+
 			// Extend backwards
 			for start > 0 && isWordChar(line[start-1]) {
 				start--
 			}
-			
+
 			// Extend forwards
 			for end < len(line) && isWordChar(line[end]) {
 				end++
 			}
-			
+
 			if end > start {
 				highlight.StartColumn = start + 1
 				highlight.EndColumn = end + 1
@@ -279,7 +279,7 @@ func (r *ErrorReporter) buildContext(pos ast.Position, radius int) *ErrorContext
 			}
 		}
 	}
-	
+
 	return &ErrorContext{
 		Lines:      contextLines,
 		Highlight:  highlight,
@@ -290,7 +290,7 @@ func (r *ErrorReporter) buildContext(pos ast.Position, radius int) *ErrorContext
 // generateSuggestion creates helpful suggestions based on error patterns
 func (r *ErrorReporter) generateSuggestion(message, category string) *ErrorSuggestion {
 	message = strings.ToLower(message)
-	
+
 	switch category {
 	case "yaml":
 		return r.generateYAMLSuggestion(message)
@@ -360,7 +360,7 @@ func (r *ErrorReporter) generateSchemaSuggestion(message string) *ErrorSuggestio
 	switch {
 	case strings.Contains(message, "version"):
 		return &ErrorSuggestion{
-			Title: "Set the version field",
+			Title:       "Set the version field",
 			Description: "The version field is required and must be set to \"1.0\"",
 			Fixes: []SuggestedFix{
 				{
@@ -377,7 +377,7 @@ func (r *ErrorReporter) generateSchemaSuggestion(message string) *ErrorSuggestio
 		}
 	case strings.Contains(message, "agents"):
 		return &ErrorSuggestion{
-			Title: "Check agent definitions",
+			Title:       "Check agent definitions",
 			Description: "Each agent must have a model or uses field",
 			Examples: []string{
 				"agents:",
@@ -389,7 +389,7 @@ func (r *ErrorReporter) generateSchemaSuggestion(message string) *ErrorSuggestio
 		}
 	case strings.Contains(message, "steps"):
 		return &ErrorSuggestion{
-			Title: "Check step definitions",
+			Title:       "Check step definitions",
 			Description: "Each step needs an id and either agent+prompt, uses, or action",
 			Examples: []string{
 				"steps:",
@@ -413,7 +413,7 @@ func (r *ErrorReporter) generateSemanticSuggestion(message string) *ErrorSuggest
 	switch {
 	case strings.Contains(message, "agent") && strings.Contains(message, "not found"):
 		return &ErrorSuggestion{
-			Title: "Define the agent",
+			Title:       "Define the agent",
 			Description: "The step references an agent that hasn't been defined",
 			Examples: []string{
 				"agents:",
@@ -428,7 +428,7 @@ func (r *ErrorReporter) generateSemanticSuggestion(message string) *ErrorSuggest
 		}
 	case strings.Contains(message, "circular"):
 		return &ErrorSuggestion{
-			Title: "Remove circular dependencies",
+			Title:       "Remove circular dependencies",
 			Description: "Steps cannot depend on each other in a circle",
 			Examples: []string{
 				"# Bad: step1 → step2 → step1",
@@ -437,7 +437,7 @@ func (r *ErrorReporter) generateSemanticSuggestion(message string) *ErrorSuggest
 		}
 	case strings.Contains(message, "variable"):
 		return &ErrorSuggestion{
-			Title: "Check variable references",
+			Title:       "Check variable references",
 			Description: "Variables must be defined before use",
 			Examples: []string{
 				"# Reference step outputs:",
@@ -477,13 +477,13 @@ func (e *MultiErrorEnhanced) Error() string {
 	if len(e.Errors) == 0 {
 		return "no errors"
 	}
-	
+
 	var result strings.Builder
-	
+
 	if e.Filename != "" {
 		result.WriteString(fmt.Sprintf("  parsing %s: ", e.Filename))
 	}
-	
+
 	if len(e.Errors) == 1 {
 		result.WriteString(e.Errors[0].Error())
 	} else {
@@ -492,7 +492,7 @@ func (e *MultiErrorEnhanced) Error() string {
 			result.WriteString(fmt.Sprintf("  %d. %s\n", i+1, err.Error()))
 		}
 	}
-	
+
 	return result.String()
 }
 

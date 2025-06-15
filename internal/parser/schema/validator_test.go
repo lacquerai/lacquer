@@ -15,18 +15,18 @@ func TestValidator_ValidateExampleWorkflows(t *testing.T) {
 	// Note: Only testing basic MVP-compatible examples, as advanced features
 	// like parallel execution, switch statements are out of scope for v0.1.0
 	testCases := []struct {
-		name     string
-		filename string
+		name        string
+		filename    string
 		expectValid bool
 	}{
 		{
-			name:     "Hello World Example",
-			filename: "../../../docs/examples/hello-world.laq.yaml",
+			name:        "Hello World Example",
+			filename:    "../../../docs/examples/hello-world.laq.yaml",
 			expectValid: true,
 		},
 		{
-			name:     "Research Workflow Example", 
-			filename: "../../../docs/examples/research-workflow.laq.yaml",
+			name:        "Research Workflow Example",
+			filename:    "../../../docs/examples/research-workflow.laq.yaml",
 			expectValid: true,
 		},
 		// Advanced examples with parallel/switch constructs are out of MVP scope
@@ -67,8 +67,8 @@ func TestValidator_InvalidWorkflows(t *testing.T) {
 
 	// Test cases with invalid workflows
 	testCases := []struct {
-		name string
-		yaml string
+		name        string
+		yaml        string
 		expectError string
 	}{
 		{
@@ -157,11 +157,11 @@ workflow:
 
 // Helper function to check if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (s == substr || 
-		    len(s) > len(substr) && 
-		    (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		     containsSubstring(s, substr)))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			len(s) > len(substr) &&
+				(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+					containsSubstring(s, substr)))
 }
 
 func containsSubstring(s, substr string) bool {

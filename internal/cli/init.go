@@ -48,7 +48,7 @@ var (
 
 func init() {
 	rootCmd.AddCommand(initCmd)
-	
+
 	initCmd.Flags().StringVarP(&templateName, "template", "t", "basic", "project template (basic, research, enterprise)")
 	initCmd.Flags().BoolVar(&noGit, "no-git", false, "skip git repository initialization")
 	initCmd.Flags().BoolVar(&force, "force", false, "overwrite existing project directory")
@@ -139,7 +139,7 @@ func initializeProject(projectName string) {
 	for filename, content := range template.Files {
 		filePath := filepath.Join(projectName, filename)
 		content = strings.ReplaceAll(content, "{{PROJECT_NAME}}", projectName)
-		
+
 		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 			Error(fmt.Sprintf("Failed to create %s: %v", filename, err))
 			os.Exit(1)
@@ -169,14 +169,14 @@ func isValidProjectName(name string) bool {
 	if name == "" || name == "." || name == ".." {
 		return false
 	}
-	
+
 	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || 
-			 (r >= '0' && r <= '9') || r == '-' || r == '_') {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_') {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -201,7 +201,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 `
-	
+
 	if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
 		return err
 	}

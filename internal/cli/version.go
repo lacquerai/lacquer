@@ -36,11 +36,11 @@ func init() {
 
 // VersionInfo represents version information
 type VersionInfo struct {
-	Version    string `json:"version" yaml:"version"`
-	Commit     string `json:"commit" yaml:"commit"`
-	Date       string `json:"date" yaml:"date"`
-	GoVersion  string `json:"go_version" yaml:"go_version"`
-	Platform   string `json:"platform" yaml:"platform"`
+	Version    string            `json:"version" yaml:"version"`
+	Commit     string            `json:"commit" yaml:"commit"`
+	Date       string            `json:"date" yaml:"date"`
+	GoVersion  string            `json:"go_version" yaml:"go_version"`
+	Platform   string            `json:"platform" yaml:"platform"`
 	Components ComponentVersions `json:"components" yaml:"components"`
 }
 
@@ -66,7 +66,7 @@ func showVersion() {
 	}
 
 	outputFormat := viper.GetString("output")
-	
+
 	switch outputFormat {
 	case "json":
 		printJSON(versionInfo)
@@ -83,7 +83,7 @@ func printText(info VersionInfo) {
 	fmt.Printf("Built: %s\n", info.Date)
 	fmt.Printf("Go version: %s\n", info.GoVersion)
 	fmt.Printf("Platform: %s\n", info.Platform)
-	
+
 	if viper.GetBool("verbose") {
 		fmt.Printf("\nComponent versions:\n")
 		fmt.Printf("  Parser: %s\n", info.Components.Parser)

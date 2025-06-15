@@ -17,7 +17,6 @@ func TestNewYAMLParser(t *testing.T) {
 	assert.NotNil(t, parser.validator)
 }
 
-
 func TestYAMLParser_ParseFile_ValidFiles(t *testing.T) {
 	parser, err := NewYAMLParser()
 	require.NoError(t, err)
@@ -48,7 +47,7 @@ func TestYAMLParser_ParseFile_ValidFiles(t *testing.T) {
 
 			workflow, err := parser.ParseFile(absPath)
 			require.NoError(t, err)
-			
+
 			assert.NotNil(t, workflow)
 			assert.Equal(t, "1.0", workflow.Version)
 			assert.Equal(t, absPath, workflow.SourceFile)
@@ -95,7 +94,7 @@ workflow:
 
 	workflow, err := parser.ParseBytes([]byte(validYAML))
 	require.NoError(t, err)
-	
+
 	assert.NotNil(t, workflow)
 	assert.Equal(t, "1.0", workflow.Version)
 	assert.NotNil(t, workflow.Metadata)
@@ -109,7 +108,7 @@ func TestYAMLParser_ParseBytes_Empty(t *testing.T) {
 
 	_, err = parser.ParseBytes([]byte{})
 	assert.Error(t, err)
-	
+
 	// Check that it's an enhanced error
 	_, ok := err.(*MultiErrorEnhanced)
 	require.True(t, ok)
@@ -130,7 +129,7 @@ workflow:
 
 	_, err = parser.ParseBytes([]byte(invalidYAML))
 	assert.Error(t, err)
-	
+
 	// Should wrap the YAML error with additional context
 	assert.Contains(t, err.Error(), "YAML parsing error")
 }
@@ -147,7 +146,7 @@ workflow:
 
 	_, err = parser.ParseBytes([]byte(invalidYAML))
 	assert.Error(t, err)
-	
+
 	// Should be a validation error about minimum items
 	assert.Contains(t, err.Error(), "minimum")
 }
@@ -205,7 +204,7 @@ workflow:
 	reader := strings.NewReader(validYAML)
 	workflow, err := parser.ParseReader(reader)
 	require.NoError(t, err)
-	
+
 	assert.NotNil(t, workflow)
 	assert.Equal(t, "1.0", workflow.Version)
 }
@@ -288,7 +287,7 @@ workflow:
 `
 
 	data := []byte(validYAML)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := parser.ParseBytes(data)
@@ -312,7 +311,7 @@ workflow:
 `
 
 	data := []byte(validYAML)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		err := parser.ValidateOnly(data)

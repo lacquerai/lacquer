@@ -69,7 +69,7 @@ func TestComprehensiveParser_ValidWorkflows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			workflow, err := parser.ParseFile(tc.filename)
-			
+
 			if tc.expectValid {
 				require.NoError(t, err, "Expected %s to be valid: %s", tc.filename, tc.description)
 				assert.NotNil(t, workflow)
@@ -154,7 +154,7 @@ func TestComprehensiveParser_InvalidWorkflows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := parser.ParseFile(tc.filename)
 			require.Error(t, err, "Expected %s to be invalid: %s", tc.filename, tc.description)
-			
+
 			// Check that error messages contain expected terms
 			errMsg := err.Error()
 			for _, expectedErr := range tc.expectedErrors {
@@ -197,12 +197,12 @@ func TestComprehensiveParser_ErrorPositioning(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := parser.ParseFile(tc.filename)
 			require.Error(t, err)
-			
+
 			// Check if it's an enhanced error with position information
 			if enhancedErr, ok := err.(*MultiErrorEnhanced); ok {
 				issues := enhancedErr.GetAllIssues()
 				require.NotEmpty(t, issues)
-				
+
 				// Check the first issue's position
 				assert.Equal(t, tc.expectedLine, issues[0].Position.Line,
 					"Expected error at line %d for %s", tc.expectedLine, tc.description)
@@ -243,12 +243,12 @@ func TestComprehensiveParser_RealWorldExamples(t *testing.T) {
 
 			workflow, err := parser.ParseFile(filename)
 			require.NoError(t, err, "Real-world example %s should parse successfully", filename)
-			
+
 			assert.NotNil(t, workflow)
 			assert.Equal(t, "1.0", workflow.Version)
 			assert.NotNil(t, workflow.Workflow)
 			assert.NotEmpty(t, workflow.Workflow.Steps, "Example should have at least one step")
-			
+
 			// Additional validations for real-world examples
 			if workflow.Metadata != nil {
 				assert.NotEmpty(t, workflow.Metadata.Name, "Example should have a name")
@@ -335,28 +335,28 @@ func TestComprehensiveParser_PerformanceValidation(t *testing.T) {
 	require.NoError(t, err)
 
 	testCases := []struct {
-		name           string
-		filename       string
-		maxDurationMs  int64
-		description    string
+		name          string
+		filename      string
+		maxDurationMs int64
+		description   string
 	}{
 		{
-			name:           "Small workflow performance",
-			filename:       "testdata/performance/small_workflow.laq.yaml",
-			maxDurationMs:  10,
-			description:    "Small workflows should parse very quickly",
+			name:          "Small workflow performance",
+			filename:      "testdata/performance/small_workflow.laq.yaml",
+			maxDurationMs: 10,
+			description:   "Small workflows should parse very quickly",
 		},
 		{
-			name:           "Medium workflow performance",
-			filename:       "testdata/performance/simple_medium_workflow.laq.yaml",
-			maxDurationMs:  50,
-			description:    "Medium workflows should parse in reasonable time",
+			name:          "Medium workflow performance",
+			filename:      "testdata/performance/simple_medium_workflow.laq.yaml",
+			maxDurationMs: 50,
+			description:   "Medium workflows should parse in reasonable time",
 		},
 		{
-			name:           "Large workflow performance",
-			filename:       "testdata/performance/large_workflow.laq.yaml",
-			maxDurationMs:  200,
-			description:    "Large workflows should parse within target time",
+			name:          "Large workflow performance",
+			filename:      "testdata/performance/large_workflow.laq.yaml",
+			maxDurationMs: 200,
+			description:   "Large workflows should parse within target time",
 		},
 	}
 
@@ -372,9 +372,9 @@ func TestComprehensiveParser_PerformanceValidation(t *testing.T) {
 			start := time.Now()
 			_, err := parser.ParseFile(tc.filename)
 			duration := time.Since(start)
-			
+
 			require.NoError(t, err)
-			
+
 			durationMs := duration.Nanoseconds() / 1000000
 			assert.LessOrEqual(t, durationMs, tc.maxDurationMs,
 				"Expected %s to parse in under %dms, took %dms: %s",
@@ -389,22 +389,22 @@ func TestComprehensiveParser_TemplateFeatures(t *testing.T) {
 	require.NoError(t, err)
 
 	testCases := []struct {
-		name                 string
-		filename             string
-		expectToPass         bool
-		description          string
+		name         string
+		filename     string
+		expectToPass bool
+		description  string
 	}{
 		{
-			name:                 "Advanced templating",
-			filename:             "testdata/strict_mode/advanced_templating.laq.yaml",
-			expectToPass:         true,
-			description:          "Complex template expressions should work",
+			name:         "Advanced templating",
+			filename:     "testdata/strict_mode/advanced_templating.laq.yaml",
+			expectToPass: true,
+			description:  "Complex template expressions should work",
 		},
 		{
-			name:                 "Function calls in variables",
-			filename:             "testdata/strict_mode/function_calls.laq.yaml",
-			expectToPass:         true,
-			description:          "Function calls should be allowed",
+			name:         "Function calls in variables",
+			filename:     "testdata/strict_mode/function_calls.laq.yaml",
+			expectToPass: true,
+			description:  "Function calls should be allowed",
 		},
 	}
 
@@ -417,7 +417,7 @@ func TestComprehensiveParser_TemplateFeatures(t *testing.T) {
 			}
 
 			_, err := parser.ParseFile(tc.filename)
-			
+
 			if tc.expectToPass {
 				assert.NoError(t, err, "Expected parser to accept %s: %s", tc.filename, tc.description)
 			} else {

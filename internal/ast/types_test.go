@@ -33,15 +33,15 @@ func TestWorkflow_Basic(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Test basic functionality
 	assert.Equal(t, "1.0", workflow.Version)
 	assert.Equal(t, "test-workflow", workflow.Metadata.Name)
-	
+
 	agent, exists := workflow.GetAgent("test_agent")
 	assert.True(t, exists)
 	assert.Equal(t, "gpt-4", agent.Model)
-	
+
 	step, exists := workflow.GetStep("test_step")
 	assert.True(t, exists)
 	assert.Equal(t, "test_step", step.ID)
@@ -112,11 +112,11 @@ func TestWorkflow_Validate(t *testing.T) {
 			errorMsg:    "duplicate step ID",
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.workflow.Validate()
-			
+
 			if tc.expectError {
 				assert.Error(t, err)
 				if tc.errorMsg != "" {
@@ -208,11 +208,11 @@ func TestStep_Validation(t *testing.T) {
 			errorMsg:    "requires updates field",
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.step.Validate()
-			
+
 			if tc.expectError {
 				assert.Error(t, err)
 				if tc.errorMsg != "" {
@@ -266,7 +266,7 @@ func TestStep_TypeDetection(t *testing.T) {
 			isAction: true,
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.stepType, tc.step.GetStepType())
@@ -351,11 +351,11 @@ func TestAgent_Validation(t *testing.T) {
 			errorMsg:    "max_tokens must be positive",
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.agent.Validate()
-			
+
 			if tc.expectError {
 				assert.Error(t, err)
 				if tc.errorMsg != "" {
@@ -394,25 +394,25 @@ func TestDuration_Marshaling(t *testing.T) {
 			jsonStr:  `"2h30m15s"`,
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test YAML marshaling
 			yamlData, err := yaml.Marshal(tc.duration)
 			require.NoError(t, err)
 			assert.Equal(t, tc.yamlStr+"\n", string(yamlData))
-			
+
 			// Test YAML unmarshaling
 			var yamlDuration Duration
 			err = yaml.Unmarshal(yamlData, &yamlDuration)
 			require.NoError(t, err)
 			assert.Equal(t, tc.duration.Duration, yamlDuration.Duration)
-			
+
 			// Test JSON marshaling
 			jsonData, err := json.Marshal(tc.duration)
 			require.NoError(t, err)
 			assert.Equal(t, tc.jsonStr, string(jsonData))
-			
+
 			// Test JSON unmarshaling
 			var jsonDuration Duration
 			err = json.Unmarshal(jsonData, &jsonDuration)
@@ -449,15 +449,15 @@ func TestDuration_InvalidFormat(t *testing.T) {
 			jsonData: `""`,
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var duration Duration
-			
+
 			// Test YAML unmarshaling
 			err := yaml.Unmarshal([]byte(tc.yamlData), &duration)
 			assert.Error(t, err)
-			
+
 			// Test JSON unmarshaling
 			err = json.Unmarshal([]byte(tc.jsonData), &duration)
 			assert.Error(t, err)
@@ -503,13 +503,13 @@ default: "test"
 			},
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var param InputParam
 			err := yaml.Unmarshal([]byte(tc.yamlStr), &param)
 			require.NoError(t, err)
-			
+
 			assert.Equal(t, tc.expected.Type, param.Type)
 			assert.Equal(t, tc.expected.Required, param.Required)
 			assert.Equal(t, tc.expected.Description, param.Description)
@@ -520,12 +520,12 @@ default: "test"
 
 func TestTool_TypeDetection(t *testing.T) {
 	testCases := []struct {
-		name         string
-		tool         *Tool
-		toolType     string
-		isOfficial   bool
-		isScript     bool
-		isMCP        bool
+		name       string
+		tool       *Tool
+		toolType   string
+		isOfficial bool
+		isScript   bool
+		isMCP      bool
 	}{
 		{
 			name: "Official tool",
@@ -558,7 +558,7 @@ func TestTool_TypeDetection(t *testing.T) {
 			isMCP:      true,
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.toolType, tc.tool.GetToolType())
@@ -586,33 +586,33 @@ func TestWorkflow_HelperMethods(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Test agent retrieval
 	agent, exists := workflow.GetAgent("agent1")
 	assert.True(t, exists)
 	assert.Equal(t, "gpt-4", agent.Model)
-	
+
 	_, exists = workflow.GetAgent("nonexistent")
 	assert.False(t, exists)
-	
+
 	// Test step retrieval
 	step, exists := workflow.GetStep("step1")
 	assert.True(t, exists)
 	assert.Equal(t, "step1", step.ID)
-	
+
 	_, exists = workflow.GetStep("nonexistent")
 	assert.False(t, exists)
-	
+
 	// Test input parameter retrieval
 	param, exists := workflow.GetInputParam("param1")
 	assert.True(t, exists)
 	assert.Equal(t, "string", param.Type)
-	
+
 	// Test list methods
 	agentNames := workflow.ListAgents()
 	assert.Contains(t, agentNames, "agent1")
 	assert.Contains(t, agentNames, "agent2")
-	
+
 	stepIDs := workflow.ListStepIDs()
 	assert.Equal(t, []string{"step1", "step2"}, stepIDs)
 }

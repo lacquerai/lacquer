@@ -14,7 +14,7 @@ import (
 func TestRunCommandExists(t *testing.T) {
 	// Test that the run command is properly registered
 	cmd := rootCmd.Commands()
-	
+
 	var runCmdFound bool
 	for _, cmd := range cmd {
 		if cmd.Name() == "run" {
@@ -22,7 +22,7 @@ func TestRunCommandExists(t *testing.T) {
 			break
 		}
 	}
-	
+
 	assert.True(t, runCmdFound, "run command should be registered")
 }
 
@@ -30,14 +30,14 @@ func TestRunCommandFlags(t *testing.T) {
 	// Test that expected flags are available
 	expectedFlags := []string{
 		"input",
-		"dry-run", 
+		"dry-run",
 		"save-state",
 		"max-retries",
 		"timeout",
 		"progress",
 		"show-steps",
 	}
-	
+
 	for _, flagName := range expectedFlags {
 		flag := runCmd.Flags().Lookup(flagName)
 		assert.NotNil(t, flag, "Flag %s should be defined", flagName)
@@ -47,7 +47,7 @@ func TestRunCommandFlags(t *testing.T) {
 func TestRunCommandArguments(t *testing.T) {
 	// Test that the command expects exactly one argument
 	assert.Nil(t, runCmd.Args(runCmd, []string{"workflow.laq.yaml"})) // Should return nil for valid args
-	assert.NotNil(t, runCmd.Args(runCmd, []string{})) // Should return error for no args
+	assert.NotNil(t, runCmd.Args(runCmd, []string{}))                 // Should return error for no args
 	assert.NotNil(t, runCmd.Args(runCmd, []string{"file1", "file2"})) // Should return error for too many args
 }
 
@@ -66,7 +66,7 @@ func TestExecutionResultStructure(t *testing.T) {
 		FinalState:    map[string]interface{}{"result": "success"},
 		StepResults:   []StepExecutionResult{},
 	}
-	
+
 	assert.Equal(t, "test.laq.yaml", result.WorkflowFile)
 	assert.Equal(t, "test-run-123", result.RunID)
 	assert.Equal(t, "completed", result.Status)
@@ -84,7 +84,7 @@ func TestStepExecutionResultStructure(t *testing.T) {
 		TotalTokens:      30,
 		EstimatedCost:    0.001,
 	}
-	
+
 	stepResult := StepExecutionResult{
 		StepID:     "step1",
 		Status:     "completed",
@@ -96,7 +96,7 @@ func TestStepExecutionResultStructure(t *testing.T) {
 		Retries:    0,
 		TokenUsage: tokenUsage,
 	}
-	
+
 	assert.Equal(t, "step1", stepResult.StepID)
 	assert.Equal(t, "completed", stepResult.Status)
 	assert.Equal(t, time.Second, stepResult.Duration)
@@ -114,7 +114,7 @@ func TestTokenUsageSummaryStructure(t *testing.T) {
 		CompletionTokens: 70,
 		EstimatedCost:    0.005,
 	}
-	
+
 	assert.Equal(t, 100, summary.TotalTokens)
 	assert.Equal(t, 30, summary.PromptTokens)
 	assert.Equal(t, 70, summary.CompletionTokens)
@@ -153,7 +153,7 @@ func TestGetWorkflowName(t *testing.T) {
 			expected: "Untitled Workflow",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := getWorkflowName(tt.workflow)
@@ -164,7 +164,7 @@ func TestGetWorkflowName(t *testing.T) {
 
 func TestCollectExecutionResultsIntegration(t *testing.T) {
 	// Test the token aggregation logic
-	
+
 	// Create a mock execution context with step results
 	workflow := &ast.Workflow{
 		Version: "1.0",
@@ -175,10 +175,10 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := context.Background()
 	execCtx := runtime.NewExecutionContext(ctx, workflow, nil)
-	
+
 	// Add step results with token usage
 	execCtx.SetStepResult("step1", &runtime.StepResult{
 		StepID:    "step1",
@@ -195,7 +195,7 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 			EstimatedCost:    0.001,
 		},
 	})
-	
+
 	execCtx.SetStepResult("step2", &runtime.StepResult{
 		StepID:    "step2",
 		Status:    runtime.StepStatusCompleted,
@@ -211,23 +211,23 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 			EstimatedCost:    0.002,
 		},
 	})
-	
+
 	// Create execution result
 	result := ExecutionResult{
 		RunID:      execCtx.RunID,
 		StepsTotal: 2,
 	}
-	
+
 	// Collect execution results
 	collectExecutionResults(execCtx, &result)
-	
+
 	// Verify results
 	require.NotNil(t, result.TokenUsage)
 	assert.Equal(t, 75, result.TokenUsage.TotalTokens)
 	assert.Equal(t, 30, result.TokenUsage.PromptTokens)
 	assert.Equal(t, 45, result.TokenUsage.CompletionTokens)
 	assert.Equal(t, 0.003, result.TokenUsage.EstimatedCost)
-	
+
 	assert.Len(t, result.StepResults, 2)
 	assert.Equal(t, "step1", result.StepResults[0].StepID)
 	assert.Equal(t, "step2", result.StepResults[1].StepID)

@@ -55,7 +55,7 @@ func TestSemanticValidator_ValidateWorkflow(t *testing.T) {
 							Prompt: "Use {{ steps.step2.output }}",
 						},
 						{
-							ID:     "step2", 
+							ID:     "step2",
 							Agent:  "agent1",
 							Prompt: "Use {{ steps.step1.output }}",
 						},
@@ -81,7 +81,7 @@ func TestSemanticValidator_ValidateWorkflow(t *testing.T) {
 						},
 						{
 							ID:     "step2",
-							Agent:  "agent1", 
+							Agent:  "agent1",
 							Prompt: "Generate something",
 						},
 					},
@@ -248,7 +248,7 @@ func TestSemanticValidator_ValidateStepDependencies(t *testing.T) {
 
 		result := validator.ValidateWorkflow(workflow)
 		assert.True(t, result.HasErrors())
-		
+
 		// Should detect circular dependency
 		found := false
 		for _, err := range result.Errors {
@@ -318,13 +318,13 @@ func TestSemanticValidator_ValidateVariableReferences(t *testing.T) {
 
 		result := validator.ValidateWorkflow(workflow)
 		assert.True(t, result.HasErrors())
-		
+
 		// Should find undefined variable references
 		errorMessages := make([]string, len(result.Errors))
 		for i, err := range result.Errors {
 			errorMessages[i] = err.Message
 		}
-		
+
 		assert.Contains(t, strings.Join(errorMessages, " "), "undefined.variable")
 		assert.Contains(t, strings.Join(errorMessages, " "), "inputs.missing")
 	})
@@ -385,7 +385,7 @@ func TestSemanticValidator_ValidateBlockReferences(t *testing.T) {
 			}
 
 			result := validator.ValidateWorkflow(workflow)
-			
+
 			if tt.shouldErr {
 				assert.True(t, result.HasErrors(), "expected validation error for block reference: %s", tt.blockRef)
 			} else {
@@ -425,7 +425,7 @@ func TestSemanticValidator_ValidateControlFlow(t *testing.T) {
 		}
 
 		result := validator.ValidateWorkflow(workflow)
-		
+
 		// Should not have parentheses errors
 		hasParenthesesError := false
 		for _, err := range result.Errors {
@@ -457,7 +457,7 @@ func TestSemanticValidator_ValidateControlFlow(t *testing.T) {
 
 		result := validator.ValidateWorkflow(workflow)
 		assert.True(t, result.HasErrors())
-		
+
 		// Should detect unbalanced parentheses
 		found := false
 		for _, err := range result.Errors {
@@ -517,9 +517,9 @@ func TestSemanticValidator_ExtractStepDependencies(t *testing.T) {
 	validator := NewSemanticValidator()
 
 	step := &ast.Step{
-		ID:     "test-step",
-		Agent:  "agent1",
-		Prompt: "Use {{ steps.step1.output }} and {{ steps.step2.result }}",
+		ID:        "test-step",
+		Agent:     "agent1",
+		Prompt:    "Use {{ steps.step1.output }} and {{ steps.step2.result }}",
 		Condition: "{{ steps.step3.success }}",
 		With: map[string]interface{}{
 			"data": "{{ steps.step4.data }}",
@@ -528,7 +528,7 @@ func TestSemanticValidator_ExtractStepDependencies(t *testing.T) {
 
 	deps := validator.extractStepDependencies(step)
 	expected := []string{"step1", "step2", "step3", "step4"}
-	
+
 	assert.ElementsMatch(t, expected, deps)
 }
 
@@ -541,10 +541,10 @@ func TestSemanticValidator_HasCycle(t *testing.T) {
 			"step2": {"step1"},
 			"step3": {"step2"},
 		}
-		
+
 		visited := make(map[string]bool)
 		recursionStack := make(map[string]bool)
-		
+
 		hasCycle := validator.hasCycle("step1", dependencies, visited, recursionStack)
 		assert.False(t, hasCycle)
 	})
@@ -555,10 +555,10 @@ func TestSemanticValidator_HasCycle(t *testing.T) {
 			"step2": {"step1"},
 			"step3": {"step2"},
 		}
-		
+
 		visited := make(map[string]bool)
 		recursionStack := make(map[string]bool)
-		
+
 		hasCycle := validator.hasCycle("step1", dependencies, visited, recursionStack)
 		assert.True(t, hasCycle)
 	})
@@ -577,17 +577,17 @@ func TestSemanticValidator_BlockReferenceValidation(t *testing.T) {
 		{"valid lacquer block no version", "lacquer/postgresql", true},
 		{"invalid lacquer block name", "lacquer/Invalid_Name", false},
 		{"invalid lacquer block format", "lacquer/", false},
-		
+
 		// GitHub references
 		{"valid github ref", "github.com/owner/repo@tag", true},
 		{"valid github ref no tag", "github.com/owner/repo", true},
 		{"invalid github format", "github.com/owner", false},
-		
+
 		// Local references
 		{"valid local ref", "./blocks/custom", true},
 		{"valid relative ref", "../shared/blocks", true},
 		{"invalid local ref", "./", false},
-		
+
 		// Invalid formats
 		{"unsupported format", "https://example.com/block", false},
 		{"empty reference", "", false},
@@ -596,7 +596,7 @@ func TestSemanticValidator_BlockReferenceValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var result bool
-			
+
 			if strings.HasPrefix(tt.ref, "lacquer/") {
 				result = validator.isValidLacquerBlock(tt.ref)
 			} else if strings.HasPrefix(tt.ref, "github.com/") {
@@ -606,7 +606,7 @@ func TestSemanticValidator_BlockReferenceValidation(t *testing.T) {
 			} else {
 				result = false
 			}
-			
+
 			assert.Equal(t, tt.expected, result, "validation result mismatch for: %s", tt.ref)
 		})
 	}

@@ -20,17 +20,17 @@ type ParseError struct {
 // Error implements the error interface
 func (e *ParseError) Error() string {
 	var result strings.Builder
-	
+
 	result.WriteString(fmt.Sprintf("Parse error at %s: %s", e.Position.String(), e.Message))
-	
+
 	if e.Suggestion != "" {
 		result.WriteString(fmt.Sprintf("\nSuggestion: %s", e.Suggestion))
 	}
-	
+
 	if e.Context != "" {
 		result.WriteString(fmt.Sprintf("\n\nContext:\n%s", e.Context))
 	}
-	
+
 	return result.String()
 }
 
@@ -39,7 +39,7 @@ func WrapYAMLError(err error, source []byte, filename string) error {
 	if err == nil {
 		return nil
 	}
-	
+
 	// Handle different types of YAML errors
 	switch yamlErr := err.(type) {
 	case *yaml.TypeError:
@@ -50,12 +50,12 @@ func WrapYAMLError(err error, source []byte, filename string) error {
 		if filename != "" {
 			position.File = filename
 		}
-		
+
 		return &ParseError{
-			Message:  err.Error(),
-			Position: position,
-			Context:  ast.ExtractContext(source, position, 2),
-			Source:   source,
+			Message:    err.Error(),
+			Position:   position,
+			Context:    ast.ExtractContext(source, position, 2),
+			Source:     source,
 			Suggestion: generateSuggestion(err.Error()),
 		}
 	}
@@ -75,14 +75,14 @@ func handleTypeError(err *yaml.TypeError, source []byte, filename string) error 
 			Source:   source,
 		}
 	}
-	
+
 	// Parse the first error message to extract position
 	firstError := err.Errors[0]
 	position := extractPositionFromMessage(firstError, source)
 	if filename != "" {
 		position.File = filename
 	}
-	
+
 	return &ParseError{
 		Message:    fmt.Sprintf("Type error: %s", firstError),
 		Position:   position,
@@ -96,7 +96,7 @@ func handleTypeError(err *yaml.TypeError, source []byte, filename string) error 
 func extractPositionFromMessage(message string, source []byte) ast.Position {
 	// YAML error messages often contain "line X" patterns
 	// This is a simple implementation - could be enhanced with regex
-	
+
 	lines := strings.Split(message, " ")
 	for i, word := range lines {
 		if word == "line" && i+1 < len(lines) {
@@ -106,7 +106,7 @@ func extractPositionFromMessage(message string, source []byte) ast.Position {
 			}
 		}
 	}
-	
+
 	// Fallback to beginning of file
 	return ast.Position{Line: 1, Column: 1}
 }
@@ -114,7 +114,7 @@ func extractPositionFromMessage(message string, source []byte) ast.Position {
 // generateSuggestion provides helpful suggestions based on common errors
 func generateSuggestion(errorMessage string) string {
 	message := strings.ToLower(errorMessage)
-	
+
 	switch {
 	case strings.Contains(message, "cannot unmarshal"):
 		return "Check that the field type matches the expected value (string, number, boolean, array, or object)"
@@ -139,10 +139,10 @@ func generateSuggestion(errorMessage string) string {
 
 // ValidationError wraps validation errors from the schema validator
 type ValidationError struct {
-	Path       string `json:"path"`
-	Message    string `json:"message"`
+	Path       string      `json:"path"`
+	Message    string      `json:"message"`
 	Value      interface{} `json:"value,omitempty"`
-	Suggestion string `json:"suggestion,omitempty"`
+	Suggestion string      `json:"suggestion,omitempty"`
 }
 
 // MultiError represents multiple parsing or validation errors
@@ -155,18 +155,18 @@ func (e *MultiError) Error() string {
 	if len(e.Errors) == 0 {
 		return "no errors"
 	}
-	
+
 	if len(e.Errors) == 1 {
 		return e.Errors[0].Error()
 	}
-	
+
 	var result strings.Builder
 	result.WriteString(fmt.Sprintf("Multiple errors (%d):\n", len(e.Errors)))
-	
+
 	for i, err := range e.Errors {
 		result.WriteString(fmt.Sprintf("  %d. %s\n", i+1, err.Error()))
 	}
-	
+
 	return result.String()
 }
 

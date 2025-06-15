@@ -21,7 +21,7 @@ func (w *Workflow) GetStep(id string) (*Step, bool) {
 	if w.Workflow == nil || w.Workflow.Steps == nil {
 		return nil, false
 	}
-	
+
 	for _, step := range w.Workflow.Steps {
 		if step.ID == id {
 			return step, true
@@ -52,7 +52,7 @@ func (w *Workflow) ListAgents() []string {
 	if w.Agents == nil {
 		return nil
 	}
-	
+
 	names := make([]string, 0, len(w.Agents))
 	for name := range w.Agents {
 		names = append(names, name)
@@ -66,7 +66,7 @@ func (w *Workflow) ListStepIDs() []string {
 	if steps == nil {
 		return nil
 	}
-	
+
 	ids := make([]string, len(steps))
 	for i, step := range steps {
 		ids[i] = step.ID
@@ -79,15 +79,15 @@ func (w *Workflow) Validate() error {
 	if w.Version != "1.0" {
 		return fmt.Errorf("unsupported version: %s (expected 1.0)", w.Version)
 	}
-	
+
 	if w.Workflow == nil {
 		return fmt.Errorf("workflow definition is required")
 	}
-	
+
 	if len(w.Workflow.Steps) == 0 {
 		return fmt.Errorf("workflow must have at least one step")
 	}
-	
+
 	// Check for duplicate step IDs
 	stepIDs := make(map[string]bool)
 	for _, step := range w.Workflow.Steps {
@@ -96,14 +96,14 @@ func (w *Workflow) Validate() error {
 		}
 		stepIDs[step.ID] = true
 	}
-	
+
 	// Validate each step
 	for _, step := range w.Workflow.Steps {
 		if err := step.Validate(); err != nil {
 			return fmt.Errorf("step %s: %w", step.ID, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -143,7 +143,7 @@ func (s *Step) Validate() error {
 	if s.ID == "" {
 		return fmt.Errorf("step ID is required")
 	}
-	
+
 	// Check that exactly one execution method is specified
 	methods := 0
 	if s.IsAgentStep() {
@@ -155,14 +155,14 @@ func (s *Step) Validate() error {
 	if s.IsActionStep() {
 		methods++
 	}
-	
+
 	if methods == 0 {
 		return fmt.Errorf("step must specify either agent+prompt, uses, or action")
 	}
 	if methods > 1 {
 		return fmt.Errorf("step cannot specify multiple execution methods")
 	}
-	
+
 	// Validate agent steps
 	if s.IsAgentStep() {
 		if s.Agent == "" {
@@ -172,27 +172,27 @@ func (s *Step) Validate() error {
 			return fmt.Errorf("prompt is required for agent steps")
 		}
 	}
-	
+
 	// Validate block steps
 	if s.IsBlockStep() {
 		if s.Uses == "" {
 			return fmt.Errorf("uses is required for block steps")
 		}
 	}
-	
+
 	// Validate action steps
 	if s.IsActionStep() {
 		validActions := []string{"human_input", "update_state"}
 		if !contains(validActions, s.Action) {
-			return fmt.Errorf("invalid action: %s (valid actions: %s)", 
+			return fmt.Errorf("invalid action: %s (valid actions: %s)",
 				s.Action, strings.Join(validActions, ", "))
 		}
-		
+
 		if s.Action == "update_state" && len(s.Updates) == 0 {
 			return fmt.Errorf("update_state action requires updates field")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -210,7 +210,7 @@ func (s *Step) ListOutputs() []string {
 	if s.Outputs == nil {
 		return nil
 	}
-	
+
 	outputs := make([]string, 0, len(s.Outputs))
 	for name := range s.Outputs {
 		outputs = append(outputs, name)
@@ -236,11 +236,11 @@ func (a *Agent) Validate() error {
 	if !a.IsCustom() && !a.IsPreBuilt() {
 		return fmt.Errorf("agent must specify either model or uses")
 	}
-	
+
 	if a.IsCustom() && a.IsPreBuilt() {
 		return fmt.Errorf("agent cannot specify both model and uses")
 	}
-	
+
 	// Validate model if specified
 	if a.IsCustom() {
 		validModels := []string{
@@ -252,22 +252,22 @@ func (a *Agent) Validate() error {
 			return fmt.Errorf("unsupported model: %s", a.Model)
 		}
 	}
-	
+
 	// Validate temperature range
 	if a.Temperature != nil && (*a.Temperature < 0 || *a.Temperature > 2) {
 		return fmt.Errorf("temperature must be between 0 and 2, got %f", *a.Temperature)
 	}
-	
+
 	// Validate top_p range
 	if a.TopP != nil && (*a.TopP < 0 || *a.TopP > 1) {
 		return fmt.Errorf("top_p must be between 0 and 1, got %f", *a.TopP)
 	}
-	
+
 	// Validate max_tokens
 	if a.MaxTokens != nil && *a.MaxTokens < 1 {
 		return fmt.Errorf("max_tokens must be positive, got %d", *a.MaxTokens)
 	}
-	
+
 	return nil
 }
 

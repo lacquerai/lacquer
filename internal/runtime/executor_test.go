@@ -16,7 +16,7 @@ func TestNewExecutor(t *testing.T) {
 	assert.NotNil(t, executor.config)
 	assert.Equal(t, 3, executor.config.MaxConcurrentSteps)
 	assert.True(t, executor.config.EnableRetries)
-	
+
 	// Test with custom config
 	config := &ExecutorConfig{
 		MaxConcurrentSteps: 5,
@@ -29,7 +29,7 @@ func TestNewExecutor(t *testing.T) {
 
 func TestExecutor_ValidateInputs(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -53,17 +53,17 @@ func TestExecutor_ValidateInputs(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Test valid inputs
 	inputs := map[string]interface{}{
 		"required_param": "provided_value",
 	}
 	err := executor.validateInputs(workflow, inputs)
 	assert.NoError(t, err)
-	
+
 	// Check that defaults were applied
 	assert.Equal(t, "fallback_value", inputs["required_with_default"])
-	
+
 	// Test missing required input
 	inputs = map[string]interface{}{}
 	err = executor.validateInputs(workflow, inputs)
@@ -73,7 +73,7 @@ func TestExecutor_ValidateInputs(t *testing.T) {
 
 func TestExecutor_EvaluateSkipCondition(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -86,16 +86,16 @@ func TestExecutor_EvaluateSkipCondition(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
-	
+
 	// Test no condition
 	step := &ast.Step{ID: "test"}
 	shouldSkip, err := executor.evaluateSkipCondition(execCtx, step)
 	assert.NoError(t, err)
 	assert.False(t, shouldSkip)
-	
+
 	// Test skip_if condition (true)
 	step = &ast.Step{
 		ID:     "test",
@@ -104,7 +104,7 @@ func TestExecutor_EvaluateSkipCondition(t *testing.T) {
 	shouldSkip, err = executor.evaluateSkipCondition(execCtx, step)
 	assert.NoError(t, err)
 	assert.True(t, shouldSkip)
-	
+
 	// Test skip_if condition (false)
 	step = &ast.Step{
 		ID:     "test",
@@ -113,7 +113,7 @@ func TestExecutor_EvaluateSkipCondition(t *testing.T) {
 	shouldSkip, err = executor.evaluateSkipCondition(execCtx, step)
 	assert.NoError(t, err)
 	assert.False(t, shouldSkip)
-	
+
 	// Test condition (true - should not skip)
 	step = &ast.Step{
 		ID:        "test",
@@ -122,7 +122,7 @@ func TestExecutor_EvaluateSkipCondition(t *testing.T) {
 	shouldSkip, err = executor.evaluateSkipCondition(execCtx, step)
 	assert.NoError(t, err)
 	assert.False(t, shouldSkip)
-	
+
 	// Test condition (false - should skip)
 	step = &ast.Step{
 		ID:        "test",
@@ -135,7 +135,7 @@ func TestExecutor_EvaluateSkipCondition(t *testing.T) {
 
 func TestExecutor_ExecuteActionStep_UpdateState(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -147,35 +147,35 @@ func TestExecutor_ExecuteActionStep_UpdateState(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, map[string]interface{}{
 		"name": "Alice",
 	})
-	
+
 	step := &ast.Step{
 		ID:     "update_test",
 		Action: "update_state",
 		Updates: map[string]interface{}{
-			"new_value":    "hello",
+			"new_value":     "hello",
 			"dynamic_value": "{{ inputs.name }}",
-			"counter":      10,
+			"counter":       10,
 		},
 	}
-	
+
 	output, err := executor.executeActionStep(execCtx, step)
 	assert.NoError(t, err)
 	assert.NotNil(t, output)
-	
+
 	// Check updated state
 	value, exists := execCtx.GetState("new_value")
 	assert.True(t, exists)
 	assert.Equal(t, "hello", value)
-	
+
 	value, exists = execCtx.GetState("dynamic_value")
 	assert.True(t, exists)
 	assert.Equal(t, "Alice", value)
-	
+
 	value, exists = execCtx.GetState("counter")
 	assert.True(t, exists)
 	assert.Equal(t, 10, value)
@@ -183,7 +183,7 @@ func TestExecutor_ExecuteActionStep_UpdateState(t *testing.T) {
 
 func TestExecutor_ExecuteActionStep_HumanInput(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -192,15 +192,15 @@ func TestExecutor_ExecuteActionStep_HumanInput(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
-	
+
 	step := &ast.Step{
 		ID:     "human_input_test",
 		Action: "human_input",
 	}
-	
+
 	output, err := executor.executeActionStep(execCtx, step)
 	assert.NoError(t, err)
 	assert.NotNil(t, output)
@@ -209,7 +209,7 @@ func TestExecutor_ExecuteActionStep_HumanInput(t *testing.T) {
 
 func TestExecutor_ExecuteActionStep_UnknownAction(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -218,15 +218,15 @@ func TestExecutor_ExecuteActionStep_UnknownAction(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
-	
+
 	step := &ast.Step{
 		ID:     "unknown_test",
 		Action: "unknown_action",
 	}
-	
+
 	_, err := executor.executeActionStep(execCtx, step)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown action")
@@ -234,7 +234,7 @@ func TestExecutor_ExecuteActionStep_UnknownAction(t *testing.T) {
 
 func TestExecutor_ExecuteBlockStep(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -243,15 +243,15 @@ func TestExecutor_ExecuteBlockStep(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
-	
+
 	step := &ast.Step{
 		ID:   "block_test",
 		Uses: "lacquer/http-request@v1",
 	}
-	
+
 	output, err := executor.executeBlockStep(execCtx, step)
 	assert.NoError(t, err)
 	assert.NotNil(t, output)
@@ -260,18 +260,18 @@ func TestExecutor_ExecuteBlockStep(t *testing.T) {
 
 func TestExecutor_ExecuteAgentStep(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	// Register mock provider
 	mockProvider := NewMockModelProvider("mock", []string{"test-model"})
 	mockProvider.SetResponse("Hello, Alice!", "Hello, Alice! How can I help?")
 	err := executor.modelRegistry.RegisterProvider(mockProvider)
 	assert.NoError(t, err)
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Agents: map[string]*ast.Agent{
 			"test_agent": {
-				Model:  "test-model",
+				Model:        "test-model",
 				SystemPrompt: "You are helpful",
 			},
 		},
@@ -281,14 +281,14 @@ func TestExecutor_ExecuteAgentStep(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, map[string]interface{}{
 		"name": "Alice",
 	})
-	
+
 	step := workflow.Workflow.Steps[0]
-	
+
 	response, usage, err := executor.executeAgentStep(execCtx, step)
 	assert.NoError(t, err)
 	assert.Equal(t, "Hello, Alice! How can I help?", response)
@@ -298,7 +298,7 @@ func TestExecutor_ExecuteAgentStep(t *testing.T) {
 
 func TestExecutor_ExecuteAgentStep_MissingAgent(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Agents:  map[string]*ast.Agent{},
@@ -308,12 +308,12 @@ func TestExecutor_ExecuteAgentStep_MissingAgent(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
-	
+
 	step := workflow.Workflow.Steps[0]
-	
+
 	_, _, err := executor.executeAgentStep(execCtx, step)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "agent missing_agent not found")
@@ -321,7 +321,7 @@ func TestExecutor_ExecuteAgentStep_MissingAgent(t *testing.T) {
 
 func TestExecutor_ExecuteAgentStep_MissingModel(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Agents: map[string]*ast.Agent{
@@ -335,12 +335,12 @@ func TestExecutor_ExecuteAgentStep_MissingModel(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := context.Background()
 	execCtx := NewExecutionContext(ctx, workflow, nil)
-	
+
 	step := workflow.Workflow.Steps[0]
-	
+
 	_, _, err := executor.executeAgentStep(execCtx, step)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get model provider")
@@ -348,7 +348,7 @@ func TestExecutor_ExecuteAgentStep_MissingModel(t *testing.T) {
 
 func TestDefaultExecutorConfig(t *testing.T) {
 	config := DefaultExecutorConfig()
-	
+
 	assert.Equal(t, 3, config.MaxConcurrentSteps)
 	assert.Equal(t, 5*time.Minute, config.DefaultTimeout)
 	assert.True(t, config.EnableRetries)
@@ -363,7 +363,7 @@ func TestGetKeys(t *testing.T) {
 		"b": 2,
 		"c": 3,
 	}
-	
+
 	keys := getKeys(m)
 	assert.Len(t, keys, 3)
 	assert.Contains(t, keys, "a")

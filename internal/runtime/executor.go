@@ -27,14 +27,14 @@ const (
 
 // ExecutionEvent represents an event during workflow execution
 type ExecutionEvent struct {
-	Type      ExecutionEventType `json:"type"`
-	Timestamp time.Time          `json:"timestamp"`
-	RunID     string             `json:"run_id"`
-	StepID    string             `json:"step_id,omitempty"`
-	StepIndex int                `json:"step_index,omitempty"`
-	Duration  time.Duration      `json:"duration,omitempty"`
-	Error     string             `json:"error,omitempty"`
-	Attempt   int                `json:"attempt,omitempty"`
+	Type      ExecutionEventType     `json:"type"`
+	Timestamp time.Time              `json:"timestamp"`
+	RunID     string                 `json:"run_id"`
+	StepID    string                 `json:"step_id,omitempty"`
+	StepIndex int                    `json:"step_index,omitempty"`
+	Duration  time.Duration          `json:"duration,omitempty"`
+	Error     string                 `json:"error,omitempty"`
+	Attempt   int                    `json:"attempt,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -76,7 +76,7 @@ func NewExecutor(config *ExecutorConfig) *Executor {
 	}
 
 	registry := NewModelRegistry()
-	
+
 	// Initialize and register providers
 	initializeProviders(registry)
 
@@ -102,7 +102,7 @@ func initializeProviders(registry *ModelRegistry) {
 			}
 		}
 	}
-	
+
 	// Register Claude Code provider if CLI is available
 	claudeCodeProvider, err := NewClaudeCodeProvider(nil) // Use default config
 	if err != nil {
@@ -114,7 +114,7 @@ func initializeProviders(registry *ModelRegistry) {
 			log.Info().Msg("Claude Code provider registered successfully")
 		}
 	}
-	
+
 	// Register OpenAI provider if API key is available
 	if apiKey := GetOpenAIAPIKeyFromEnv(); apiKey != "" {
 		openaiProvider, err := NewOpenAIProvider(nil) // Use default config
@@ -155,7 +155,7 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 		}
 
 		execCtx.CurrentStepIndex = i
-		
+
 		// Send step started event
 		if progressChan != nil {
 			progressChan <- ExecutionEvent{
@@ -166,7 +166,7 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 				StepIndex: i + 1,
 			}
 		}
-		
+
 		stepStart := time.Now()
 		err := e.executeStep(execCtx, step)
 		stepDuration := time.Since(stepStart)
@@ -177,7 +177,7 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 				Str("run_id", execCtx.RunID).
 				Str("step_id", step.ID).
 				Msg("Step execution failed")
-			
+
 			// Send step failed event
 			if progressChan != nil {
 				progressChan <- ExecutionEvent{
@@ -190,7 +190,7 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 					Error:     err.Error(),
 				}
 			}
-			
+
 			// Mark step as failed
 			result := &StepResult{
 				StepID:    step.ID,
@@ -201,7 +201,7 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 				Error:     err,
 			}
 			execCtx.SetStepResult(step.ID, result)
-			
+
 			// Send workflow failed event
 			if progressChan != nil {
 				progressChan <- ExecutionEvent{
@@ -211,7 +211,7 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 					Error:     err.Error(),
 				}
 			}
-			
+
 			return err
 		} else {
 			// Send step completed event
@@ -257,7 +257,7 @@ func getWorkflowNameFromContext(execCtx *ExecutionContext) string {
 func (e *Executor) Execute(ctx context.Context, workflow *ast.Workflow, inputs map[string]interface{}) (*ExecutionSummary, error) {
 	// Create execution context
 	execCtx := NewExecutionContext(ctx, workflow, inputs)
-	
+
 	log.Info().
 		Str("workflow", workflow.Metadata.Name).
 		Str("run_id", execCtx.RunID).
@@ -283,7 +283,7 @@ func (e *Executor) Execute(ctx context.Context, workflow *ast.Workflow, inputs m
 	}
 
 	summary := execCtx.GetExecutionSummary()
-	
+
 	log.Info().
 		Str("run_id", execCtx.RunID).
 		Str("status", string(summary.Status)).
@@ -298,7 +298,7 @@ func (e *Executor) Execute(ctx context.Context, workflow *ast.Workflow, inputs m
 // executeStep executes a single workflow step
 func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error {
 	start := time.Now()
-	
+
 	// Mark step as running
 	result := &StepResult{
 		StepID:    step.ID,
@@ -311,18 +311,19 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error 
 	if shouldSkip, err := e.evaluateSkipCondition(execCtx, step); err != nil {
 		return fmt.Errorf("failed to evaluate skip condition: %w", err)
 	} else if shouldSkip {
+		// TODO: should we send a step skipped event?
+
 		result.Status = StepStatusSkipped
 		result.EndTime = time.Now()
 		result.Duration = result.EndTime.Sub(start)
 		execCtx.SetStepResult(step.ID, result)
-		
+
 		log.Debug().
 			Str("step_id", step.ID).
 			Msg("Step skipped due to condition")
 		return nil
 	}
 
-	// Execute based on step type
 	var stepOutput map[string]interface{}
 	var stepResponse string
 	var tokenUsage *TokenUsage
@@ -336,13 +337,13 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error 
 				"response": stepResponse,
 			}
 		}
-		
+
 	case step.IsBlockStep():
 		stepOutput, err = e.executeBlockStep(execCtx, step)
-		
+
 	case step.IsActionStep():
 		stepOutput, err = e.executeActionStep(execCtx, step)
-		
+
 	default:
 		err = fmt.Errorf("unknown step type for step %s", step.ID)
 	}
@@ -359,14 +360,14 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error 
 	} else {
 		result.Status = StepStatusCompleted
 		result.Output = stepOutput
-		
+
 		// Store step outputs for template access
 		if stepOutput != nil {
 			for key, value := range stepOutput {
 				execCtx.SetState(fmt.Sprintf("steps.%s.%s", step.ID, key), value)
 			}
 		}
-		
+
 		// Process state updates for any step type
 		if step.Updates != nil {
 			updates := make(map[string]interface{})
@@ -388,10 +389,10 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error 
 	}
 
 	execCtx.SetStepResult(step.ID, result)
-	
+
 	// Increment current step index after processing the step
 	execCtx.IncrementCurrentStep()
-	
+
 	return err
 }
 
@@ -404,18 +405,18 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 
 	// Build dependency graph
 	dependencies := e.buildDependencyGraph(steps)
-	
+
 	// Track step completion and execution using sync.Map for thread safety
 	var completed sync.Map
 	var executing sync.Map
 	var stepErrors sync.Map
-	
+
 	// Channel to limit concurrent executions
 	semaphore := make(chan struct{}, e.config.MaxConcurrentSteps)
-	
+
 	// Channel for step completion notifications
 	stepDone := make(chan string, len(steps))
-	
+
 	// Execute steps
 	for {
 		completedCount := 0
@@ -428,7 +429,7 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 			errorCount++
 			return true
 		})
-		
+
 		if completedCount+errorCount >= len(steps) {
 			break
 		}
@@ -438,7 +439,7 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 
 		// Find steps that are ready to execute (dependencies satisfied)
 		readySteps := e.findReadySteps(steps, dependencies, &completed, &executing, &stepErrors)
-		
+
 		if len(readySteps) == 0 {
 			// Check if we have any steps currently executing
 			hasExecutingSteps := false
@@ -449,7 +450,7 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 				}
 				return true
 			})
-			
+
 			if !hasExecutingSteps {
 				// No steps are executing and none are ready
 				// Check if there are steps that can't proceed due to failed dependencies
@@ -465,7 +466,7 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 				// Otherwise it's a deadlock
 				return fmt.Errorf("workflow execution deadlocked: no steps ready and none executing")
 			}
-			
+
 			// Wait for a step to complete
 			select {
 			case stepID := <-stepDone:
@@ -484,16 +485,16 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 			if isCompleted || isExecuting {
 				continue // Skip already completed or executing steps
 			}
-			
+
 			// Mark as executing
 			executing.Store(step.ID, true)
-			
+
 			// Acquire semaphore
 			semaphore <- struct{}{}
-			
+
 			go func(s *ast.Step) {
 				defer func() { <-semaphore }() // Release semaphore
-				
+
 				log.Debug().
 					Str("run_id", execCtx.RunID).
 					Str("step_id", s.ID).
@@ -510,10 +511,10 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 				} else {
 					completed.Store(s.ID, true)
 				}
-				
+
 				// Clear executing flag
 				executing.Store(s.ID, false)
-				
+
 				// Notify completion
 				stepDone <- s.ID
 			}(step)
@@ -534,7 +535,7 @@ func (e *Executor) executeStepsSequentially(execCtx *ExecutionContext, steps []*
 		}
 
 		execCtx.CurrentStepIndex = i
-		
+
 		log.Debug().
 			Str("run_id", execCtx.RunID).
 			Str("step_id", step.ID).
@@ -548,7 +549,7 @@ func (e *Executor) executeStepsSequentially(execCtx *ExecutionContext, steps []*
 				Str("run_id", execCtx.RunID).
 				Str("step_id", step.ID).
 				Msg("Step execution failed")
-			
+
 			// Mark step as failed
 			result := &StepResult{
 				StepID:    step.ID,
@@ -558,7 +559,7 @@ func (e *Executor) executeStepsSequentially(execCtx *ExecutionContext, steps []*
 				Error:     err,
 			}
 			execCtx.SetStepResult(step.ID, result)
-			
+
 			// Stop execution on error for MVP (no error recovery yet)
 			return err
 		}
@@ -569,45 +570,45 @@ func (e *Executor) executeStepsSequentially(execCtx *ExecutionContext, steps []*
 // buildDependencyGraph analyzes steps to determine dependencies based on template variable usage
 func (e *Executor) buildDependencyGraph(steps []*ast.Step) map[string][]string {
 	dependencies := make(map[string][]string)
-	
+
 	for _, step := range steps {
 		deps := e.findStepDependencies(step, steps)
 		if len(deps) > 0 {
 			dependencies[step.ID] = deps
 		}
 	}
-	
+
 	return dependencies
 }
 
 // findStepDependencies finds which other steps this step depends on by analyzing template variables
 func (e *Executor) findStepDependencies(step *ast.Step, allSteps []*ast.Step) []string {
 	var dependencies []string
-	
+
 	// Create a map of step IDs for quick lookup
 	stepIDs := make(map[string]bool)
 	for _, s := range allSteps {
 		stepIDs[s.ID] = true
 	}
-	
+
 	// Check template variables in prompt
 	if step.Prompt != "" {
 		deps := e.extractStepReferences(step.Prompt, stepIDs)
 		dependencies = append(dependencies, deps...)
 	}
-	
+
 	// Check template variables in condition
 	if step.Condition != "" {
 		deps := e.extractStepReferences(step.Condition, stepIDs)
 		dependencies = append(dependencies, deps...)
 	}
-	
+
 	// Check template variables in skip condition
 	if step.SkipIf != "" {
 		deps := e.extractStepReferences(step.SkipIf, stepIDs)
 		dependencies = append(dependencies, deps...)
 	}
-	
+
 	// Check template variables in updates
 	if step.Updates != nil {
 		for _, value := range step.Updates {
@@ -617,7 +618,7 @@ func (e *Executor) findStepDependencies(step *ast.Step, allSteps []*ast.Step) []
 			}
 		}
 	}
-	
+
 	// Remove duplicates
 	unique := make(map[string]bool)
 	var result []string
@@ -627,14 +628,14 @@ func (e *Executor) findStepDependencies(step *ast.Step, allSteps []*ast.Step) []
 			result = append(result, dep)
 		}
 	}
-	
+
 	return result
 }
 
 // extractStepReferences extracts step references like {{ steps.stepname.response }} from template strings
 func (e *Executor) extractStepReferences(template string, validStepIDs map[string]bool) []string {
 	var dependencies []string
-	
+
 	// Use strings.Contains to find patterns - simpler and more reliable
 	for stepID := range validStepIDs {
 		// Look for patterns like {{ steps.stepID.response }} or {{ steps.stepID.output }}
@@ -642,7 +643,7 @@ func (e *Executor) extractStepReferences(template string, validStepIDs map[strin
 		if strings.Contains(template, pattern) {
 			dependencies = append(dependencies, stepID)
 		}
-		
+
 		// Also check for just {{ steps.stepID }} (without property)
 		simplePattern := "{{ steps." + stepID + " }}"
 		if strings.Contains(template, simplePattern) {
@@ -659,26 +660,26 @@ func (e *Executor) extractStepReferences(template string, validStepIDs map[strin
 			}
 		}
 	}
-	
+
 	return dependencies
 }
 
 // findReadySteps finds steps that have all their dependencies satisfied
 func (e *Executor) findReadySteps(steps []*ast.Step, dependencies map[string][]string, completed *sync.Map, executing *sync.Map, stepErrors *sync.Map) []*ast.Step {
 	var ready []*ast.Step
-	
+
 	for _, step := range steps {
 		_, isCompleted := completed.Load(step.ID)
 		_, isExecuting := executing.Load(step.ID)
 		if isCompleted || isExecuting {
 			continue // Already completed or executing
 		}
-		
+
 		// Skip failed steps
 		if _, hasFailed := stepErrors.Load(step.ID); hasFailed {
 			continue
 		}
-		
+
 		// Check if all dependencies are satisfied
 		deps, hasDeps := dependencies[step.ID]
 		if !hasDeps {
@@ -686,7 +687,7 @@ func (e *Executor) findReadySteps(steps []*ast.Step, dependencies map[string][]s
 			ready = append(ready, step)
 			continue
 		}
-		
+
 		allDepsSatisfied := true
 		for _, dep := range deps {
 			if _, isDepCompleted := completed.Load(dep); !isDepCompleted {
@@ -694,12 +695,12 @@ func (e *Executor) findReadySteps(steps []*ast.Step, dependencies map[string][]s
 				break
 			}
 		}
-		
+
 		if allDepsSatisfied {
 			ready = append(ready, step)
 		}
 	}
-	
+
 	return ready
 }
 
@@ -725,12 +726,12 @@ func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (
 
 	// Create model request
 	request := &ModelRequest{
-		Model:       agent.Model,
-		Prompt:      prompt,
+		Model:        agent.Model,
+		Prompt:       prompt,
 		SystemPrompt: agent.SystemPrompt,
-		Temperature: agent.Temperature,
-		MaxTokens:   agent.MaxTokens,
-		TopP:        agent.TopP,
+		Temperature:  agent.Temperature,
+		MaxTokens:    agent.MaxTokens,
+		TopP:         agent.TopP,
 	}
 
 	// Execute with timeout
@@ -755,7 +756,7 @@ func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (
 func (e *Executor) executeBlockStep(execCtx *ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
 	// For MVP, we'll implement basic block support
 	// This is a placeholder that will be expanded in the block system task
-	
+
 	log.Debug().
 		Str("step_id", step.ID).
 		Str("block", step.Uses).
@@ -780,24 +781,24 @@ func (e *Executor) executeActionStep(execCtx *ExecutionContext, step *ast.Step) 
 			}
 			updates[key] = rendered
 		}
-		
+
 		execCtx.UpdateState(updates)
-		
+
 		return map[string]interface{}{
 			"updated_keys": getKeys(updates),
 		}, nil
-		
+
 	case "human_input":
 		// For MVP, this is a placeholder
 		// In a full implementation, this would pause execution and wait for human input
 		log.Info().
 			Str("step_id", step.ID).
 			Msg("Human input requested (placeholder)")
-		
+
 		return map[string]interface{}{
 			"human_input": "Mock human input response",
 		}, nil
-		
+
 	default:
 		return nil, fmt.Errorf("unknown action: %s", step.Action)
 	}
@@ -811,7 +812,7 @@ func (e *Executor) evaluateSkipCondition(execCtx *ExecutionContext, step *ast.St
 
 	// For MVP, implement basic condition evaluation
 	// This would be expanded to full expression evaluation later
-	
+
 	if step.SkipIf != "" {
 		// Simple template-based condition evaluation
 		result, err := e.templateEngine.Render(step.SkipIf, execCtx)

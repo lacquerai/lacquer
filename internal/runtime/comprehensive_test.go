@@ -20,13 +20,13 @@ import (
 func TestRuntimeComprehensive_EndToEndWorkflow(t *testing.T) {
 	// Create executor with mock provider
 	executor := NewExecutor(nil)
-	
+
 	// Register mock provider
 	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
 	mockProvider.SetResponse("Process this topic: artificial intelligence", "Mock analysis of artificial intelligence")
 	mockProvider.SetResponse("Build on: Mock analysis of artificial intelligence", "Extended analysis with more details")
 	mockProvider.SetResponse("Finalize with format summary: Extended analysis with more details", "Final summary completed")
-	
+
 	err := executor.modelRegistry.RegisterProvider(mockProvider)
 	require.NoError(t, err)
 
@@ -67,9 +67,9 @@ func TestRuntimeComprehensive_EndToEndWorkflow(t *testing.T) {
 					Prompt: "Process this topic: {{ inputs.topic }}",
 				},
 				{
-					ID:      "step2",
-					Agent:   "test_agent",
-					Prompt:  "Build on: {{ steps.step1.response }}",
+					ID:     "step2",
+					Agent:  "test_agent",
+					Prompt: "Build on: {{ steps.step1.response }}",
 					Updates: map[string]interface{}{
 						"counter": 1,
 						"status":  "processing",
@@ -85,8 +85,8 @@ func TestRuntimeComprehensive_EndToEndWorkflow(t *testing.T) {
 				},
 			},
 			Outputs: map[string]interface{}{
-				"result":     "{{ steps.step3.response }}",
-				"step_count": "{{ state.counter }}",
+				"result":       "{{ steps.step3.response }}",
+				"step_count":   "{{ state.counter }}",
 				"final_status": "{{ state.status }}",
 			},
 		},
@@ -119,7 +119,7 @@ func TestRuntimeComprehensive_EndToEndWorkflow(t *testing.T) {
 			step3Result = &result.Steps[i]
 		}
 	}
-	
+
 	assert.NotNil(t, step1Result)
 	assert.Equal(t, StepStatusCompleted, step1Result.Status)
 
@@ -137,12 +137,12 @@ func TestRuntimeComprehensive_EndToEndWorkflow(t *testing.T) {
 // TestRuntimeComprehensive_VariableInterpolation tests template variable resolution
 func TestRuntimeComprehensive_VariableInterpolation(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	// Register mock provider for gpt-4
 	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
 	mockProvider.SetResponse("Hello, Alice! You are 25 years old.", "Mock greeting response")
 	mockProvider.SetResponse("Summary for Alice: Mock greeting response", "Mock summary response")
-	
+
 	err := executor.modelRegistry.RegisterProvider(mockProvider)
 	require.NoError(t, err)
 
@@ -162,7 +162,7 @@ func TestRuntimeComprehensive_VariableInterpolation(t *testing.T) {
 				"age":  {Type: "number", Required: true},
 			},
 			State: map[string]interface{}{
-				"greeting": "Hello",
+				"greeting":        "Hello",
 				"processed_count": 0,
 			},
 			Steps: []*ast.Step{
@@ -209,13 +209,13 @@ func TestRuntimeComprehensive_VariableInterpolation(t *testing.T) {
 // TestRuntimeComprehensive_ConditionalExecution tests step conditions and skip logic
 func TestRuntimeComprehensive_ConditionalExecution(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	// Register mock provider for gpt-4
 	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
 	mockProvider.SetResponse("This always runs", "Mock always response")
 	mockProvider.SetResponse("This runs conditionally", "Mock conditional response")
 	mockProvider.SetResponse("This runs after conditional", "Mock final response")
-	
+
 	err := executor.modelRegistry.RegisterProvider(mockProvider)
 	require.NoError(t, err)
 
@@ -262,9 +262,9 @@ func TestRuntimeComprehensive_ConditionalExecution(t *testing.T) {
 					},
 					Steps: []*ast.Step{
 						{
-							ID:        "always_run",
-							Agent:     "conditional_agent",
-							Prompt:    "This always runs",
+							ID:     "always_run",
+							Agent:  "conditional_agent",
+							Prompt: "This always runs",
 						},
 						{
 							ID:        "conditional_step",
@@ -323,11 +323,11 @@ func TestRuntimeComprehensive_ConditionalExecution(t *testing.T) {
 // TestRuntimeComprehensive_ErrorHandling tests error scenarios and recovery
 func TestRuntimeComprehensive_ErrorHandling(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	// Register mock provider for gpt-4
 	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
 	mockProvider.SetResponse("test", "Mock test response")
-	
+
 	err := executor.modelRegistry.RegisterProvider(mockProvider)
 	require.NoError(t, err)
 
@@ -341,9 +341,9 @@ func TestRuntimeComprehensive_ErrorHandling(t *testing.T) {
 		{
 			name: "Missing required input",
 			workflow: &ast.Workflow{
-				Version: "1.0",
+				Version:  "1.0",
 				Metadata: &ast.WorkflowMetadata{Name: "error-test-workflow"},
-				Agents:  map[string]*ast.Agent{"agent": {Model: "gpt-4"}},
+				Agents:   map[string]*ast.Agent{"agent": {Model: "gpt-4"}},
 				Workflow: &ast.WorkflowDef{
 					Inputs: map[string]*ast.InputParam{
 						"required": {Type: "string", Required: true},
@@ -359,9 +359,9 @@ func TestRuntimeComprehensive_ErrorHandling(t *testing.T) {
 		{
 			name: "Invalid agent reference",
 			workflow: &ast.Workflow{
-				Version: "1.0",
+				Version:  "1.0",
 				Metadata: &ast.WorkflowMetadata{Name: "error-test-workflow"},
-				Agents:  map[string]*ast.Agent{"valid_agent": {Model: "gpt-4"}},
+				Agents:   map[string]*ast.Agent{"valid_agent": {Model: "gpt-4"}},
 				Workflow: &ast.WorkflowDef{
 					Steps: []*ast.Step{
 						{ID: "test", Agent: "nonexistent_agent", Prompt: "test"},
@@ -375,9 +375,9 @@ func TestRuntimeComprehensive_ErrorHandling(t *testing.T) {
 		{
 			name: "Missing model in agent",
 			workflow: &ast.Workflow{
-				Version: "1.0",
+				Version:  "1.0",
 				Metadata: &ast.WorkflowMetadata{Name: "error-test-workflow"},
-				Agents:  map[string]*ast.Agent{"bad_agent": {}}, // Missing model
+				Agents:   map[string]*ast.Agent{"bad_agent": {}}, // Missing model
 				Workflow: &ast.WorkflowDef{
 					Steps: []*ast.Step{
 						{ID: "test", Agent: "bad_agent", Prompt: "test"},
@@ -421,13 +421,13 @@ func TestRuntimeComprehensive_ErrorHandling(t *testing.T) {
 // TestRuntimeComprehensive_StateManagement tests state persistence and updates
 func TestRuntimeComprehensive_StateManagement(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	// Register mock provider for gpt-4
 	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
 	mockProvider.SetResponse("Processing item 1", "Mock item 1 response")
 	mockProvider.SetResponse("Adding item to list", "Mock item list response")
 	mockProvider.SetResponse("Updating metadata", "Mock metadata response")
-	
+
 	err := executor.modelRegistry.RegisterProvider(mockProvider)
 	require.NoError(t, err)
 
@@ -470,9 +470,9 @@ func TestRuntimeComprehensive_StateManagement(t *testing.T) {
 					Prompt: "Updating metadata after {{ steps.increment_counter.response }}",
 					Updates: map[string]interface{}{
 						"metadata": map[string]interface{}{
-							"created":     "{{ state.metadata.created }}",
-							"updated":     "now",
-							"step_count":  "{{ state.counter }}",
+							"created":    "{{ state.metadata.created }}",
+							"updated":    "now",
+							"step_count": "{{ state.counter }}",
 						},
 					},
 				},
@@ -502,13 +502,13 @@ func TestRuntimeComprehensive_StateManagement(t *testing.T) {
 // TestRuntimeComprehensive_Performance tests runtime performance characteristics
 func TestRuntimeComprehensive_Performance(t *testing.T) {
 	executor := NewExecutor(nil)
-	
+
 	// Register mock provider for gpt-4
 	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
 	for i := 0; i < 10; i++ {
 		mockProvider.SetResponse(fmt.Sprintf("Processing step %d", i), fmt.Sprintf("Mock response for step %d", i))
 	}
-	
+
 	err := executor.modelRegistry.RegisterProvider(mockProvider)
 	require.NoError(t, err)
 
@@ -571,14 +571,14 @@ func TestRuntimeComprehensive_ConcurrentExecution(t *testing.T) {
 		EnableRetries:      true,
 	}
 	executor := NewExecutor(config)
-	
+
 	// Register mock provider for gpt-4
 	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
 	mockProvider.SetResponse("Independent task 1", "Mock response 1")
-	mockProvider.SetResponse("Independent task 2", "Mock response 2") 
+	mockProvider.SetResponse("Independent task 2", "Mock response 2")
 	mockProvider.SetResponse("Independent task 3", "Mock response 3")
 	mockProvider.SetResponse("Depends on: Mock response 1, Mock response 2, Mock response 3", "Mock dependent response")
-	
+
 	err := executor.modelRegistry.RegisterProvider(mockProvider)
 	require.NoError(t, err)
 
@@ -640,7 +640,7 @@ func TestRuntimeComprehensive_HTTPMocked(t *testing.T) {
 	openaiServer := createMockOpenAIServer(t)
 	defer openaiServer.Close()
 
-	// Create mock Anthropic server  
+	// Create mock Anthropic server
 	anthropicServer := createMockAnthropicServer(t)
 	defer anthropicServer.Close()
 
@@ -680,16 +680,16 @@ func TestRuntimeComprehensive_HTTPMocked(t *testing.T) {
 	t.Run("Anthropic Claude workflow", func(t *testing.T) {
 		// Create a new executor for this test to register Anthropic provider
 		testExecutor := NewExecutor(nil)
-		
+
 		// Register mock Anthropic provider since real provider requires API key
 		mockAnthropic := NewMockModelProvider("anthropic", []string{"claude-3-sonnet"})
 		mockAnthropic.SetResponse("Process this topic: machine learning", "Mock Claude response for: Process this topic: machine learning")
 		mockAnthropic.SetResponse("Build on: Mock Claude response for: Process this topic: machine learning", "Mock Claude extended response")
 		mockAnthropic.SetResponse("Finalize: Mock Claude extended response", "Mock Claude final response")
-		
+
 		err := testExecutor.modelRegistry.RegisterProvider(mockAnthropic)
 		require.NoError(t, err)
-		
+
 		workflow := createTestWorkflow("claude-3-sonnet", "claude_agent")
 		result, err := testExecutor.Execute(context.Background(), workflow, map[string]interface{}{
 			"topic": "machine learning",
@@ -791,7 +791,7 @@ func TestRuntimeComprehensive_HTTPRetryLogic(t *testing.T) {
 	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
-		
+
 		// Fail first 2 attempts, succeed on 3rd
 		if callCount < 3 {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -822,7 +822,7 @@ func TestRuntimeComprehensive_HTTPRetryLogic(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", server.URL)
 
 	executor := NewExecutor(nil)
-	
+
 	// Create a single-step workflow for retry testing
 	workflow := &ast.Workflow{
 		Version: "1.0",
@@ -948,7 +948,7 @@ func TestRuntimeComprehensive_HTTPVariableInterpolation(t *testing.T) {
 		// Capture the actual prompt sent in the request
 		var reqBody map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&reqBody)
-		
+
 		if messages, ok := reqBody["messages"].([]interface{}); ok && len(messages) > 0 {
 			if msg, ok := messages[0].(map[string]interface{}); ok {
 				if content, ok := msg["content"].(string); ok {
@@ -992,7 +992,7 @@ func TestRuntimeComprehensive_HTTPVariableInterpolation(t *testing.T) {
 		},
 		Workflow: &ast.WorkflowDef{
 			Inputs: map[string]*ast.InputParam{
-				"name": {Type: "string", Required: true},
+				"name":  {Type: "string", Required: true},
 				"topic": {Type: "string", Required: true},
 			},
 			State: map[string]interface{}{
@@ -1136,9 +1136,9 @@ func createTestWorkflow(model, agentName string) *ast.Workflow {
 					Prompt: "Process this topic: {{ inputs.topic }}",
 				},
 				{
-					ID:      "step2",
-					Agent:   agentName,
-					Prompt:  "Build on: {{ steps.step1.response }}",
+					ID:     "step2",
+					Agent:  agentName,
+					Prompt: "Build on: {{ steps.step1.response }}",
 					Updates: map[string]interface{}{
 						"counter": 1,
 						"status":  "processing",

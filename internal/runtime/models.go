@@ -10,16 +10,16 @@ import (
 type ModelProvider interface {
 	// Generate generates a response from the model
 	Generate(ctx context.Context, request *ModelRequest) (string, *TokenUsage, error)
-	
+
 	// GetName returns the provider name
 	GetName() string
-	
+
 	// SupportedModels returns a list of supported model names
 	SupportedModels() []string
-	
+
 	// IsModelSupported checks if a model is supported by this provider
 	IsModelSupported(model string) bool
-	
+
 	// Close cleans up resources
 	Close() error
 }
@@ -33,7 +33,7 @@ type ModelRequest struct {
 	MaxTokens    *int     `json:"max_tokens,omitempty"`
 	TopP         *float64 `json:"top_p,omitempty"`
 	Stop         []string `json:"stop,omitempty"`
-	
+
 	// Additional metadata
 	RequestID string                 `json:"request_id,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
@@ -58,14 +58,14 @@ func NewModelRegistry() *ModelRegistry {
 func (mr *ModelRegistry) RegisterProvider(provider ModelProvider) error {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
-	
+
 	name := provider.GetName()
 	if _, exists := mr.providers[name]; exists {
 		return fmt.Errorf("provider %s already registered", name)
 	}
-	
+
 	mr.providers[name] = provider
-	
+
 	// Register supported models
 	for _, model := range provider.SupportedModels() {
 		if existingProvider, exists := mr.modelMap[model]; exists {
@@ -73,7 +73,7 @@ func (mr *ModelRegistry) RegisterProvider(provider ModelProvider) error {
 		}
 		mr.modelMap[model] = name
 	}
-	
+
 	return nil
 }
 
@@ -81,17 +81,17 @@ func (mr *ModelRegistry) RegisterProvider(provider ModelProvider) error {
 func (mr *ModelRegistry) GetProvider(model string) (ModelProvider, error) {
 	mr.mu.RLock()
 	defer mr.mu.RUnlock()
-	
+
 	providerName, exists := mr.modelMap[model]
 	if !exists {
 		return nil, fmt.Errorf("no provider found for model %s", model)
 	}
-	
+
 	provider, exists := mr.providers[providerName]
 	if !exists {
 		return nil, fmt.Errorf("provider %s not found", providerName)
 	}
-	
+
 	return provider, nil
 }
 
@@ -99,12 +99,12 @@ func (mr *ModelRegistry) GetProvider(model string) (ModelProvider, error) {
 func (mr *ModelRegistry) GetProviderByName(name string) (ModelProvider, error) {
 	mr.mu.RLock()
 	defer mr.mu.RUnlock()
-	
+
 	provider, exists := mr.providers[name]
 	if !exists {
 		return nil, fmt.Errorf("provider %s not found", name)
 	}
-	
+
 	return provider, nil
 }
 
@@ -112,7 +112,7 @@ func (mr *ModelRegistry) GetProviderByName(name string) (ModelProvider, error) {
 func (mr *ModelRegistry) ListProviders() []string {
 	mr.mu.RLock()
 	defer mr.mu.RUnlock()
-	
+
 	names := make([]string, 0, len(mr.providers))
 	for name := range mr.providers {
 		names = append(names, name)
@@ -124,7 +124,7 @@ func (mr *ModelRegistry) ListProviders() []string {
 func (mr *ModelRegistry) ListModels() []string {
 	mr.mu.RLock()
 	defer mr.mu.RUnlock()
-	
+
 	models := make([]string, 0, len(mr.modelMap))
 	for model := range mr.modelMap {
 		models = append(models, model)
@@ -136,7 +136,7 @@ func (mr *ModelRegistry) ListModels() []string {
 func (mr *ModelRegistry) IsModelSupported(model string) bool {
 	mr.mu.RLock()
 	defer mr.mu.RUnlock()
-	
+
 	_, exists := mr.modelMap[model]
 	return exists
 }
@@ -145,22 +145,22 @@ func (mr *ModelRegistry) IsModelSupported(model string) bool {
 func (mr *ModelRegistry) Close() error {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
-	
+
 	var lastErr error
 	for _, provider := range mr.providers {
 		if err := provider.Close(); err != nil {
 			lastErr = err
 		}
 	}
-	
+
 	return lastErr
 }
 
 // MockModelProvider is a mock implementation for testing
 type MockModelProvider struct {
-	name           string
+	name            string
 	supportedModels []string
-	responses      map[string]string
+	responses       map[string]string
 }
 
 // NewMockModelProvider creates a new mock model provider
@@ -188,7 +188,7 @@ func (mp *MockModelProvider) Generate(ctx context.Context, request *ModelRequest
 			EstimatedCost:    0.001,
 		}, nil
 	}
-	
+
 	// Default mock response
 	response := fmt.Sprintf("Mock response for prompt: %s", request.Prompt)
 	return response, &TokenUsage{

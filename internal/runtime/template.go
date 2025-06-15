@@ -17,7 +17,7 @@ type TemplateEngine struct {
 func NewTemplateEngine() *TemplateEngine {
 	// Pattern to match {{ variable.path }} with optional whitespace
 	pattern := regexp.MustCompile(`\{\{\s*([^}]+)\s*\}\}`)
-	
+
 	return &TemplateEngine{
 		variablePattern: pattern,
 	}
@@ -36,25 +36,25 @@ func (te *TemplateEngine) Render(template string, execCtx *ExecutionContext) (st
 	}
 
 	result := template
-	
+
 	// Replace each variable reference
 	for _, match := range matches {
 		if len(match) < 2 {
 			continue
 		}
-		
-		fullMatch := match[0] // Full match including {{ }}
+
+		fullMatch := match[0]                  // Full match including {{ }}
 		varPath := strings.TrimSpace(match[1]) // Variable path
-		
+
 		// Resolve the variable value
 		value, err := te.resolveVariable(varPath, execCtx)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve variable %s: %w", varPath, err)
 		}
-		
+
 		// Convert value to string
 		strValue := te.valueToString(value)
-		
+
 		// Replace in result
 		result = strings.ReplaceAll(result, fullMatch, strValue)
 	}
@@ -70,7 +70,7 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 
 	// Split the path into components
 	parts := strings.Split(varPath, ".")
-	
+
 	// Handle different variable scopes
 	switch parts[0] {
 	case "inputs":
@@ -82,7 +82,7 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 			return nil, fmt.Errorf("input parameter %s not found", parts[1])
 		}
 		return te.resolveNestedPath(value, parts[2:])
-		
+
 	case "state":
 		if len(parts) < 2 {
 			return nil, fmt.Errorf("state variable requires a key name")
@@ -92,21 +92,21 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 			return nil, fmt.Errorf("state variable %s not found", parts[1])
 		}
 		return te.resolveNestedPath(value, parts[2:])
-		
+
 	case "steps":
 		if len(parts) < 3 {
 			return nil, fmt.Errorf("steps variable requires step_id and field name")
 		}
 		stepID := parts[1]
 		field := parts[2]
-		
+
 		result, exists := execCtx.GetStepResult(stepID)
 		if !exists {
 			return nil, fmt.Errorf("step %s not found", stepID)
 		}
-		
+
 		return te.resolveStepField(result, field, parts[3:])
-		
+
 	case "metadata":
 		if len(parts) < 2 {
 			return nil, fmt.Errorf("metadata variable requires a field name")
@@ -116,7 +116,7 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 			return nil, fmt.Errorf("metadata field %s not found", parts[1])
 		}
 		return te.resolveNestedPath(value, parts[2:])
-		
+
 	case "env":
 		if len(parts) < 2 {
 			return nil, fmt.Errorf("env variable requires a variable name")
@@ -126,10 +126,10 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 			return "", nil // Environment variables default to empty string
 		}
 		return value, nil
-		
+
 	case "workflow":
 		return te.resolveWorkflowVariable(parts[1:], execCtx)
-		
+
 	default:
 		return nil, fmt.Errorf("unknown variable scope: %s", parts[0])
 	}
@@ -138,7 +138,7 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 // resolveStepField resolves a field from a step result
 func (te *TemplateEngine) resolveStepField(result *StepResult, field string, remaining []string) (interface{}, error) {
 	var value interface{}
-	
+
 	switch field {
 	case "status":
 		value = string(result.Status)
@@ -173,7 +173,7 @@ func (te *TemplateEngine) resolveStepField(result *StepResult, field string, rem
 			return nil, fmt.Errorf("step field %s not found", field)
 		}
 	}
-	
+
 	return te.resolveNestedPath(value, remaining)
 }
 
@@ -182,7 +182,7 @@ func (te *TemplateEngine) resolveWorkflowVariable(parts []string, execCtx *Execu
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("workflow variable requires a field name")
 	}
-	
+
 	switch parts[0] {
 	case "run_id":
 		return execCtx.RunID, nil
@@ -205,7 +205,7 @@ func (te *TemplateEngine) resolveWorkflowVariable(parts []string, execCtx *Execu
 // resolveNestedPath resolves a nested path within a value
 func (te *TemplateEngine) resolveNestedPath(value interface{}, path []string) (interface{}, error) {
 	current := value
-	
+
 	for _, key := range path {
 		switch val := current.(type) {
 		case map[string]interface{}:
@@ -225,7 +225,7 @@ func (te *TemplateEngine) resolveNestedPath(value interface{}, path []string) (i
 			return nil, fmt.Errorf("cannot access field %s on non-object value", key)
 		}
 	}
-	
+
 	return current, nil
 }
 
@@ -234,7 +234,7 @@ func (te *TemplateEngine) valueToString(value interface{}) string {
 	if value == nil {
 		return ""
 	}
-	
+
 	switch v := value.(type) {
 	case string:
 		return v
@@ -269,18 +269,18 @@ func (te *TemplateEngine) ValidateTemplate(template string) error {
 
 	// Find all variable references
 	matches := te.variablePattern.FindAllStringSubmatch(template, -1)
-	
+
 	// Check each variable reference for basic syntax
 	for _, match := range matches {
 		if len(match) < 2 {
 			continue
 		}
-		
+
 		varPath := strings.TrimSpace(match[1])
 		if varPath == "" {
 			return fmt.Errorf("empty variable reference in template")
 		}
-		
+
 		// Basic path validation
 		parts := strings.Split(varPath, ".")
 		for _, part := range parts {
@@ -288,7 +288,7 @@ func (te *TemplateEngine) ValidateTemplate(template string) error {
 				return fmt.Errorf("invalid variable path: %s", varPath)
 			}
 		}
-		
+
 		// Validate scope
 		scope := parts[0]
 		validScopes := []string{"inputs", "state", "steps", "metadata", "env", "workflow"}
@@ -299,11 +299,11 @@ func (te *TemplateEngine) ValidateTemplate(template string) error {
 				break
 			}
 		}
-		
+
 		if !isValidScope {
 			return fmt.Errorf("invalid variable scope: %s", scope)
 		}
 	}
-	
+
 	return nil
 }

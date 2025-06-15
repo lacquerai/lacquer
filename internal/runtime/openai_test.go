@@ -85,13 +85,13 @@ func TestOpenAIProvider_ModelSupport(t *testing.T) {
 	t.Run("model list not empty", func(t *testing.T) {
 		models := provider.SupportedModels()
 		assert.NotEmpty(t, models)
-		
+
 		// Check some expected models are present
 		modelSet := make(map[string]bool)
 		for _, model := range models {
 			modelSet[model] = true
 		}
-		
+
 		assert.True(t, modelSet["gpt-4o"], "should include gpt-4o")
 		assert.True(t, modelSet["gpt-4"], "should include gpt-4")
 		assert.True(t, modelSet["gpt-3.5-turbo"], "should include gpt-3.5-turbo")
@@ -448,12 +448,12 @@ func TestOpenAIProvider_Close(t *testing.T) {
 
 func TestGetSupportedOpenAIModels(t *testing.T) {
 	models := getSupportedOpenAIModels()
-	
+
 	assert.NotEmpty(t, models)
 	assert.Contains(t, models, "gpt-4o")
 	assert.Contains(t, models, "gpt-4")
 	assert.Contains(t, models, "gpt-3.5-turbo")
-	
+
 	// Ensure no duplicates
 	modelSet := make(map[string]bool)
 	for _, model := range models {
@@ -464,7 +464,7 @@ func TestGetSupportedOpenAIModels(t *testing.T) {
 
 func TestGetDefaultOpenAIConfig(t *testing.T) {
 	config := getDefaultOpenAIConfig()
-	
+
 	assert.NotNil(t, config)
 	assert.Equal(t, "https://api.openai.com/v1", config.BaseURL)
 	assert.Equal(t, 30*time.Second, config.Timeout)

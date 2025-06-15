@@ -28,7 +28,7 @@ func (p Position) String() string {
 // ExtractPosition extracts position information from YAML parsing errors
 func ExtractPosition(source []byte, offset int) Position {
 	lines := strings.Split(string(source), "\n")
-	
+
 	currentOffset := 0
 	for lineNum, line := range lines {
 		lineLength := len(line) + 1 // +1 for newline character
@@ -42,7 +42,7 @@ func ExtractPosition(source []byte, offset int) Position {
 		}
 		currentOffset += lineLength
 	}
-	
+
 	// Fallback if position is at end of file
 	return Position{
 		Line:   len(lines),
@@ -54,14 +54,14 @@ func ExtractPosition(source []byte, offset int) Position {
 // ExtractContext extracts contextual lines around a position for error reporting
 func ExtractContext(source []byte, position Position, contextLines int) string {
 	lines := strings.Split(string(source), "\n")
-	
+
 	if position.Line <= 0 || position.Line > len(lines) {
 		return ""
 	}
-	
+
 	start := max(0, position.Line-contextLines-1)
 	end := min(len(lines), position.Line+contextLines)
-	
+
 	var context strings.Builder
 	for i := start; i < end; i++ {
 		lineNum := i + 1
@@ -69,16 +69,16 @@ func ExtractContext(source []byte, position Position, contextLines int) string {
 		if lineNum == position.Line {
 			prefix = ">> "
 		}
-		
+
 		context.WriteString(fmt.Sprintf("%s%4d | %s\n", prefix, lineNum, lines[i]))
-		
+
 		// Add a pointer to the specific column for the error line
 		if lineNum == position.Line && position.Column > 0 {
 			pointer := strings.Repeat(" ", 8+min(position.Column-1, len(lines[i]))) + "^"
 			context.WriteString(pointer + "\n")
 		}
 	}
-	
+
 	return context.String()
 }
 
@@ -99,11 +99,11 @@ func max(a, b int) int {
 
 // Workflow represents the root of a Lacquer workflow
 type Workflow struct {
-	Version  string             `yaml:"version" json:"version" validate:"required,eq=1.0"`
-	Metadata *WorkflowMetadata  `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	Agents   map[string]*Agent  `yaml:"agents,omitempty" json:"agents,omitempty"`
-	Workflow *WorkflowDef       `yaml:"workflow" json:"workflow" validate:"required"`
-	
+	Version  string            `yaml:"version" json:"version" validate:"required,eq=1.0"`
+	Metadata *WorkflowMetadata `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	Agents   map[string]*Agent `yaml:"agents,omitempty" json:"agents,omitempty"`
+	Workflow *WorkflowDef      `yaml:"workflow" json:"workflow" validate:"required"`
+
 	// Internal fields for tracking
 	SourceFile string   `yaml:"-" json:"-"`
 	Position   Position `yaml:"-" json:"-"`
@@ -116,7 +116,7 @@ type WorkflowMetadata struct {
 	Author      string   `yaml:"author,omitempty" json:"author,omitempty"`
 	Tags        []string `yaml:"tags,omitempty" json:"tags,omitempty"`
 	Version     string   `yaml:"version,omitempty" json:"version,omitempty"`
-	
+
 	Position Position `yaml:"-" json:"-"`
 }
 
@@ -131,7 +131,7 @@ type Agent struct {
 	Uses         string                 `yaml:"uses,omitempty" json:"uses,omitempty"`
 	With         map[string]interface{} `yaml:"with,omitempty" json:"with,omitempty"`
 	Policies     *AgentPolicies         `yaml:"policies,omitempty" json:"policies,omitempty"`
-	
+
 	Position Position `yaml:"-" json:"-"`
 }
 
@@ -141,7 +141,7 @@ type AgentPolicies struct {
 	Timeout              *Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	RequireHumanApproval bool      `yaml:"require_human_approval,omitempty" json:"require_human_approval,omitempty"`
 	CostLimit            string    `yaml:"cost_limit,omitempty" json:"cost_limit,omitempty"`
-	
+
 	Position Position `yaml:"-" json:"-"`
 }
 
@@ -152,7 +152,7 @@ type Tool struct {
 	Script    string                 `yaml:"script,omitempty" json:"script,omitempty"`
 	MCPServer string                 `yaml:"mcp_server,omitempty" json:"mcp_server,omitempty"`
 	Config    map[string]interface{} `yaml:"config,omitempty" json:"config,omitempty"`
-	
+
 	Position Position `yaml:"-" json:"-"`
 }
 
@@ -162,7 +162,7 @@ type WorkflowDef struct {
 	State   map[string]interface{} `yaml:"state,omitempty" json:"state,omitempty"`
 	Steps   []*Step                `yaml:"steps" json:"steps" validate:"required,min=1"`
 	Outputs map[string]interface{} `yaml:"outputs,omitempty" json:"outputs,omitempty"`
-	
+
 	Position Position `yaml:"-" json:"-"`
 }
 
@@ -178,7 +178,7 @@ type InputParam struct {
 	MinItems    *int        `yaml:"min_items,omitempty" json:"min_items,omitempty"`
 	MaxItems    *int        `yaml:"max_items,omitempty" json:"max_items,omitempty"`
 	Enum        []string    `yaml:"enum,omitempty" json:"enum,omitempty"`
-	
+
 	Position Position `yaml:"-" json:"-"`
 }
 
@@ -190,14 +190,14 @@ func (ip *InputParam) UnmarshalYAML(value *yaml.Node) error {
 		ip.Required = true
 		return nil
 	}
-	
+
 	// Handle full object syntax
 	type inputParamAlias InputParam
 	var temp inputParamAlias
 	if err := value.Decode(&temp); err != nil {
 		return err
 	}
-	
+
 	*ip = InputParam(temp)
 	return nil
 }
@@ -217,7 +217,7 @@ type Step struct {
 	Timeout   *Duration              `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	Retry     *RetryConfig           `yaml:"retry,omitempty" json:"retry,omitempty"`
 	OnError   []*ErrorHandler        `yaml:"on_error,omitempty" json:"on_error,omitempty"`
-	
+
 	Position Position `yaml:"-" json:"-"`
 }
 
@@ -227,7 +227,7 @@ type RetryConfig struct {
 	Backoff      string    `yaml:"backoff,omitempty" json:"backoff,omitempty" validate:"omitempty,oneof=linear exponential"`
 	InitialDelay *Duration `yaml:"initial_delay,omitempty" json:"initial_delay,omitempty"`
 	MaxDelay     *Duration `yaml:"max_delay,omitempty" json:"max_delay,omitempty"`
-	
+
 	Position Position `yaml:"-" json:"-"`
 }
 
@@ -237,7 +237,7 @@ type ErrorHandler struct {
 	Fallback string                 `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 	Output   map[string]interface{} `yaml:"output,omitempty" json:"output,omitempty"`
 	Return   map[string]interface{} `yaml:"return,omitempty" json:"return,omitempty"`
-	
+
 	Position Position `yaml:"-" json:"-"`
 }
 
@@ -252,12 +252,12 @@ func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 	if err := value.Decode(&s); err != nil {
 		return err
 	}
-	
+
 	dur, err := time.ParseDuration(s)
 	if err != nil {
 		return fmt.Errorf("invalid duration format '%s': %w", s, err)
 	}
-	
+
 	d.Duration = dur
 	return nil
 }
@@ -273,12 +273,12 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
-	
+
 	dur, err := time.ParseDuration(s)
 	if err != nil {
 		return fmt.Errorf("invalid duration format '%s': %w", s, err)
 	}
-	
+
 	d.Duration = dur
 	return nil
 }

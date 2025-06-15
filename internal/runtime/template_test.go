@@ -10,7 +10,7 @@ import (
 
 func TestTemplateEngine_BasicRendering(t *testing.T) {
 	te := NewTemplateEngine()
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Metadata: &ast.WorkflowMetadata{
@@ -44,7 +44,7 @@ func TestTemplateEngine_BasicRendering(t *testing.T) {
 
 func TestTemplateEngine_StateVariables(t *testing.T) {
 	te := NewTemplateEngine()
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -75,7 +75,7 @@ func TestTemplateEngine_StateVariables(t *testing.T) {
 
 func TestTemplateEngine_StepVariables(t *testing.T) {
 	te := NewTemplateEngine()
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -94,7 +94,7 @@ func TestTemplateEngine_StepVariables(t *testing.T) {
 		Status:   StepStatusCompleted,
 		Response: "Hello, world!",
 		Output: map[string]interface{}{
-			"response": "Hello, world!",
+			"response":  "Hello, world!",
 			"sentiment": "positive",
 		},
 	}
@@ -123,7 +123,7 @@ func TestTemplateEngine_StepVariables(t *testing.T) {
 
 func TestTemplateEngine_MetadataVariables(t *testing.T) {
 	te := NewTemplateEngine()
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Metadata: &ast.WorkflowMetadata{
@@ -149,7 +149,7 @@ func TestTemplateEngine_MetadataVariables(t *testing.T) {
 
 func TestTemplateEngine_WorkflowVariables(t *testing.T) {
 	te := NewTemplateEngine()
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -176,7 +176,7 @@ func TestTemplateEngine_WorkflowVariables(t *testing.T) {
 
 func TestTemplateEngine_EnvironmentVariables(t *testing.T) {
 	te := NewTemplateEngine()
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -205,7 +205,7 @@ func TestTemplateEngine_EnvironmentVariables(t *testing.T) {
 
 func TestTemplateEngine_NoVariables(t *testing.T) {
 	te := NewTemplateEngine()
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -231,7 +231,7 @@ func TestTemplateEngine_NoVariables(t *testing.T) {
 
 func TestTemplateEngine_Errors(t *testing.T) {
 	te := NewTemplateEngine()
-	
+
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{

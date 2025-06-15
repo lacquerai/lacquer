@@ -19,15 +19,15 @@ type Validator struct {
 
 // ValidationError represents a validation error with context
 type ValidationError struct {
-	Message  string `json:"message"`
-	Path     string `json:"path"`
-	Value    interface{} `json:"value,omitempty"`
+	Message string      `json:"message"`
+	Path    string      `json:"path"`
+	Value   interface{} `json:"value,omitempty"`
 }
 
 // ValidationResult contains the results of workflow validation
 type ValidationResult struct {
-	Valid  bool               `json:"valid"`
-	Errors []ValidationError  `json:"errors,omitempty"`
+	Valid  bool              `json:"valid"`
+	Errors []ValidationError `json:"errors,omitempty"`
 }
 
 // NewValidator creates a new schema validator
@@ -35,7 +35,7 @@ func NewValidator() (*Validator, error) {
 	// Get the schema file path relative to this package
 	_, currentFile, _, _ := runtime.Caller(0)
 	schemaPath := filepath.Join(filepath.Dir(currentFile), "schema.json")
-	
+
 	// Read and compile the schema
 	schemaData, err := os.ReadFile(schemaPath)
 	if err != nil {
@@ -111,7 +111,7 @@ func (v *Validator) ValidateBytes(data []byte) (*ValidationResult, error) {
 // convertValidationErrors converts jsonschema validation errors to our format
 func (v *Validator) convertValidationErrors(err *jsonschema.ValidationError) []ValidationError {
 	var errors []ValidationError
-	
+
 	// Add the main error
 	errors = append(errors, ValidationError{
 		Message: err.Message,
