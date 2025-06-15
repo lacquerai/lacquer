@@ -93,7 +93,7 @@ func TestGlobalFlags(t *testing.T) {
 
 	flag = rootCmd.PersistentFlags().Lookup("log-level")
 	assert.NotNil(t, flag)
-	assert.Equal(t, "info", flag.DefValue)
+	assert.Equal(t, "disabled", flag.DefValue)
 
 	flag = rootCmd.PersistentFlags().Lookup("output")
 	assert.NotNil(t, flag)
