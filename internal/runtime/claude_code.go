@@ -3,14 +3,13 @@ package runtime
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -18,40 +17,26 @@ import (
 
 // ClaudeCodeProvider implements the ModelProvider interface using Claude Code CLI
 type ClaudeCodeProvider struct {
-	name           string
-	executablePath string
-	workingDir     string
-	models         []string
-	sessions       map[string]*ClaudeCodeSession
-	sessionMutex   sync.RWMutex
-	config         *ClaudeCodeConfig
+	session                 *ClaudeCodeSession
+	name                    string
+	executablePath          string
+	workingDir              string
+	config                  *ClaudeCodeConfig
+	defaultProgressCallback ProgressCallback
 }
 
 // ClaudeCodeConfig contains configuration for Claude Code provider
 type ClaudeCodeConfig struct {
-	ExecutablePath   string        `yaml:"executable_path"`
-	WorkingDirectory string        `yaml:"working_directory"`
-	SessionTimeout   time.Duration `yaml:"session_timeout"`
-	MaxSessions      int           `yaml:"max_sessions"`
-	Model            string        `yaml:"model"`
-	EnableTools      bool          `yaml:"enable_tools"`
-	LogLevel         string        `yaml:"log_level"`
-}
-
-// ClaudeCodeSession represents an active Claude Code session
-type ClaudeCodeSession struct {
-	ID           string
-	Process      *exec.Cmd
-	Stdin        io.WriteCloser
-	Stdout       io.ReadCloser
-	Stderr       io.ReadCloser
-	Scanner      *bufio.Scanner
-	ErrorScanner *bufio.Scanner
-	CreatedAt    time.Time
-	LastUsed     time.Time
-	WorkingDir   string
-	Mutex        sync.Mutex
-	Active       bool
+	ExecutablePath   string           `yaml:"executable_path"`
+	WorkingDirectory string           `yaml:"working_directory"`
+	SessionTimeout   time.Duration    `yaml:"session_timeout"`
+	MaxSessions      int              `yaml:"max_sessions"`
+	Model            string           `yaml:"model"`
+	EnableTools      bool             `yaml:"enable_tools"`
+	LogLevel         string           `yaml:"log_level"`
+	EnableStreaming  bool             `yaml:"enable_streaming"`
+	ShowProgress     bool             `yaml:"show_progress"`
+	ProgressCallback ProgressCallback `yaml:"-"` // Custom progress callback, not serializable
 }
 
 // ClaudeCodeResponse represents a response from Claude Code
@@ -71,6 +56,72 @@ type ClaudeCodeToolUse struct {
 	Error      string                 `json:"error,omitempty"`
 }
 
+// StreamMessage represents a message in the streaming JSON output
+type StreamMessage struct {
+	Type            string            `json:"type"`
+	Subtype         string            `json:"subtype,omitempty"`
+	Message         *AssistantMessage `json:"message,omitempty"`
+	SessionID       string            `json:"session_id,omitempty"`
+	ParentToolUseID string            `json:"parent_tool_use_id,omitempty"`
+	IsError         bool              `json:"is_error,omitempty"`
+	Result          string            `json:"result,omitempty"`
+	DurationMS      int               `json:"duration_ms,omitempty"`
+	DurationAPIMS   int               `json:"duration_api_ms,omitempty"`
+	NumTurns        int               `json:"num_turns,omitempty"`
+	TotalCostUSD    float64           `json:"total_cost_usd,omitempty"`
+	Usage           *Usage            `json:"usage,omitempty"`
+	CWD             string            `json:"cwd,omitempty"`
+	Tools           []string          `json:"tools,omitempty"`
+	Model           string            `json:"model,omitempty"`
+	PermissionMode  string            `json:"permissionMode,omitempty"`
+	APIKeySource    string            `json:"apiKeySource,omitempty"`
+	MCPServers      []interface{}     `json:"mcp_servers,omitempty"`
+}
+
+// AssistantMessage represents the message content in assistant responses
+type AssistantMessage struct {
+	ID           string         `json:"id"`
+	Type         string         `json:"type"`
+	Role         string         `json:"role"`
+	Model        string         `json:"model"`
+	Content      []ContentBlock `json:"content"`
+	StopReason   string         `json:"stop_reason"`
+	StopSequence string         `json:"stop_sequence"`
+	Usage        *Usage         `json:"usage"`
+}
+
+// ContentBlock represents a content block in the message
+type ContentBlock struct {
+	Type      string                 `json:"type"`
+	Text      string                 `json:"text,omitempty"`
+	ID        string                 `json:"id,omitempty"`
+	Name      string                 `json:"name,omitempty"`
+	Input     map[string]interface{} `json:"input,omitempty"`
+	Content   string                 `json:"content,omitempty"`
+	ToolUseID string                 `json:"tool_use_id,omitempty"`
+}
+
+// Usage represents token usage information
+type Usage struct {
+	InputTokens              int                    `json:"input_tokens"`
+	CacheCreationInputTokens int                    `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int                    `json:"cache_read_input_tokens,omitempty"`
+	OutputTokens             int                    `json:"output_tokens"`
+	ServiceTier              string                 `json:"service_tier,omitempty"`
+	ServerToolUse            map[string]interface{} `json:"server_tool_use,omitempty"`
+}
+
+// ProgressCallback is a function that receives progress updates during streaming
+type ProgressCallback func(status string, details map[string]interface{})
+
+// StreamingOptions contains options for streaming responses
+type StreamingOptions struct {
+	EnableStreaming  bool
+	ProgressCallback ProgressCallback
+	ShowToolUse      bool
+	ShowThinking     bool
+}
+
 // Default configuration for Claude Code
 func DefaultClaudeCodeConfig() *ClaudeCodeConfig {
 	return &ClaudeCodeConfig{
@@ -78,9 +129,11 @@ func DefaultClaudeCodeConfig() *ClaudeCodeConfig {
 		WorkingDirectory: "",       // Use current directory
 		SessionTimeout:   30 * time.Minute,
 		MaxSessions:      5,
-		Model:            "claude-3-5-sonnet-20241022", // Default to latest
+		Model:            "sonnet",
 		EnableTools:      true,
 		LogLevel:         "info",
+		EnableStreaming:  true, // Enable streaming by default
+		ShowProgress:     true, // Show progress by default
 	}
 }
 
@@ -106,13 +159,28 @@ func NewClaudeCodeProvider(config *ClaudeCodeConfig) (*ClaudeCodeProvider, error
 		}
 	}
 
+	// Set up default progress callback
+	var defaultProgressCallback ProgressCallback
+	if config.ProgressCallback != nil {
+		// Use custom callback if provided
+		defaultProgressCallback = config.ProgressCallback
+	} else if config.ShowProgress {
+		// Use default progress callback that logs to console
+		defaultProgressCallback = func(status string, details map[string]interface{}) {
+			log.Info().
+				Str("status", status).
+				Interface("details", details).
+				Msg("Claude Code progress")
+		}
+	}
+	// If ShowProgress is false and no custom callback, defaultProgressCallback will be nil
+
 	provider := &ClaudeCodeProvider{
-		name:           "claude-code",
-		executablePath: execPath,
-		workingDir:     workingDir,
-		models:         getSupportedClaudeModels(),
-		sessions:       make(map[string]*ClaudeCodeSession),
-		config:         config,
+		name:                    "local",
+		executablePath:          execPath,
+		workingDir:              workingDir,
+		config:                  config,
+		defaultProgressCallback: defaultProgressCallback,
 	}
 
 	log.Info().
@@ -124,33 +192,36 @@ func NewClaudeCodeProvider(config *ClaudeCodeConfig) (*ClaudeCodeProvider, error
 	return provider, nil
 }
 
-// Generate generates a response using Claude Code
-func (p *ClaudeCodeProvider) Generate(ctx context.Context, request *ModelRequest) (string, *TokenUsage, error) {
-	// Get or create session
-	session, err := p.getOrCreateSession(ctx, request.RequestID)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to get Claude Code session: %w", err)
+// NewClaudeCodeProviderWithCallback creates a new Claude Code provider with a custom progress callback
+func NewClaudeCodeProviderWithCallback(config *ClaudeCodeConfig, progressCallback ProgressCallback) (*ClaudeCodeProvider, error) {
+	if config == nil {
+		config = DefaultClaudeCodeConfig()
 	}
 
-	// Update last used time
-	session.LastUsed = time.Now()
+	// Set the custom progress callback
+	config.ProgressCallback = progressCallback
 
-	// Send request to Claude Code
-	response, err := p.sendRequest(ctx, session, request)
+	return NewClaudeCodeProvider(config)
+}
+
+// Generate generates a response using Claude Code with streaming enabled by default
+func (p *ClaudeCodeProvider) Generate(ctx context.Context, request *ModelRequest) (string, *TokenUsage, error) {
+	// Use streaming with default progress callback if enabled
+	options := &StreamingOptions{
+		EnableStreaming:  p.config.EnableStreaming,
+		ProgressCallback: p.defaultProgressCallback,
+		ShowToolUse:      true,
+		ShowThinking:     true,
+	}
+	return p.GenerateWithOptions(ctx, request, options)
+}
+
+// GenerateWithOptions generates a response using Claude Code with streaming options
+func (p *ClaudeCodeProvider) GenerateWithOptions(ctx context.Context, request *ModelRequest, options *StreamingOptions) (string, *TokenUsage, error) {
+	// Send request to Claude Code with streaming support
+	response, err := p.sendRequestWithOptions(ctx, request, options)
 	if err != nil {
-		// If session failed, try to recreate it once
-		log.Warn().Err(err).Str("session_id", session.ID).Msg("Session failed, attempting to recreate")
-
-		p.closeSession(session.ID)
-		session, err = p.getOrCreateSession(ctx, request.RequestID)
-		if err != nil {
-			return "", nil, fmt.Errorf("failed to recreate Claude Code session: %w", err)
-		}
-
-		response, err = p.sendRequest(ctx, session, request)
-		if err != nil {
-			return "", nil, fmt.Errorf("failed to send request to Claude Code: %w", err)
-		}
+		return "", nil, fmt.Errorf("failed to send request to Claude Code: %w", err)
 	}
 
 	// Parse response and extract content
@@ -159,7 +230,7 @@ func (p *ClaudeCodeProvider) Generate(ctx context.Context, request *ModelRequest
 		return "", nil, fmt.Errorf("Claude Code error: %s", response.Error)
 	}
 
-	// Estimate token usage (Claude Code doesn't provide exact counts)
+	// Extract token usage from response metadata if available
 	tokenUsage := &TokenUsage{
 		PromptTokens:     estimateTokens(request.Prompt + request.SystemPrompt),
 		CompletionTokens: estimateTokens(content),
@@ -170,14 +241,32 @@ func (p *ClaudeCodeProvider) Generate(ctx context.Context, request *ModelRequest
 	return content, tokenUsage, nil
 }
 
+func (p *ClaudeCodeProvider) Close() error {
+	if p.session != nil {
+		p.session.Stderr.Close()
+		p.session.Stdout.Close()
+		p.session.Stdin.Close()
+		p.session.Process.Process.Kill()
+		p.session = nil
+	}
+
+	return nil
+}
+
+// GenerateWithProgress generates a response using Claude Code with progress callbacks
+func (p *ClaudeCodeProvider) GenerateWithProgress(ctx context.Context, request *ModelRequest, progressCallback ProgressCallback) (string, *TokenUsage, error) {
+	options := &StreamingOptions{
+		EnableStreaming:  true,
+		ProgressCallback: progressCallback,
+		ShowToolUse:      true,
+		ShowThinking:     true,
+	}
+	return p.GenerateWithOptions(ctx, request, options)
+}
+
 // GetName returns the provider name
 func (p *ClaudeCodeProvider) GetName() string {
 	return p.name
-}
-
-// SupportedModels returns the list of supported models
-func (p *ClaudeCodeProvider) SupportedModels() []string {
-	return p.models
 }
 
 // ListModels returns the Claude Code model (single model for local provider)
@@ -203,68 +292,28 @@ func (p *ClaudeCodeProvider) ListModels(ctx context.Context) ([]ModelInfo, error
 	return models, nil
 }
 
-// IsModelSupported checks if a model is supported
-func (p *ClaudeCodeProvider) IsModelSupported(model string) bool {
-	for _, supported := range p.models {
-		if supported == model {
-			return true
-		}
-	}
-	return false
-}
-
-// Close closes all sessions and cleans up resources
-func (p *ClaudeCodeProvider) Close() error {
-	p.sessionMutex.Lock()
-	defer p.sessionMutex.Unlock()
-
-	var lastErr error
-	for sessionID := range p.sessions {
-		if err := p.closeSessionUnsafe(sessionID); err != nil {
-			lastErr = err
-		}
-	}
-
-	log.Info().Msg("Claude Code provider closed")
-	return lastErr
-}
-
-// getOrCreateSession gets an existing session or creates a new one
-func (p *ClaudeCodeProvider) getOrCreateSession(ctx context.Context, requestID string) (*ClaudeCodeSession, error) {
-	sessionID := requestID
-	if sessionID == "" {
-		sessionID = generateSessionID()
-	}
-
-	p.sessionMutex.Lock()
-	defer p.sessionMutex.Unlock()
-
-	// Check if session exists and is active
-	if session, exists := p.sessions[sessionID]; exists && session.Active {
-		return session, nil
-	}
-
-	// Clean up old sessions if we're at the limit
-	if len(p.sessions) >= p.config.MaxSessions {
-		p.cleanupOldestSessionUnsafe()
-	}
-
-	// Create new session
-	session, err := p.createSessionUnsafe(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-
-	p.sessions[sessionID] = session
-	return session, nil
+type ClaudeCodeSession struct {
+	Process      *exec.Cmd
+	Stdin        io.WriteCloser
+	Stdout       io.ReadCloser
+	Stderr       io.ReadCloser
+	Scanner      *bufio.Scanner
+	ErrorScanner *bufio.Scanner
+	WorkingDir   string
 }
 
 // createSessionUnsafe creates a new Claude Code session (caller must hold lock)
-func (p *ClaudeCodeProvider) createSessionUnsafe(ctx context.Context, sessionID string) (*ClaudeCodeSession, error) {
-	// Build command arguments
+func (p *ClaudeCodeProvider) execute(ctx context.Context, request *ModelRequest) (*ClaudeCodeSession, error) {
+	prompt := request.Prompt
+	if request.SystemPrompt != "" {
+		prompt = fmt.Sprintf("System: %s\n\nUser: %s", request.SystemPrompt, request.Prompt)
+	}
 	args := []string{
 		"--p",
+		"--verbose",
+		"--output-format", "stream-json",
 		"--model", p.config.Model,
+		prompt,
 	}
 
 	// Create command
@@ -299,55 +348,36 @@ func (p *ClaudeCodeProvider) createSessionUnsafe(ctx context.Context, sessionID 
 	}
 
 	session := &ClaudeCodeSession{
-		ID:           sessionID,
 		Process:      cmd,
 		Stdin:        stdin,
 		Stdout:       stdout,
 		Stderr:       stderr,
 		Scanner:      bufio.NewScanner(stdout),
 		ErrorScanner: bufio.NewScanner(stderr),
-		CreatedAt:    time.Now(),
-		LastUsed:     time.Now(),
 		WorkingDir:   p.workingDir,
-		Active:       true,
 	}
-
-	log.Debug().
-		Str("session_id", sessionID).
-		Str("working_dir", p.workingDir).
-		Msg("Created new Claude Code session")
-
+	p.session = session
 	return session, nil
 }
 
-// sendRequest sends a request to Claude Code session
-func (p *ClaudeCodeProvider) sendRequest(ctx context.Context, session *ClaudeCodeSession, request *ModelRequest) (*ClaudeCodeResponse, error) {
-	session.Mutex.Lock()
-	defer session.Mutex.Unlock()
-
-	if !session.Active {
-		return nil, fmt.Errorf("session %s is not active", session.ID)
-	}
-
-	// Build the prompt with system prompt if provided
-	fullPrompt := request.Prompt
-	if request.SystemPrompt != "" {
-		fullPrompt = fmt.Sprintf("System: %s\n\nUser: %s", request.SystemPrompt, request.Prompt)
-	}
-
-	// Send the prompt
-	_, err := session.Stdin.Write([]byte(fullPrompt + "\n"))
+// sendRequestWithOptions sends a request to Claude Code session with streaming options
+func (p *ClaudeCodeProvider) sendRequestWithOptions(ctx context.Context, request *ModelRequest, options *StreamingOptions) (*ClaudeCodeResponse, error) {
+	session, err := p.execute(ctx, request)
 	if err != nil {
-		session.Active = false
-		return nil, fmt.Errorf("failed to write to Claude Code stdin: %w", err)
+		return nil, fmt.Errorf("failed to execute Claude Code: %w", err)
 	}
 
-	// Read response with timeout
+	// Read response with timeout and optional progress callback
 	responseChan := make(chan *ClaudeCodeResponse, 1)
 	errorChan := make(chan error, 1)
 
 	go func() {
-		response, err := p.readResponse(session)
+		var progressCallback ProgressCallback
+		if options != nil && options.EnableStreaming && options.ProgressCallback != nil {
+			progressCallback = options.ProgressCallback
+		}
+
+		response, err := p.readStreamingResponse(session, progressCallback)
 		if err != nil {
 			errorChan <- err
 		} else {
@@ -366,119 +396,143 @@ func (p *ClaudeCodeProvider) sendRequest(ctx context.Context, session *ClaudeCod
 	}
 }
 
-// readResponse reads a response from Claude Code session
-func (p *ClaudeCodeProvider) readResponse(session *ClaudeCodeSession) (*ClaudeCodeResponse, error) {
-	var responseLines []string
-	var inResponse bool
+// readStreamingResponse reads a streaming JSON response from Claude Code session
+func (p *ClaudeCodeProvider) readStreamingResponse(session *ClaudeCodeSession, progressCallback ProgressCallback) (*ClaudeCodeResponse, error) {
+	var finalResponse *ClaudeCodeResponse
+	var responseContent strings.Builder
+	var toolUses []ClaudeCodeToolUse
 
-	// Claude Code outputs responses in a specific format
-	// We need to parse the output to extract the actual response
+	// Read streaming JSON messages
 	for session.Scanner.Scan() {
-		line := session.Scanner.Text()
+		line := strings.TrimSpace(session.Scanner.Text())
 
-		// Skip empty lines and prompts
-		if line == "" || strings.HasPrefix(line, "> ") {
+		// Skip empty lines
+		if line == "" {
 			continue
 		}
 
-		// Look for response start/end markers or content
-		if strings.Contains(line, "Assistant:") || inResponse {
-			inResponse = true
+		// Parse JSON message
+		var message StreamMessage
+		if err := json.Unmarshal([]byte(line), &message); err != nil {
+			// If it's not JSON, it might be legacy output - handle gracefully
+			log.Debug().Str("line", line).Msg("Non-JSON output received")
+			continue
+		}
 
-			// Clean up the line
-			cleaned := strings.TrimSpace(line)
-			if strings.HasPrefix(cleaned, "Assistant:") {
-				cleaned = strings.TrimSpace(strings.TrimPrefix(cleaned, "Assistant:"))
+		// Handle different message types
+		switch message.Type {
+		case "system":
+			if message.Subtype == "init" && progressCallback != nil {
+				progressCallback("Initializing Claude Code session", map[string]interface{}{
+					"model": message.Model,
+					"tools": message.Tools,
+					"cwd":   message.CWD,
+				})
 			}
 
-			if cleaned != "" {
-				responseLines = append(responseLines, cleaned)
+		case "assistant":
+			if message.Message != nil {
+				// Process assistant message content
+				for _, content := range message.Message.Content {
+					switch content.Type {
+					case "text":
+						responseContent.WriteString(content.Text)
+						if progressCallback != nil {
+							progressCallback("Generating response", map[string]interface{}{
+								"content_preview": truncateString(content.Text, 100),
+							})
+						}
+
+					case "tool_use":
+						toolUse := ClaudeCodeToolUse{
+							Name:       content.Name,
+							Parameters: content.Input,
+						}
+						toolUses = append(toolUses, toolUse)
+
+						if progressCallback != nil {
+							progressCallback("Using tool", map[string]interface{}{
+								"tool_name": content.Name,
+								"tool_id":   content.ID,
+							})
+						}
+
+					case "tool_result":
+						// Update the corresponding tool use with result
+						for i := range toolUses {
+							if toolUses[i].Name != "" { // Find matching tool use
+								toolUses[i].Result = content.Content
+								break
+							}
+						}
+
+						if progressCallback != nil {
+							progressCallback("Tool completed", map[string]interface{}{
+								"tool_result_preview": truncateString(content.Content, 100),
+							})
+						}
+					}
+				}
+
+				// Usage information is handled in the final response metadata
 			}
 
-			// Check for natural ending
-			if strings.HasSuffix(line, ".") || strings.HasSuffix(line, "!") || strings.HasSuffix(line, "?") {
-				// Look ahead to see if there's more content
-				// For now, we'll assume single responses
-				break
+		case "result":
+			// Final result message
+			if progressCallback != nil {
+				status := "Completed"
+				if message.IsError {
+					status = "Error"
+				}
+				progressCallback(status, map[string]interface{}{
+					"duration_ms":     message.DurationMS,
+					"duration_api_ms": message.DurationAPIMS,
+					"num_turns":       message.NumTurns,
+					"total_cost_usd":  message.TotalCostUSD,
+				})
 			}
+
+			// Build final response
+			finalResponse = &ClaudeCodeResponse{
+				Content:   responseContent.String(),
+				ToolUses:  toolUses,
+				SessionID: message.SessionID,
+				Metadata: map[string]interface{}{
+					"working_dir":     session.WorkingDir,
+					"session_id":      message.SessionID,
+					"duration_ms":     message.DurationMS,
+					"duration_api_ms": message.DurationAPIMS,
+					"num_turns":       message.NumTurns,
+					"total_cost_usd":  message.TotalCostUSD,
+				},
+			}
+
+			if message.IsError {
+				finalResponse.Error = message.Result
+			}
+
+			// We have the final result, break out of the loop
+			break
 		}
 	}
 
 	if err := session.Scanner.Err(); err != nil {
-		session.Active = false
 		return nil, fmt.Errorf("error reading from Claude Code stdout: %w", err)
 	}
 
-	if len(responseLines) == 0 {
-		return nil, fmt.Errorf("no response received from Claude Code")
+	if finalResponse == nil {
+		return nil, fmt.Errorf("no final response received from Claude Code")
 	}
 
-	response := &ClaudeCodeResponse{
-		Content:   strings.Join(responseLines, "\n"),
-		SessionID: session.ID,
-		Metadata: map[string]interface{}{
-			"working_dir": session.WorkingDir,
-			"session_id":  session.ID,
-		},
-	}
-
-	return response, nil
+	return finalResponse, nil
 }
 
-// closeSession closes a specific session
-func (p *ClaudeCodeProvider) closeSession(sessionID string) error {
-	p.sessionMutex.Lock()
-	defer p.sessionMutex.Unlock()
-	return p.closeSessionUnsafe(sessionID)
-}
-
-// closeSessionUnsafe closes a session (caller must hold lock)
-func (p *ClaudeCodeProvider) closeSessionUnsafe(sessionID string) error {
-	session, exists := p.sessions[sessionID]
-	if !exists {
-		return nil
+// truncateString truncates a string to a maximum length
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
 	}
-
-	session.Active = false
-
-	// Close pipes
-	if session.Stdin != nil {
-		session.Stdin.Close()
-	}
-	if session.Stdout != nil {
-		session.Stdout.Close()
-	}
-	if session.Stderr != nil {
-		session.Stderr.Close()
-	}
-
-	// Terminate process
-	if session.Process != nil {
-		session.Process.Process.Kill()
-		session.Process.Wait()
-	}
-
-	delete(p.sessions, sessionID)
-
-	log.Debug().Str("session_id", sessionID).Msg("Closed Claude Code session")
-	return nil
-}
-
-// cleanupOldestSessionUnsafe removes the oldest session (caller must hold lock)
-func (p *ClaudeCodeProvider) cleanupOldestSessionUnsafe() {
-	var oldestID string
-	var oldestTime time.Time
-
-	for id, session := range p.sessions {
-		if oldestID == "" || session.LastUsed.Before(oldestTime) {
-			oldestID = id
-			oldestTime = session.LastUsed
-		}
-	}
-
-	if oldestID != "" {
-		p.closeSessionUnsafe(oldestID)
-	}
+	return s[:maxLen] + "..."
 }
 
 // Helper functions
@@ -532,82 +586,8 @@ func detectClaudeCodeExecutable(configPath string) (string, error) {
 	return "", fmt.Errorf("Claude Code executable not found. Please install Claude Code CLI or set executable_path in configuration")
 }
 
-// getSupportedClaudeModels returns the list of supported Claude models
-func getSupportedClaudeModels() []string {
-	return []string{
-		"claude-3-5-sonnet-20241022",
-		"claude-3-5-sonnet-20240620",
-		"claude-3-opus-20240229",
-		"claude-3-sonnet-20240229",
-		"claude-3-haiku-20240307",
-	}
-}
-
-// generateSessionID generates a unique session ID
-func generateSessionID() string {
-	return fmt.Sprintf("claude-code-%d", time.Now().UnixNano())
-}
-
 // estimateTokens provides a rough token count estimate
 func estimateTokens(text string) int {
 	// Rough estimation: ~4 characters per token for English text
 	return len(text) / 4
-}
-
-// validateClaudeCodeInstallation validates that Claude Code is properly installed
-func validateClaudeCodeInstallation(execPath string) error {
-	// Try to run claude --version
-	cmd := exec.Command(execPath, "--version")
-	output, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to run Claude Code version check: %w", err)
-	}
-
-	// Check if output contains expected version information
-	outputStr := string(output)
-	if !strings.Contains(strings.ToLower(outputStr), "claude") {
-		return fmt.Errorf("unexpected version output from Claude Code: %s", outputStr)
-	}
-
-	return nil
-}
-
-// parseClaudeCodeOutput parses output from Claude Code to extract structured information
-func parseClaudeCodeOutput(output string) (*ClaudeCodeResponse, error) {
-	// Claude Code may output tool usage, code blocks, or plain text
-	// This is a basic parser that can be enhanced based on actual output format
-
-	response := &ClaudeCodeResponse{
-		Content:  output,
-		Metadata: make(map[string]interface{}),
-	}
-
-	// Look for tool usage patterns
-	toolPattern := regexp.MustCompile(`(?s)<function_calls>(.*?)</function_calls>`)
-	toolMatches := toolPattern.FindAllStringSubmatch(output, -1)
-
-	for _, match := range toolMatches {
-		if len(match) > 1 {
-			// Parse tool usage
-			toolUse := &ClaudeCodeToolUse{
-				Name:       "unknown",
-				Parameters: make(map[string]interface{}),
-			}
-
-			// Basic extraction - this would need to be more sophisticated
-			// for actual Claude Code tool parsing
-			toolContent := match[1]
-			if strings.Contains(toolContent, "bash") {
-				toolUse.Name = "bash"
-			} else if strings.Contains(toolContent, "read") {
-				toolUse.Name = "read"
-			} else if strings.Contains(toolContent, "write") {
-				toolUse.Name = "write"
-			}
-
-			response.ToolUses = append(response.ToolUses, *toolUse)
-		}
-	}
-
-	return response, nil
 }

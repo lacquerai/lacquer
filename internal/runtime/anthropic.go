@@ -242,11 +242,6 @@ func (p *AnthropicProvider) GetName() string {
 	return p.name
 }
 
-// SupportedModels returns the list of supported models
-func (p *AnthropicProvider) SupportedModels() []string {
-	return p.models
-}
-
 // ListModels dynamically fetches available models from the Anthropic API
 func (p *AnthropicProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	url := fmt.Sprintf("%s/v1/models", p.baseURL)

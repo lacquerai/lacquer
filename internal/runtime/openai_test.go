@@ -15,18 +15,6 @@ import (
 )
 
 func TestNewOpenAIProvider(t *testing.T) {
-	t.Run("with valid config", func(t *testing.T) {
-		config := &OpenAIConfig{
-			APIKey: "test-api-key",
-		}
-
-		provider, err := NewOpenAIProvider(config)
-		require.NoError(t, err)
-		assert.NotNil(t, provider)
-		assert.Equal(t, "openai", provider.GetName())
-		assert.True(t, len(provider.SupportedModels()) > 0)
-	})
-
 	t.Run("with nil config and env var", func(t *testing.T) {
 		// Set environment variable
 		os.Setenv("OPENAI_API_KEY", "env-api-key")
@@ -49,52 +37,6 @@ func TestNewOpenAIProvider(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, provider)
 		assert.Contains(t, err.Error(), "API key is required")
-	})
-}
-
-func TestOpenAIProvider_ModelSupport(t *testing.T) {
-	provider := &OpenAIProvider{
-		models: getSupportedOpenAIModels(),
-	}
-
-	t.Run("supported models", func(t *testing.T) {
-		supportedModels := []string{
-			"gpt-4o",
-			"gpt-4-turbo",
-			"gpt-4",
-			"gpt-3.5-turbo",
-		}
-
-		for _, model := range supportedModels {
-			assert.True(t, provider.IsModelSupported(model), "model %s should be supported", model)
-		}
-	})
-
-	t.Run("unsupported models", func(t *testing.T) {
-		unsupportedModels := []string{
-			"invalid-model",
-			"claude-3-opus",
-			"gemini-pro",
-		}
-
-		for _, model := range unsupportedModels {
-			assert.False(t, provider.IsModelSupported(model), "model %s should not be supported", model)
-		}
-	})
-
-	t.Run("model list not empty", func(t *testing.T) {
-		models := provider.SupportedModels()
-		assert.NotEmpty(t, models)
-
-		// Check some expected models are present
-		modelSet := make(map[string]bool)
-		for _, model := range models {
-			modelSet[model] = true
-		}
-
-		assert.True(t, modelSet["gpt-4o"], "should include gpt-4o")
-		assert.True(t, modelSet["gpt-4"], "should include gpt-4")
-		assert.True(t, modelSet["gpt-3.5-turbo"], "should include gpt-3.5-turbo")
 	})
 }
 

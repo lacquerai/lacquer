@@ -19,7 +19,6 @@ type OpenAIProvider struct {
 	name       string
 	apiKey     string
 	baseURL    string
-	models     []string
 	httpClient *http.Client
 	config     *OpenAIConfig
 }
@@ -212,15 +211,9 @@ func NewOpenAIProvider(config *OpenAIConfig) (*OpenAIProvider, error) {
 		name:       "openai",
 		apiKey:     config.APIKey,
 		baseURL:    config.BaseURL,
-		models:     getSupportedOpenAIModels(),
 		httpClient: httpClient,
 		config:     config,
 	}
-
-	log.Info().
-		Str("base_url", config.BaseURL).
-		Int("supported_models", len(provider.models)).
-		Msg("OpenAI provider initialized")
 
 	return provider, nil
 }
@@ -263,11 +256,6 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *ModelRequest) (s
 // GetName returns the provider name
 func (p *OpenAIProvider) GetName() string {
 	return p.name
-}
-
-// SupportedModels returns the list of supported models
-func (p *OpenAIProvider) SupportedModels() []string {
-	return p.models
 }
 
 // ListModels dynamically fetches available models from the OpenAI API
@@ -342,16 +330,6 @@ func (p *OpenAIProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		Msg("Successfully fetched models from OpenAI API")
 
 	return models, nil
-}
-
-// IsModelSupported checks if a model is supported
-func (p *OpenAIProvider) IsModelSupported(model string) bool {
-	for _, supported := range p.models {
-		if supported == model {
-			return true
-		}
-	}
-	return false
 }
 
 // Close cleans up resources
@@ -532,34 +510,6 @@ func (p *OpenAIProvider) calculateCost(model string, usage OpenAIUsage) float64 
 	completionCost := float64(usage.CompletionTokens) / 1000.0 * cost.completion
 
 	return promptCost + completionCost
-}
-
-// getSupportedOpenAIModels returns the list of supported OpenAI models
-func getSupportedOpenAIModels() []string {
-	return []string{
-		"gpt-4o",
-		"gpt-4o-2024-05-13",
-		"gpt-4o-mini",
-		"gpt-4o-mini-2024-07-18",
-		"gpt-4-turbo",
-		"gpt-4-turbo-2024-04-09",
-		"gpt-4-turbo-preview",
-		"gpt-4-0125-preview",
-		"gpt-4-1106-preview",
-		"gpt-4",
-		"gpt-4-0314",
-		"gpt-4-0613",
-		"gpt-4-32k",
-		"gpt-4-32k-0314",
-		"gpt-4-32k-0613",
-		"gpt-3.5-turbo",
-		"gpt-3.5-turbo-0125",
-		"gpt-3.5-turbo-1106",
-		"gpt-3.5-turbo-0613",
-		"gpt-3.5-turbo-16k",
-		"gpt-3.5-turbo-16k-0613",
-		"gpt-3.5-turbo-instruct",
-	}
 }
 
 // getDefaultOpenAIConfig returns default configuration values

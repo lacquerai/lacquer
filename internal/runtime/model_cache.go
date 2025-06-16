@@ -15,7 +15,7 @@ import (
 // ModelCache handles caching of model lists from providers
 type ModelCache struct {
 	cacheDir string
-	mu       sync.RWMutex
+	mu       *sync.RWMutex
 }
 
 // CachedModels represents cached model data
@@ -41,6 +41,7 @@ func NewModelCache() *ModelCache {
 
 	return &ModelCache{
 		cacheDir: cacheDir,
+		mu:       &sync.RWMutex{},
 	}
 }
 
@@ -76,14 +77,7 @@ func (mc *ModelCache) GetModels(ctx context.Context, provider ModelProvider) ([]
 			return cached.Models, nil
 		}
 
-		// No cache available, fall back to static list
-		log.Warn().
-			Err(err).
-			Str("provider", provider.GetName()).
-			Msg("Failed to fetch models, using static fallback")
-
-		staticModels := mc.getStaticModels(provider)
-		return staticModels, nil
+		return nil, err
 	}
 
 	// Cache the new data
@@ -174,19 +168,4 @@ func (mc *ModelCache) saveToCache(providerName string, models []ModelInfo) {
 // getCacheFilePath returns the cache file path for a provider
 func (mc *ModelCache) getCacheFilePath(providerName string) string {
 	return filepath.Join(mc.cacheDir, fmt.Sprintf("%s_models.json", providerName))
-}
-
-// getStaticModels returns static model list as fallback
-func (mc *ModelCache) getStaticModels(provider ModelProvider) []ModelInfo {
-	staticModels := provider.SupportedModels()
-	models := make([]ModelInfo, len(staticModels))
-
-	for i, modelID := range staticModels {
-		models[i] = ModelInfo{
-			ID:       modelID,
-			Provider: provider.GetName(),
-		}
-	}
-
-	return models
 }

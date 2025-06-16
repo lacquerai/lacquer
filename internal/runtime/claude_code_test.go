@@ -77,45 +77,6 @@ func TestEstimateTokens(t *testing.T) {
 	assert.Equal(t, 0, estimateTokens(""))
 }
 
-func TestClaudeCodeProvider_Basic(t *testing.T) {
-	// Create a mock configuration that doesn't require actual Claude Code
-	config := &ClaudeCodeConfig{
-		ExecutablePath:   "/bin/echo", // Use echo as a mock
-		WorkingDirectory: os.TempDir(),
-		SessionTimeout:   1 * time.Minute,
-		MaxSessions:      2,
-		Model:            "claude-3-5-sonnet-20241022",
-		EnableTools:      true,
-		LogLevel:         "debug",
-	}
-
-	// We can't easily test the full provider without Claude Code installed
-	// So we'll test the basic structure and methods
-
-	provider := &ClaudeCodeProvider{
-		name:           "claude-code",
-		executablePath: config.ExecutablePath,
-		workingDir:     config.WorkingDirectory,
-		models:         getSupportedClaudeModels(),
-		sessions:       make(map[string]*ClaudeCodeSession),
-		config:         config,
-	}
-
-	// Test basic methods
-	assert.Equal(t, "claude-code", provider.GetName())
-
-	models := provider.SupportedModels()
-	assert.NotEmpty(t, models)
-	assert.Contains(t, models, "claude-3-5-sonnet-20241022")
-
-	assert.True(t, provider.IsModelSupported("claude-3-5-sonnet-20241022"))
-	assert.False(t, provider.IsModelSupported("nonexistent-model"))
-
-	// Test close (should not error even with no sessions)
-	err := provider.Close()
-	assert.NoError(t, err)
-}
-
 func TestClaudeCodeSession_Structure(t *testing.T) {
 	session := &ClaudeCodeSession{
 		ID:         "test-session",

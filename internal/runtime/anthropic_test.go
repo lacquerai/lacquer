@@ -43,27 +43,6 @@ func TestNewAnthropicProvider(t *testing.T) {
 	assert.NotNil(t, provider)
 	assert.Equal(t, "anthropic", provider.GetName())
 }
-
-func TestAnthropicProvider_SupportedModels(t *testing.T) {
-	config := &AnthropicConfig{
-		APIKey: "sk-ant-test-key-12345",
-	}
-
-	provider, err := NewAnthropicProvider(config)
-	require.NoError(t, err)
-
-	models := provider.SupportedModels()
-	assert.NotEmpty(t, models)
-	assert.Contains(t, models, "claude-3-5-sonnet-20241022")
-	assert.Contains(t, models, "claude-3-opus-20240229")
-	assert.Contains(t, models, "claude-3-sonnet-20240229")
-	assert.Contains(t, models, "claude-3-haiku-20240307")
-
-	// Test IsModelSupported
-	assert.True(t, provider.IsModelSupported("claude-3-5-sonnet-20241022"))
-	assert.False(t, provider.IsModelSupported("nonexistent-model"))
-}
-
 func TestAnthropicProvider_BuildRequest(t *testing.T) {
 	config := &AnthropicConfig{
 		APIKey: "sk-ant-test-key-12345",

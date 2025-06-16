@@ -79,9 +79,9 @@ func TestModelRegistry_IsModelSupported(t *testing.T) {
 
 	registry.RegisterProvider(provider)
 
-	assert.True(t, registry.IsModelSupported("model1"))
-	assert.True(t, registry.IsModelSupported("model2"))
-	assert.False(t, registry.IsModelSupported("nonexistent"))
+	assert.True(t, registry.IsModelSupported("test", "model1"))
+	assert.True(t, registry.IsModelSupported("test", "model2"))
+	assert.False(t, registry.IsModelSupported("test", "nonexistent"))
 }
 
 func TestModelRegistry_Close(t *testing.T) {
@@ -118,26 +118,6 @@ func TestMockModelProvider_Generate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "Custom response", response)
 	assert.NotNil(t, usage)
-}
-
-func TestMockModelProvider_Methods(t *testing.T) {
-	provider := NewMockModelProvider("test", []string{"model1", "model2"})
-
-	// Test GetName
-	assert.Equal(t, "test", provider.GetName())
-
-	// Test SupportedModels
-	models := provider.SupportedModels()
-	assert.Equal(t, []string{"model1", "model2"}, models)
-
-	// Test IsModelSupported
-	assert.True(t, provider.IsModelSupported("model1"))
-	assert.True(t, provider.IsModelSupported("model2"))
-	assert.False(t, provider.IsModelSupported("model3"))
-
-	// Test Close
-	err := provider.Close()
-	assert.NoError(t, err)
 }
 
 func TestModelRequest_Structure(t *testing.T) {

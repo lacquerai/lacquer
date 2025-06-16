@@ -96,49 +96,6 @@ func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *Model
 	}, nil
 }
 
-// initializeProviders initializes and registers all available model providers
-func initializeProviders(registry *ModelRegistry) {
-	// Register Anthropic provider if API key is available
-	if apiKey := GetAnthropicAPIKeyFromEnv(); apiKey != "" {
-		anthropicProvider, err := NewAnthropicProvider(nil) // Use default config
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize Anthropic provider")
-		} else {
-			if err := registry.RegisterProvider(anthropicProvider); err != nil {
-				log.Warn().Err(err).Msg("Failed to register Anthropic provider")
-			} else {
-				log.Info().Msg("Anthropic provider registered successfully")
-			}
-		}
-	}
-
-	// Register Claude Code provider if CLI is available
-	claudeCodeProvider, err := NewClaudeCodeProvider(nil) // Use default config
-	if err != nil {
-		log.Debug().Err(err).Msg("Claude Code provider not available")
-	} else {
-		if err := registry.RegisterProvider(claudeCodeProvider); err != nil {
-			log.Warn().Err(err).Msg("Failed to register Claude Code provider")
-		} else {
-			log.Info().Msg("Claude Code provider registered successfully")
-		}
-	}
-
-	// Register OpenAI provider if API key is available
-	if apiKey := GetOpenAIAPIKeyFromEnv(); apiKey != "" {
-		openaiProvider, err := NewOpenAIProvider(nil) // Use default config
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize OpenAI provider")
-		} else {
-			if err := registry.RegisterProvider(openaiProvider); err != nil {
-				log.Warn().Err(err).Msg("Failed to register OpenAI provider")
-			} else {
-				log.Info().Msg("OpenAI provider registered successfully")
-			}
-		}
-	}
-}
-
 // ExecuteWorkflow runs a workflow with progress events sent to the given channel
 func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContext, progressChan chan<- ExecutionEvent) error {
 	log.Info().
@@ -747,7 +704,7 @@ func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (
 	}
 
 	// Enhance prompt with JSON schema instructions if outputs are defined
-	if step.Outputs != nil && len(step.Outputs) > 0 {
+	if len(step.Outputs) > 0 {
 		schema, schemaErr := e.schemaGenerator.GenerateJSONSchema(step.Outputs)
 		if schemaErr != nil {
 			log.Warn().

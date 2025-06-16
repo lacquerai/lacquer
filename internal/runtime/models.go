@@ -14,14 +14,8 @@ type ModelProvider interface {
 	// GetName returns the provider name
 	GetName() string
 
-	// SupportedModels returns a list of supported model names (cached, fallback)
-	SupportedModels() []string
-
 	// ListModels dynamically queries available models from the provider API
 	ListModels(ctx context.Context) ([]ModelInfo, error)
-
-	// IsModelSupported checks if a model is supported by this provider
-	IsModelSupported(model string) bool
 
 	// Close cleans up resources
 	Close() error
@@ -55,16 +49,18 @@ type ModelRequest struct {
 
 // ModelRegistry manages available model providers
 type ModelRegistry struct {
-	providers map[string]ModelProvider
-	modelMap  map[string]string // model -> provider name
-	mu        sync.RWMutex
+	modelCache *ModelCache
+	providers  map[string]ModelProvider
+	modelMap   map[string]map[string]bool
+	mu         sync.RWMutex
 }
 
 // NewModelRegistry creates a new model registry
 func NewModelRegistry() *ModelRegistry {
 	return &ModelRegistry{
-		providers: make(map[string]ModelProvider),
-		modelMap:  make(map[string]string),
+		modelCache: NewModelCache(),
+		providers:  make(map[string]ModelProvider),
+		modelMap:   make(map[string]map[string]bool),
 	}
 }
 
@@ -81,32 +77,19 @@ func (mr *ModelRegistry) RegisterProvider(provider ModelProvider) error {
 	mr.providers[name] = provider
 
 	// Register supported models
-	for _, model := range provider.SupportedModels() {
-		if existingProvider, exists := mr.modelMap[model]; exists {
-			return fmt.Errorf("model %s already supported by provider %s", model, existingProvider)
+	models, err := mr.modelCache.GetModels(context.Background(), provider)
+	if err != nil {
+		return fmt.Errorf("failed to get models: %w", err)
+	}
+
+	for _, model := range models {
+		if _, exists := mr.modelMap[name]; !exists {
+			mr.modelMap[name] = make(map[string]bool)
 		}
-		mr.modelMap[model] = name
+		mr.modelMap[name][model.ID] = true
 	}
 
 	return nil
-}
-
-// GetProvider returns the provider for a given model (legacy method for backward compatibility)
-func (mr *ModelRegistry) GetProvider(model string) (ModelProvider, error) {
-	mr.mu.RLock()
-	defer mr.mu.RUnlock()
-
-	providerName, exists := mr.modelMap[model]
-	if !exists {
-		return nil, fmt.Errorf("no provider found for model %s", model)
-	}
-
-	provider, exists := mr.providers[providerName]
-	if !exists {
-		return nil, fmt.Errorf("provider %s not found", providerName)
-	}
-
-	return provider, nil
 }
 
 // GetProviderForModel returns the provider for a specific model from a specific provider
@@ -119,8 +102,7 @@ func (mr *ModelRegistry) GetProviderForModel(providerName, model string) (ModelP
 		return nil, fmt.Errorf("provider %s not found", providerName)
 	}
 
-	// Check if the provider supports this model
-	if !provider.IsModelSupported(model) {
+	if !mr.IsModelSupported(providerName, model) {
 		return nil, fmt.Errorf("model %s not supported by provider %s", model, providerName)
 	}
 
@@ -165,12 +147,15 @@ func (mr *ModelRegistry) ListModels() []string {
 }
 
 // IsModelSupported checks if a model is supported
-func (mr *ModelRegistry) IsModelSupported(model string) bool {
+func (mr *ModelRegistry) IsModelSupported(providerName, model string) bool {
 	mr.mu.RLock()
 	defer mr.mu.RUnlock()
 
-	_, exists := mr.modelMap[model]
-	return exists
+	if _, exists := mr.modelMap[providerName]; !exists {
+		return false
+	}
+
+	return mr.modelMap[providerName][model]
 }
 
 // Close closes all providers
@@ -239,11 +224,6 @@ func (mp *MockModelProvider) Generate(ctx context.Context, request *ModelRequest
 // GetName returns the provider name
 func (mp *MockModelProvider) GetName() string {
 	return mp.name
-}
-
-// SupportedModels returns supported models
-func (mp *MockModelProvider) SupportedModels() []string {
-	return mp.supportedModels
 }
 
 // IsModelSupported checks if a model is supported
