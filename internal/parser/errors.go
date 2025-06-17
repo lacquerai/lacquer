@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lacquer/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/ast"
 	"gopkg.in/yaml.v3"
 )
 

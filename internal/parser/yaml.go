@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lacquer/lacquer/internal/ast"
-	"github.com/lacquer/lacquer/internal/parser/schema"
+	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/parser/schema"
 	"gopkg.in/yaml.v3"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lacquer/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/stretchr/testify/assert"
 )
 

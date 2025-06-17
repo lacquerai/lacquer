@@ -1,4 +1,4 @@
-module github.com/lacquer/lacquer
+module github.com/lacquerai/lacquer
 
 go 1.24.1
 

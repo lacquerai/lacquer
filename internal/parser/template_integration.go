@@ -4,8 +4,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lacquer/lacquer/internal/ast"
-	"github.com/lacquer/lacquer/internal/runtime"
+	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/runtime"
 )
 
 // TemplateValidator handles variable interpolation validation during parsing

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lacquer/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/ast"
 )
 
 // ErrorSeverity represents the severity level of an error

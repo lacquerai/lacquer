@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lacquer/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/ast"
 )
 
 // SemanticValidator provides comprehensive semantic validation for workflows

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/lacquer/lacquer/internal/cli"
+	"github.com/lacquerai/lacquer/internal/cli"
 )
 
 func main() {

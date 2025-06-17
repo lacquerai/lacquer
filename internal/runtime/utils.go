@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/lacquer/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/ast"
 )
 
 // generateRunID creates a unique identifier for a workflow execution

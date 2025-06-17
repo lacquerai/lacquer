@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/lacquer/lacquer/internal/ast"
-	"github.com/lacquer/lacquer/internal/parser"
-	"github.com/lacquer/lacquer/internal/runtime"
+	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/parser"
+	"github.com/lacquerai/lacquer/internal/runtime"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lacquer/lacquer/internal/parser"
+	"github.com/lacquerai/lacquer/internal/parser"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

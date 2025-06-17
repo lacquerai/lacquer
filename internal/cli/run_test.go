@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lacquer/lacquer/internal/ast"
-	"github.com/lacquer/lacquer/internal/runtime"
+	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
