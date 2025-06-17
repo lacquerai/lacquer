@@ -9,7 +9,7 @@ import (
 // ModelProvider defines the interface for AI model providers
 type ModelProvider interface {
 	// Generate generates a response from the model
-	Generate(ctx context.Context, request *ModelRequest) (string, *TokenUsage, error)
+	Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) (string, *TokenUsage, error)
 
 	// GetName returns the provider name
 	GetName() string

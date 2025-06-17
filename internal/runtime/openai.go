@@ -219,7 +219,7 @@ func NewOpenAIProvider(config *OpenAIConfig) (*OpenAIProvider, error) {
 }
 
 // Generate generates a response using the OpenAI API
-func (p *OpenAIProvider) Generate(ctx context.Context, request *ModelRequest) (string, *TokenUsage, error) {
+func (p *OpenAIProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) (string, *TokenUsage, error) {
 	// Build the OpenAI request
 	openaiReq, err := p.buildOpenAIRequest(request)
 	if err != nil {

@@ -207,7 +207,7 @@ func NewAnthropicProvider(config *AnthropicConfig) (*AnthropicProvider, error) {
 }
 
 // Generate generates a response using the Anthropic API
-func (p *AnthropicProvider) Generate(ctx context.Context, request *ModelRequest) (string, *TokenUsage, error) {
+func (p *AnthropicProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) (string, *TokenUsage, error) {
 	// Build the Anthropic request
 	anthropicReq, err := p.buildAnthropicRequest(request)
 	if err != nil {

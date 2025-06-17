@@ -19,6 +19,7 @@ const (
 	EventWorkflowCompleted ExecutionEventType = "workflow_completed"
 	EventWorkflowFailed    ExecutionEventType = "workflow_failed"
 	EventStepStarted       ExecutionEventType = "step_started"
+	EventStepProgress      ExecutionEventType = "step_progress"
 	EventStepCompleted     ExecutionEventType = "step_completed"
 	EventStepFailed        ExecutionEventType = "step_failed"
 	EventStepSkipped       ExecutionEventType = "step_skipped"
@@ -45,6 +46,7 @@ type Executor struct {
 	config          *ExecutorConfig
 	outputParser    *OutputParser
 	schemaGenerator *SchemaGenerator
+	progressChan    chan<- ExecutionEvent
 }
 
 // ExecutorConfig contains configuration for the executor
@@ -98,6 +100,7 @@ func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *Model
 
 // ExecuteWorkflow runs a workflow with progress events sent to the given channel
 func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContext, progressChan chan<- ExecutionEvent) error {
+	e.progressChan = progressChan
 	log.Info().
 		Str("workflow", getWorkflowNameFromContext(execCtx)).
 		Str("run_id", execCtx.RunID).
@@ -105,8 +108,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 		Msg("Starting workflow execution")
 
 	// Send workflow started event
-	if progressChan != nil {
-		progressChan <- ExecutionEvent{
+	if e.progressChan != nil {
+		e.progressChan <- ExecutionEvent{
 			Type:      EventWorkflowStarted,
 			Timestamp: time.Now(),
 			RunID:     execCtx.RunID,
@@ -123,8 +126,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 		execCtx.CurrentStepIndex = i
 
 		// Send step started event
-		if progressChan != nil {
-			progressChan <- ExecutionEvent{
+		if e.progressChan != nil {
+			e.progressChan <- ExecutionEvent{
 				Type:      EventStepStarted,
 				Timestamp: time.Now(),
 				RunID:     execCtx.RunID,
@@ -145,8 +148,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 				Msg("Step execution failed")
 
 			// Send step failed event
-			if progressChan != nil {
-				progressChan <- ExecutionEvent{
+			if e.progressChan != nil {
+				e.progressChan <- ExecutionEvent{
 					Type:      EventStepFailed,
 					Timestamp: time.Now(),
 					RunID:     execCtx.RunID,
@@ -169,8 +172,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 			execCtx.SetStepResult(step.ID, result)
 
 			// Send workflow failed event
-			if progressChan != nil {
-				progressChan <- ExecutionEvent{
+			if e.progressChan != nil {
+				e.progressChan <- ExecutionEvent{
 					Type:      EventWorkflowFailed,
 					Timestamp: time.Now(),
 					RunID:     execCtx.RunID,
@@ -181,8 +184,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 			return err
 		} else {
 			// Send step completed event
-			if progressChan != nil {
-				progressChan <- ExecutionEvent{
+			if e.progressChan != nil {
+				e.progressChan <- ExecutionEvent{
 					Type:      EventStepCompleted,
 					Timestamp: time.Now(),
 					RunID:     execCtx.RunID,
@@ -204,8 +207,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 	}
 
 	// Send workflow completed event
-	if progressChan != nil {
-		progressChan <- ExecutionEvent{
+	if e.progressChan != nil {
+		e.progressChan <- ExecutionEvent{
 			Type:      EventWorkflowCompleted,
 			Timestamp: time.Now(),
 			RunID:     execCtx.RunID,
@@ -347,10 +350,8 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error 
 		result.Output = stepOutput
 
 		// Store step outputs for template access
-		if stepOutput != nil {
-			for key, value := range stepOutput {
-				execCtx.SetState(fmt.Sprintf("steps.%s.%s", step.ID, key), value)
-			}
+		for key, value := range stepOutput {
+			execCtx.SetState(fmt.Sprintf("steps.%s.%s", step.ID, key), value)
 		}
 
 		// Process state updates for any step type
@@ -743,7 +744,7 @@ func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (
 	defer cancel()
 
 	// Call the model
-	response, tokenUsage, err := provider.Generate(ctx, request)
+	response, tokenUsage, err := provider.Generate(ctx, request, e.progressChan)
 	if err != nil {
 		return "", nil, fmt.Errorf("model generation failed: %w", err)
 	}
@@ -951,7 +952,7 @@ func initializeRequiredProviders(registry *ModelRegistry, requiredProviders map[
 // collectWorkflowOutputs collects and renders workflow-level outputs using the template engine
 func (e *Executor) collectWorkflowOutputs(execCtx *ExecutionContext) error {
 	workflowOutputs := execCtx.Workflow.Workflow.Outputs
-	if workflowOutputs == nil || len(workflowOutputs) == 0 {
+	if len(workflowOutputs) == 0 {
 		return nil // No outputs defined
 	}
 

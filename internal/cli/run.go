@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -226,6 +227,7 @@ func runWorkflow(workflowFile string) {
 	result.EndTime = time.Now()
 	result.Duration = result.EndTime.Sub(result.StartTime)
 	result.FinalState = execCtx.GetAllState()
+	result.Outputs = execCtx.GetWorkflowOutputs()
 
 	if err != nil {
 		result.Status = "failed"
@@ -261,10 +263,11 @@ func runWorkflow(workflowFile string) {
 func executeWithProgress(ctx context.Context, executor *runtime.Executor, execCtx *runtime.ExecutionContext, result *ExecutionResult) error {
 	// Create a progress channel for real-time updates
 	progressChan := make(chan runtime.ExecutionEvent, 100)
+	now := time.Now()
 
 	// Start progress reporter if enabled
 	if showProgress && !viper.GetBool("quiet") && viper.GetString("output") == "text" {
-		go progressReporter(progressChan, result)
+		go progressReporter(progressChan, result, now)
 	}
 
 	// Execute the workflow
@@ -276,7 +279,7 @@ func executeWithProgress(ctx context.Context, executor *runtime.Executor, execCt
 	return err
 }
 
-func progressReporter(progressChan <-chan runtime.ExecutionEvent, result *ExecutionResult) {
+func progressReporter(progressChan <-chan runtime.ExecutionEvent, result *ExecutionResult, now time.Time) {
 	for event := range progressChan {
 		switch event.Type {
 		case runtime.EventStepStarted:
@@ -284,9 +287,11 @@ func progressReporter(progressChan <-chan runtime.ExecutionEvent, result *Execut
 			if showSteps {
 				fmt.Printf("  📝 Step %d/%d: %s\n", result.StepsExecuted, result.StepsTotal, event.StepID)
 			} else {
-				fmt.Printf("  ▶️  Step %d/%d\n", result.StepsExecuted, result.StepsTotal)
+				fmt.Printf("  ▶️ Step %d/%d\n", result.StepsExecuted, result.StepsTotal)
 			}
-
+		case runtime.EventStepProgress:
+			message := strings.TrimSuffix(event.Metadata["message"].(string), "\n")
+			fmt.Printf("    %s\n", message)
 		case runtime.EventStepCompleted:
 			if showSteps {
 				fmt.Printf("  ✅ Completed: %s (%.2fs)\n", event.StepID, event.Duration.Seconds())
@@ -307,9 +312,6 @@ func progressReporter(progressChan <-chan runtime.ExecutionEvent, result *Execut
 
 func collectExecutionResults(execCtx *runtime.ExecutionContext, result *ExecutionResult) {
 	summary := execCtx.GetExecutionSummary()
-
-	// Set workflow outputs
-	result.Outputs = summary.Outputs
 
 	// Convert step results
 	result.StepResults = make([]StepExecutionResult, 0, len(summary.Steps))
@@ -446,11 +448,11 @@ func printExecutionSummary(result ExecutionResult) {
 		printTable(headers, rows)
 	}
 
-	// Show workflow outputs if they exist and workflow completed successfully
-	if result.Status == "completed" && len(result.Outputs) > 0 {
-		fmt.Printf("\n📤 Outputs:\n")
+	// Show workflow outputs if available
+	if len(result.Outputs) > 0 {
+		fmt.Printf("\n📤 Workflow Outputs:\n")
 		for k, v := range result.Outputs {
-			fmt.Printf("  %s = %v\n", k, v)
+			fmt.Printf("  %s: %v\n", k, v)
 		}
 	}
 
