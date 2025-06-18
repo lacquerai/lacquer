@@ -1,19 +1,12 @@
-# Lacquer - Where AI Workflows Get Their Shine ✨
-
 <div align="center">
-
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go Version](https://img.shields.io/badge/go-%3E%3D1.21-00ADD8)](https://go.dev/)
-[![Release](https://img.shields.io/github/v/release/lacquer/laq?include_prereleases)](https://github.com/lacquer/laq/releases)
-[![Discord](https://img.shields.io/discord/1234567890?label=Discord&logo=discord)](https://discord.gg/lacquer)
-
-**The GitHub Actions for AI Agent Workflows**
-
+<img src="https://github.com/user-attachments/assets/0c61330d-be8b-4e7d-bb7a-3fea9b7fe0aa">
+  
 [Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](https://docs.lacquer.ai) • [Examples](examples/) • [Community](https://discord.gg/lacquer)
-
 </div>
 
 ---
+
+
 
 ## 🚀 What is Lacquer?
 
