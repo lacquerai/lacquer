@@ -264,6 +264,7 @@ func (p *ClaudeCodeProvider) execute(ctx context.Context, request *ModelRequest)
 		"--verbose",
 		"--output-format", "stream-json",
 		"--model", p.config.Model,
+		"--dangerously-skip-permissions",
 		prompt,
 	}
 
@@ -465,12 +466,14 @@ func (p *ClaudeCodeProvider) processLine(line string, finalResponse **ClaudeCode
 			for _, content := range message.Message.Content {
 				switch content.Type {
 				case "tool_use":
-					options.ProgressChan <- p.progress(fmt.Sprintf("🔧 Using tool: %s \n", content.Name))
+					inputStr := p.formatInputParams(content.Input)
+					options.ProgressChan <- p.progress(fmt.Sprintf("🔧 Using tool: %s - %s", content.Name, inputStr))
 				case "tool_result":
 					options.ProgressChan <- p.progress("✅ Tool completed")
+				case "text":
+					options.ProgressChan <- p.progress(fmt.Sprintf("💬 %s", content.Text))
 				default:
-					options.ProgressChan <- p.progress("💪 Working...")
-
+					options.ProgressChan <- p.progress("💪 Working ...")
 				}
 			}
 		}
@@ -513,19 +516,6 @@ func truncateString(s string, maxLen int) string {
 	}
 	return s[:maxLen] + "..."
 }
-
-// nopWriteCloser is a dummy WriteCloser that does nothing
-type nopWriteCloser struct{}
-
-func (n *nopWriteCloser) Write(p []byte) (int, error) {
-	return len(p), nil
-}
-
-func (n *nopWriteCloser) Close() error {
-	return nil
-}
-
-// Helper functions
 
 // detectClaudeCodeExecutable detects the Claude Code executable path
 func detectClaudeCodeExecutable(configPath string) (string, error) {
@@ -583,6 +573,47 @@ func (p *ClaudeCodeProvider) progress(message string) ExecutionEvent {
 			"message": message,
 		},
 	}
+}
+
+// formatInputParams formats input parameters as a single-line key-value string
+func (p *ClaudeCodeProvider) formatInputParams(input map[string]interface{}) string {
+	if len(input) == 0 {
+		return "(no parameters)"
+	}
+
+	var parts []string
+	for key, value := range input {
+		// Format value based on type
+		var valueStr string
+		switch v := value.(type) {
+		case string:
+			// Truncate long strings
+			if len(v) > 50 {
+				valueStr = fmt.Sprintf("%.47s...", v)
+			} else {
+				valueStr = v
+			}
+		case bool:
+			valueStr = fmt.Sprintf("%t", v)
+		case int, int64, float64:
+			valueStr = fmt.Sprintf("%v", v)
+		default:
+			// For complex types, use JSON representation but keep it short
+			if jsonBytes, err := json.Marshal(v); err == nil {
+				jsonStr := string(jsonBytes)
+				if len(jsonStr) > 50 {
+					valueStr = fmt.Sprintf("%.47s...", jsonStr)
+				} else {
+					valueStr = jsonStr
+				}
+			} else {
+				valueStr = fmt.Sprintf("%v", v)
+			}
+		}
+		parts = append(parts, fmt.Sprintf("%s=%s", key, valueStr))
+	}
+
+	return strings.Join(parts, ", ")
 }
 
 // estimateTokens provides a rough token count estimate

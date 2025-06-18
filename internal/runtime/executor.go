@@ -64,7 +64,7 @@ type ExecutorConfig struct {
 func DefaultExecutorConfig() *ExecutorConfig {
 	return &ExecutorConfig{
 		MaxConcurrentSteps:   3, // Enable concurrent execution with reasonable limit
-		DefaultTimeout:       5 * time.Minute,
+		DefaultTimeout:       30 * time.Minute,
 		EnableRetries:        true,
 		MaxRetries:           3,
 		RetryDelay:           time.Second,
