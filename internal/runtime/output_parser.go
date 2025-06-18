@@ -76,9 +76,10 @@ func (p *OutputParser) ParseStepOutput(step *ast.Step, response string) (map[str
 		}
 	}
 
-	parsedOutputs["output"] = response
-
-	return parsedOutputs, nil
+	return map[string]interface{}{
+		"output":  response,
+		"outputs": parsedOutputs,
+	}, nil
 }
 
 // extractJSON attempts to extract JSON data from the response

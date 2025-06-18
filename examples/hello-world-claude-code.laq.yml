@@ -29,14 +29,20 @@ workflow:
       prompt: |
         Say hello to {{ inputs.name }} in a creative and friendly way.
         Make it warm and welcoming!
+      outputs:
+        greeting:
+          type: string
     - id: negate_greeting
       agent: greeter
       prompt: |
-        Use the following greeting: {{ steps.say_hello.output }}
+        Use the following greeting: {{ steps.say_hello.outputs.greeting }}
 
         Negate the greeting.
         Make it cold and unfriendly!
+      outputs:
+        greeting:
+          type: string
   
   outputs:
-    greeting: "{{ steps.say_hello.output }}"
-    negated_greeting: "{{ steps.negate_greeting.output }}"
+    greeting: "{{ steps.say_hello.outputs.greeting }}"
+    negated_greeting: "{{ steps.negate_greeting.outputs.greeting }}"
