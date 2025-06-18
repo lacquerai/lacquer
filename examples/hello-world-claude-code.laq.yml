@@ -7,42 +7,73 @@ metadata:
 
 # Define a single agent using Claude Code
 agents:
-  greeter:
+  claude:
     provider: local
     model: claude-code
-    temperature: 0.7
-    system_prompt: You are a friendly assistant who gives warm greetings.
+    temperature: 1
 
 # Define the workflow
 workflow:
   # Input parameter - name to greet
   inputs:
-    name:
+    task:
       type: string
-      description: Name of the person to greet
-      default: "World"
+      description: Task to perform
   
   # Single step workflow
   steps:
-    - id: say_hello
-      agent: greeter
+    - id: context_fetcher
+      agent: claude
       prompt: |
-        Say hello to {{ inputs.name }} in a creative and friendly way.
-        Make it warm and welcoming!
-      outputs:
-        greeting:
-          type: string
-    - id: negate_greeting
-      agent: greeter
-      prompt: |
-        Use the following greeting: {{ steps.say_hello.outputs.greeting }}
+        You are a helpful assistant that builds context for AI agents
+        to complete a coding task. You should read all the necessary files
+        in the repository to understand the context of the task.
 
-        Negate the greeting.
-        Make it cold and unfriendly!
+        Your task is as follows: {{ inputs.task }}
+
+        Output a distilled context for the agent to use to complete the task.
       outputs:
-        greeting:
+        context:
           type: string
+
+    - id: test_writer
+      agent: claude
+      prompt: |
+        You are a helpful assistant that writes tests for a given task.
+
+        The task is as follows: {{ inputs.task }}
+
+        The context is as follows: {{ steps.context_fetcher.outputs.context }}
+
+        Write a comprehensive test file for the task, this should include all edge cases and error scenarios.
+        It should be well documented and include all the necessary comments. 
+
+        Once completed, please output the path to the test file you created.
+      outputs:
+        test_file:
+          type: string
+
+    - id: test_implementer
+      agent: claude
+      prompt: |
+        You are a helpful assistant that implements a feature for a given task.
+
+        The task is as follows: {{ inputs.task }}
+
+        The context is as follows: {{ steps.context_fetcher.outputs.context }}
+
+        Another agent has written a test file for the task. The test file is as follows: {{ steps.test_writer.outputs.test_file }}
+
+        Implement the feature for the task.
+        The implementation should be well documented and include all the necessary comments. 
+
+        Once completed please output any paths to files that you have created.
+
+      outputs:
+        files:
+          type: array
+          items:
+            type: string
   
   outputs:
-    greeting: "{{ steps.say_hello.outputs.greeting }}"
-    negated_greeting: "{{ steps.negate_greeting.outputs.greeting }}"
+    files: "{{ steps.test_implementer.outputs.files }}"
