@@ -26,14 +26,15 @@ type ClaudeCodeProvider struct {
 
 // ClaudeCodeConfig contains configuration for Claude Code provider
 type ClaudeCodeConfig struct {
-	ExecutablePath   string        `yaml:"executable_path"`
-	WorkingDirectory string        `yaml:"working_directory"`
-	SessionTimeout   time.Duration `yaml:"session_timeout"`
-	MaxSessions      int           `yaml:"max_sessions"`
-	Model            string        `yaml:"model"`
-	EnableTools      bool          `yaml:"enable_tools"`
-	LogLevel         string        `yaml:"log_level"`
-	EnableStreaming  bool          `yaml:"enable_streaming"`
+	ExecutablePath             string        `yaml:"executable_path"`
+	WorkingDirectory           string        `yaml:"working_directory"`
+	SessionTimeout             time.Duration `yaml:"session_timeout"`
+	MaxSessions                int           `yaml:"max_sessions"`
+	Model                      string        `yaml:"model"`
+	LogLevel                   string        `yaml:"log_level"`
+	EnableStreaming            bool          `yaml:"enable_streaming"`
+	DangerouslySkipPermissions bool          `yaml:"dangerously_skip_permissions"`
+	WhitelistedTools           []string      `yaml:"whitelisted_tools"`
 }
 
 // ClaudeCodeResponse represents a response from Claude Code
@@ -118,13 +119,20 @@ type StreamingOptions struct {
 // Default configuration for Claude Code
 func DefaultClaudeCodeConfig() *ClaudeCodeConfig {
 	return &ClaudeCodeConfig{
-		ExecutablePath:   "claude", // Assumes claude is in PATH
-		WorkingDirectory: "",       // Use current directory
-		SessionTimeout:   30 * time.Minute,
-		MaxSessions:      5,
-		Model:            "sonnet",
-		EnableTools:      true,
-		LogLevel:         "info",
+		ExecutablePath:             "claude", // Assumes claude is in PATH
+		WorkingDirectory:           "",       // Use current directory
+		SessionTimeout:             30 * time.Minute,
+		MaxSessions:                5,
+		Model:                      "sonnet",
+		DangerouslySkipPermissions: false,
+		WhitelistedTools: []string{
+			"Read",
+			"Write",
+			"Edit",
+			"Grep",
+			"Bash",
+		},
+		LogLevel: "info",
 	}
 }
 
@@ -264,8 +272,15 @@ func (p *ClaudeCodeProvider) execute(ctx context.Context, request *ModelRequest)
 		"--verbose",
 		"--output-format", "stream-json",
 		"--model", p.config.Model,
-		"--dangerously-skip-permissions",
 		prompt,
+	}
+
+	if p.config.DangerouslySkipPermissions {
+		args = append(args, "--dangerously-skip-permissions")
+	}
+
+	if len(p.config.WhitelistedTools) > 0 {
+		args = append(args, "--allowedTools", strings.Join(p.config.WhitelistedTools, ","))
 	}
 
 	// Test if executable exists and is accessible
