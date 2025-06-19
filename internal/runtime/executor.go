@@ -80,7 +80,7 @@ func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *Model
 	}
 
 	if registry == nil {
-		registry = NewModelRegistry()
+		registry = NewModelRegistry(false)
 	}
 
 	// Only initialize providers that are used in the workflow

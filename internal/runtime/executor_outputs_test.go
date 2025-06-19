@@ -109,7 +109,7 @@ func TestExecutor_CollectWorkflowOutputs(t *testing.T) {
 
 			// Create executor
 			config := DefaultExecutorConfig()
-			registry := NewModelRegistry()
+			registry := NewModelRegistry(true)
 			executor, err := NewExecutor(config, workflow, registry)
 			require.NoError(t, err)
 
@@ -166,7 +166,7 @@ func TestExecutor_WorkflowOutputsInExecutionSummary(t *testing.T) {
 
 	// Create executor
 	config := DefaultExecutorConfig()
-	registry := NewModelRegistry()
+	registry := NewModelRegistry(true)
 	executor, err := NewExecutor(config, workflow, registry)
 	require.NoError(t, err)
 

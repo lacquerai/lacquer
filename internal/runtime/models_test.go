@@ -8,10 +8,16 @@ import (
 )
 
 func TestModelRegistry_RegisterProvider(t *testing.T) {
-	registry := NewModelRegistry()
+	registry := NewModelRegistry(true)
 
 	// Create mock provider
-	provider := NewMockModelProvider("test", []string{"model1", "model2"})
+	provider := NewMockModelProvider("test", []ModelInfo{
+		{
+			ID:       "model1",
+			Name:     "model1",
+			Provider: "test",
+		},
+	})
 
 	// Register provider
 	registry.RegisterProvider(provider)
@@ -21,16 +27,27 @@ func TestModelRegistry_RegisterProvider(t *testing.T) {
 	assert.Contains(t, providers, "test")
 
 	// Check models are registered
-	models := registry.ListModels()
-	assert.Contains(t, models, "model1")
-	assert.Contains(t, models, "model2")
+	assert.True(t, registry.IsModelSupported("test", "model1"))
+	assert.False(t, registry.IsModelSupported("test", "nonexistent"))
 }
 
 func TestModelRegistry_RegisterProvider_Duplicate(t *testing.T) {
-	registry := NewModelRegistry()
+	registry := NewModelRegistry(true)
 
-	provider1 := NewMockModelProvider("test", []string{"model1"})
-	provider2 := NewMockModelProvider("test", []string{"model2"})
+	provider1 := NewMockModelProvider("test", []ModelInfo{
+		{
+			ID:       "model1",
+			Name:     "model1",
+			Provider: "test",
+		},
+	})
+	provider2 := NewMockModelProvider("test", []ModelInfo{
+		{
+			ID:       "model2",
+			Name:     "model2",
+			Provider: "test",
+		},
+	})
 
 	// Register first provider
 	registry.RegisterProvider(provider1)
@@ -40,25 +57,45 @@ func TestModelRegistry_RegisterProvider_Duplicate(t *testing.T) {
 }
 
 func TestModelRegistry_GetProvider(t *testing.T) {
-	registry := NewModelRegistry()
-	provider := NewMockModelProvider("test", []string{"model1", "model2"})
+	registry := NewModelRegistry(true)
+	provider := NewMockModelProvider("test", []ModelInfo{
+		{
+			ID:       "model1",
+			Name:     "model1",
+			Provider: "test",
+		},
+	})
+	provider2 := NewMockModelProvider("test", []ModelInfo{
+		{
+			ID:       "model2",
+			Name:     "model2",
+			Provider: "test",
+		},
+	})
 
 	registry.RegisterProvider(provider)
+	registry.RegisterProvider(provider2)
 
 	// Get provider by model
-	retrieved, err := registry.GetProvider("model1")
+	retrieved, err := registry.GetProviderForModel("test", "model1")
 	assert.NoError(t, err)
 	assert.Equal(t, provider, retrieved)
 
 	// Get provider for non-existent model
-	_, err = registry.GetProvider("nonexistent")
+	_, err = registry.GetProviderForModel("test", "nonexistent")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no provider found")
+	assert.Contains(t, err.Error(), "not supported by provider")
 }
 
 func TestModelRegistry_GetProviderByName(t *testing.T) {
-	registry := NewModelRegistry()
-	provider := NewMockModelProvider("test", []string{"model1"})
+	registry := NewModelRegistry(true)
+	provider := NewMockModelProvider("test", []ModelInfo{
+		{
+			ID:       "model1",
+			Name:     "model1",
+			Provider: "test",
+		},
+	})
 
 	registry.RegisterProvider(provider)
 
@@ -74,8 +111,19 @@ func TestModelRegistry_GetProviderByName(t *testing.T) {
 }
 
 func TestModelRegistry_IsModelSupported(t *testing.T) {
-	registry := NewModelRegistry()
-	provider := NewMockModelProvider("test", []string{"model1", "model2"})
+	registry := NewModelRegistry(true)
+	provider := NewMockModelProvider("test", []ModelInfo{
+		{
+			ID:       "model1",
+			Name:     "model1",
+			Provider: "test",
+		},
+		{
+			ID:       "model2",
+			Name:     "model2",
+			Provider: "test",
+		},
+	})
 
 	registry.RegisterProvider(provider)
 
@@ -85,8 +133,14 @@ func TestModelRegistry_IsModelSupported(t *testing.T) {
 }
 
 func TestModelRegistry_Close(t *testing.T) {
-	registry := NewModelRegistry()
-	provider := NewMockModelProvider("test", []string{"model1"})
+	registry := NewModelRegistry(true)
+	provider := NewMockModelProvider("test", []ModelInfo{
+		{
+			ID:       "model1",
+			Name:     "model1",
+			Provider: "test",
+		},
+	})
 
 	registry.RegisterProvider(provider)
 
@@ -96,7 +150,13 @@ func TestModelRegistry_Close(t *testing.T) {
 }
 
 func TestMockModelProvider_Generate(t *testing.T) {
-	provider := NewMockModelProvider("test", []string{"model1"})
+	provider := NewMockModelProvider("test", []ModelInfo{
+		{
+			ID:       "model1",
+			Name:     "model1",
+			Provider: "test",
+		},
+	})
 
 	ctx := context.Background()
 	request := &ModelRequest{
@@ -105,7 +165,7 @@ func TestMockModelProvider_Generate(t *testing.T) {
 	}
 
 	// Test default response
-	response, usage, err := provider.Generate(ctx, request)
+	response, usage, err := provider.Generate(ctx, request, nil)
 	assert.NoError(t, err)
 	assert.Contains(t, response, "Mock response")
 	assert.Contains(t, response, "Hello, world!")
@@ -114,7 +174,7 @@ func TestMockModelProvider_Generate(t *testing.T) {
 
 	// Test custom response
 	provider.SetResponse("Hello, world!", "Custom response")
-	response, usage, err = provider.Generate(ctx, request)
+	response, usage, err = provider.Generate(ctx, request, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "Custom response", response)
 	assert.NotNil(t, usage)

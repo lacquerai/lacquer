@@ -19,8 +19,7 @@ func TestDefaultClaudeCodeConfig(t *testing.T) {
 	assert.Equal(t, "", config.WorkingDirectory)
 	assert.Equal(t, 30*time.Minute, config.SessionTimeout)
 	assert.Equal(t, 5, config.MaxSessions)
-	assert.Equal(t, "claude-3-5-sonnet-20241022", config.Model)
-	assert.True(t, config.EnableTools)
+	assert.Equal(t, "sonnet", config.Model)
 	assert.Equal(t, "info", config.LogLevel)
 }
 
@@ -45,26 +44,6 @@ func TestDetectClaudeCodeExecutable(t *testing.T) {
 	assert.Equal(t, "/bin/sh", path)
 }
 
-func TestGetSupportedClaudeModels(t *testing.T) {
-	models := getSupportedClaudeModels()
-
-	assert.NotEmpty(t, models)
-	assert.Contains(t, models, "claude-3-5-sonnet-20241022")
-	assert.Contains(t, models, "claude-3-opus-20240229")
-	assert.Contains(t, models, "claude-3-sonnet-20240229")
-	assert.Contains(t, models, "claude-3-haiku-20240307")
-}
-
-func TestGenerateSessionID(t *testing.T) {
-	id1 := generateSessionID()
-	time.Sleep(1 * time.Nanosecond) // Ensure different timestamps
-	id2 := generateSessionID()
-
-	assert.NotEqual(t, id1, id2)
-	assert.Contains(t, id1, "claude-code-")
-	assert.Contains(t, id2, "claude-code-")
-}
-
 func TestEstimateTokens(t *testing.T) {
 	text := "Hello, world!"
 	tokens := estimateTokens(text)
@@ -77,85 +56,15 @@ func TestEstimateTokens(t *testing.T) {
 	assert.Equal(t, 0, estimateTokens(""))
 }
 
-func TestClaudeCodeSession_Structure(t *testing.T) {
-	session := &ClaudeCodeSession{
-		ID:         "test-session",
-		CreatedAt:  time.Now(),
-		LastUsed:   time.Now(),
-		WorkingDir: "/tmp",
-		Active:     true,
-	}
-
-	assert.Equal(t, "test-session", session.ID)
-	assert.True(t, session.Active)
-	assert.Equal(t, "/tmp", session.WorkingDir)
-	assert.False(t, session.CreatedAt.IsZero())
-	assert.False(t, session.LastUsed.IsZero())
-}
-
-func TestClaudeCodeResponse_Structure(t *testing.T) {
-	response := &ClaudeCodeResponse{
-		Content:   "Hello, world!",
-		SessionID: "test-session",
-		Metadata: map[string]interface{}{
-			"working_dir": "/tmp",
-		},
-	}
-
-	assert.Equal(t, "Hello, world!", response.Content)
-	assert.Equal(t, "test-session", response.SessionID)
-	assert.Equal(t, "/tmp", response.Metadata["working_dir"])
-	assert.Empty(t, response.Error)
-}
-
-func TestClaudeCodeToolUse_Structure(t *testing.T) {
-	toolUse := &ClaudeCodeToolUse{
-		Name: "bash",
-		Parameters: map[string]interface{}{
-			"command": "ls -la",
-		},
-		Result: "total 8\ndrwxr-xr-x  2 user user 4096 Jan 1 12:00 .",
-	}
-
-	assert.Equal(t, "bash", toolUse.Name)
-	assert.Equal(t, "ls -la", toolUse.Parameters["command"])
-	assert.Contains(t, toolUse.Result, "total 8")
-	assert.Empty(t, toolUse.Error)
-}
-
-func TestParseClaudeCodeOutput(t *testing.T) {
-	// Test basic text output
-	output := "Hello, this is a simple response."
-	response, err := parseClaudeCodeOutput(output)
-	assert.NoError(t, err)
-	assert.Equal(t, output, response.Content)
-
-	// Test empty output
-	response, err = parseClaudeCodeOutput("")
-	assert.NoError(t, err)
-	assert.Equal(t, "", response.Content)
-}
-
-func TestValidateClaudeCodeInstallation(t *testing.T) {
-	// Test with a known good executable (using echo as a stand-in)
-	// This will fail validation because echo doesn't output "claude"
-	err := validateClaudeCodeInstallation("/bin/echo")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unexpected version output")
-
-	// Test with non-existent executable
-	err = validateClaudeCodeInstallation("/nonexistent/path")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to run Claude Code version check")
-}
-
 // Test Claude Code provider with mock (always runs)
 func TestClaudeCodeProvider_MockIntegration(t *testing.T) {
 	// Use mock provider instead of real Claude Code CLI
-	mockProvider := NewMockModelProvider("claude-code", []string{
-		"claude-3-5-sonnet-20241022",
-		"claude-3-sonnet",
-		"claude-3-haiku",
+	mockProvider := NewMockModelProvider("local", []ModelInfo{
+		{
+			ID:       "claude-code",
+			Name:     "claude-code",
+			Provider: "local",
+		},
 	})
 
 	// Set up mock response
@@ -171,7 +80,7 @@ func TestClaudeCodeProvider_MockIntegration(t *testing.T) {
 		RequestID: "test-request",
 	}
 
-	response, usage, err := mockProvider.Generate(ctx, request)
+	response, usage, err := mockProvider.Generate(ctx, request, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, response)
 	assert.NotNil(t, usage)
@@ -195,11 +104,6 @@ func TestClaudeCodeProvider_RealIntegration(t *testing.T) {
 		t.Skip("Claude Code not found, skipping real integration test")
 	}
 
-	// Validate installation
-	if err := validateClaudeCodeInstallation(execPath); err != nil {
-		t.Skipf("Claude Code installation validation failed: %v", err)
-	}
-
 	// Create provider
 	config := DefaultClaudeCodeConfig()
 	config.ExecutablePath = execPath
@@ -221,7 +125,7 @@ func TestClaudeCodeProvider_RealIntegration(t *testing.T) {
 		RequestID: "test-request",
 	}
 
-	response, usage, err := provider.Generate(ctx, request)
+	response, usage, err := provider.Generate(ctx, request, nil)
 	if err != nil {
 		t.Skipf("Claude Code generation failed (may not be properly configured): %v", err)
 	}
@@ -260,41 +164,13 @@ func BenchmarkClaudeCodeProvider_Generate(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		_, _, err := provider.Generate(ctx, request)
+		_, _, err := provider.Generate(ctx, request, nil)
 		cancel()
 
 		if err != nil {
 			b.Fatalf("Generation failed: %v", err)
 		}
 	}
-}
-
-func TestClaudeCodeProvider_SessionManagement(t *testing.T) {
-	config := &ClaudeCodeConfig{
-		ExecutablePath:   "/bin/echo",
-		WorkingDirectory: os.TempDir(),
-		SessionTimeout:   1 * time.Minute,
-		MaxSessions:      2,
-		Model:            "claude-3-5-sonnet-20241022",
-		EnableTools:      true,
-		LogLevel:         "debug",
-	}
-
-	provider := &ClaudeCodeProvider{
-		name:           "claude-code",
-		executablePath: config.ExecutablePath,
-		workingDir:     config.WorkingDirectory,
-		models:         getSupportedClaudeModels(),
-		sessions:       make(map[string]*ClaudeCodeSession),
-		config:         config,
-	}
-
-	// Test session limits
-	assert.Equal(t, 0, len(provider.sessions))
-
-	// Test close with no sessions
-	err := provider.Close()
-	assert.NoError(t, err)
 }
 
 func TestClaudeCodeProvider_WorkingDirectory(t *testing.T) {
@@ -313,8 +189,6 @@ func TestClaudeCodeProvider_WorkingDirectory(t *testing.T) {
 		name:           "claude-code",
 		executablePath: config.ExecutablePath,
 		workingDir:     tempDir,
-		models:         getSupportedClaudeModels(),
-		sessions:       make(map[string]*ClaudeCodeSession),
 		config:         config,
 	}
 

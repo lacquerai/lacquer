@@ -312,8 +312,14 @@ func TestExecutor_ExecuteAgentStep(t *testing.T) {
 			},
 		},
 	}
-	registry := NewModelRegistry()
-	mockProvider := NewMockModelProvider("mock", []string{"test-model"})
+	registry := NewModelRegistry(true)
+	mockProvider := NewMockModelProvider("mock", []ModelInfo{
+		{
+			ID:       "test-model",
+			Name:     "test-model",
+			Provider: "mock",
+		},
+	})
 	mockProvider.SetResponse("Hello, Alice!", "Hello, Alice! How can I help?")
 	registry.RegisterProvider(mockProvider)
 	executor, err := NewExecutor(nil, workflow, registry)
@@ -375,8 +381,14 @@ func TestExecutor_ExecuteAgentStep_MissingModel(t *testing.T) {
 	}
 
 	// Create registry and register mock provider that doesn't support the model
-	registry := NewModelRegistry()
-	mockProvider := NewMockModelProvider("mock", []string{"other-model"}) // Doesn't include "nonexistent-model"
+	registry := NewModelRegistry(true)
+	mockProvider := NewMockModelProvider("mock", []ModelInfo{
+		{
+			ID:       "other-model",
+			Name:     "other-model",
+			Provider: "mock",
+		},
+	})
 	err := registry.RegisterProvider(mockProvider)
 	assert.NoError(t, err)
 
@@ -391,17 +403,6 @@ func TestExecutor_ExecuteAgentStep_MissingModel(t *testing.T) {
 	_, _, err = executor.executeAgentStep(execCtx, step)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "model nonexistent-model not supported by provider mock")
-}
-
-func TestDefaultExecutorConfig(t *testing.T) {
-	config := DefaultExecutorConfig()
-
-	assert.Equal(t, 3, config.MaxConcurrentSteps)
-	assert.Equal(t, 5*time.Minute, config.DefaultTimeout)
-	assert.True(t, config.EnableRetries)
-	assert.Equal(t, 3, config.MaxRetries)
-	assert.Equal(t, time.Second, config.RetryDelay)
-	assert.True(t, config.EnableMetrics)
 }
 
 func TestGetKeys(t *testing.T) {

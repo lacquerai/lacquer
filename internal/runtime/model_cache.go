@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 type ModelCache struct {
 	cacheDir string
 	mu       *sync.RWMutex
+	disable  bool
 }
 
 // CachedModels represents cached model data
@@ -27,7 +29,7 @@ type CachedModels struct {
 }
 
 // NewModelCache creates a new model cache
-func NewModelCache() *ModelCache {
+func NewModelCache(disable bool) *ModelCache {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Warn().Err(err).Msg("Could not get user home directory, using current directory for cache")
@@ -39,9 +41,14 @@ func NewModelCache() *ModelCache {
 		log.Warn().Err(err).Str("dir", cacheDir).Msg("Could not create cache directory")
 	}
 
+	if flag.Lookup("test.v") != nil {
+		disable = true
+	}
+
 	return &ModelCache{
 		cacheDir: cacheDir,
 		mu:       &sync.RWMutex{},
+		disable:  disable,
 	}
 }
 
@@ -52,7 +59,7 @@ func (mc *ModelCache) GetModels(ctx context.Context, provider ModelProvider) ([]
 	mc.mu.RUnlock()
 
 	// Check if cache is valid and not expired
-	if cached != nil && time.Now().Before(cached.ExpiresAt) {
+	if cached != nil && time.Now().Before(cached.ExpiresAt) && !mc.disable {
 		log.Debug().
 			Str("provider", provider.GetName()).
 			Time("expires_at", cached.ExpiresAt).

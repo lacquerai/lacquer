@@ -148,7 +148,7 @@ func TestOpenAIProvider_Generate(t *testing.T) {
 		Prompt: "Hello, how are you?",
 	}
 
-	response, usage, err := provider.Generate(context.Background(), request)
+	response, usage, err := provider.Generate(context.Background(), request, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "Hello! How can I help you today?", response)
 	assert.NotNil(t, usage)
@@ -193,7 +193,7 @@ func TestOpenAIProvider_Generate_Error(t *testing.T) {
 			Prompt: "Hello",
 		}
 
-		_, _, err = provider.Generate(context.Background(), request)
+		_, _, err = provider.Generate(context.Background(), request, nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "Invalid request")
 	})
@@ -216,7 +216,7 @@ func TestOpenAIProvider_Generate_Error(t *testing.T) {
 		}
 
 		start := time.Now()
-		_, _, err = provider.Generate(context.Background(), request)
+		_, _, err = provider.Generate(context.Background(), request, nil)
 		duration := time.Since(start)
 
 		assert.Error(t, err)
@@ -249,7 +249,7 @@ func TestOpenAIProvider_Generate_Error(t *testing.T) {
 			Prompt: "Hello",
 		}
 
-		_, _, err = provider.Generate(ctx, request)
+		_, _, err = provider.Generate(ctx, request, nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "context deadline exceeded")
 	})
@@ -386,22 +386,6 @@ func TestOpenAIProvider_Close(t *testing.T) {
 	provider := &OpenAIProvider{}
 	err := provider.Close()
 	assert.NoError(t, err)
-}
-
-func TestGetSupportedOpenAIModels(t *testing.T) {
-	models := getSupportedOpenAIModels()
-
-	assert.NotEmpty(t, models)
-	assert.Contains(t, models, "gpt-4o")
-	assert.Contains(t, models, "gpt-4")
-	assert.Contains(t, models, "gpt-3.5-turbo")
-
-	// Ensure no duplicates
-	modelSet := make(map[string]bool)
-	for _, model := range models {
-		assert.False(t, modelSet[model], "duplicate model found: %s", model)
-		modelSet[model] = true
-	}
 }
 
 func TestGetDefaultOpenAIConfig(t *testing.T) {

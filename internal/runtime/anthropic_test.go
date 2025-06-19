@@ -214,7 +214,7 @@ func TestAnthropicProvider_Integration(t *testing.T) {
 		RequestID: "test-request",
 	}
 
-	response, usage, err := provider.Generate(ctx, request)
+	response, usage, err := provider.Generate(ctx, request, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, response)
 	assert.NotNil(t, usage)
@@ -274,7 +274,7 @@ func TestAnthropicProvider_MockServer(t *testing.T) {
 		Prompt: "Hello, world!",
 	}
 
-	response, usage, err := provider.Generate(ctx, request)
+	response, usage, err := provider.Generate(ctx, request, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "Hello, this is a test response from Claude!", response)
 	assert.Equal(t, 10, usage.PromptTokens)
@@ -309,7 +309,7 @@ func TestAnthropicProvider_ErrorHandling(t *testing.T) {
 		Prompt: "Hello, world!",
 	}
 
-	_, _, err = provider.Generate(ctx, request)
+	_, _, err = provider.Generate(ctx, request, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Internal server error")
 
@@ -325,7 +325,7 @@ func TestAnthropicProvider_ErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	defer provider.Close()
 
-	_, _, err = provider.Generate(ctx, request)
+	_, _, err = provider.Generate(ctx, request, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Invalid request")
 }
@@ -437,7 +437,7 @@ func BenchmarkAnthropicProvider_Generate(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		_, _, err := provider.Generate(ctx, request)
+		_, _, err := provider.Generate(ctx, request, nil)
 		cancel()
 
 		if err != nil {

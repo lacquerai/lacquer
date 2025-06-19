@@ -214,7 +214,6 @@ func (p *ClaudeCodeProvider) Close() error {
 	if p.session != nil {
 		p.session.Stderr.Close()
 		p.session.Stdout.Close()
-		p.session.Stdin.Close()
 		p.session.Process.Process.Kill()
 		p.session = nil
 	}
@@ -252,7 +251,6 @@ func (p *ClaudeCodeProvider) ListModels(ctx context.Context) ([]ModelInfo, error
 
 type ClaudeCodeSession struct {
 	Process      *exec.Cmd
-	Stdin        io.WriteCloser
 	Stdout       io.ReadCloser
 	Stderr       io.ReadCloser
 	Scanner      *bufio.Scanner

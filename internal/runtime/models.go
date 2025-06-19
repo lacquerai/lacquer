@@ -56,9 +56,9 @@ type ModelRegistry struct {
 }
 
 // NewModelRegistry creates a new model registry
-func NewModelRegistry() *ModelRegistry {
+func NewModelRegistry(disableCache bool) *ModelRegistry {
 	return &ModelRegistry{
-		modelCache: NewModelCache(),
+		modelCache: NewModelCache(disableCache),
 		providers:  make(map[string]ModelProvider),
 		modelMap:   make(map[string]map[string]bool),
 	}
@@ -134,18 +134,6 @@ func (mr *ModelRegistry) ListProviders() []string {
 	return names
 }
 
-// ListModels returns all supported models
-func (mr *ModelRegistry) ListModels() []string {
-	mr.mu.RLock()
-	defer mr.mu.RUnlock()
-
-	models := make([]string, 0, len(mr.modelMap))
-	for model := range mr.modelMap {
-		models = append(models, model)
-	}
-	return models
-}
-
 // IsModelSupported checks if a model is supported
 func (mr *ModelRegistry) IsModelSupported(providerName, model string) bool {
 	mr.mu.RLock()
@@ -176,12 +164,12 @@ func (mr *ModelRegistry) Close() error {
 // MockModelProvider is a mock implementation for testing
 type MockModelProvider struct {
 	name            string
-	supportedModels []string
+	supportedModels []ModelInfo
 	responses       map[string]string
 }
 
 // NewMockModelProvider creates a new mock model provider
-func NewMockModelProvider(name string, models []string) *MockModelProvider {
+func NewMockModelProvider(name string, models []ModelInfo) *MockModelProvider {
 	return &MockModelProvider{
 		name:            name,
 		supportedModels: models,
@@ -191,7 +179,7 @@ func NewMockModelProvider(name string, models []string) *MockModelProvider {
 
 // ListModels returns the supported models
 func (mp *MockModelProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	return nil, nil
+	return mp.supportedModels, nil
 }
 
 // SetResponse sets a mock response for a specific prompt
@@ -200,7 +188,7 @@ func (mp *MockModelProvider) SetResponse(prompt, response string) {
 }
 
 // Generate generates a mock response
-func (mp *MockModelProvider) Generate(ctx context.Context, request *ModelRequest) (string, *TokenUsage, error) {
+func (mp *MockModelProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) (string, *TokenUsage, error) {
 	// Check for specific response
 	if response, exists := mp.responses[request.Prompt]; exists {
 		return response, &TokenUsage{
@@ -229,7 +217,7 @@ func (mp *MockModelProvider) GetName() string {
 // IsModelSupported checks if a model is supported
 func (mp *MockModelProvider) IsModelSupported(model string) bool {
 	for _, supported := range mp.supportedModels {
-		if supported == model {
+		if supported.ID == model {
 			return true
 		}
 	}

@@ -19,9 +19,15 @@ import (
 // TestRuntimeComprehensive_EndToEndWorkflow tests complete workflow execution
 func TestRuntimeComprehensive_EndToEndWorkflow(t *testing.T) {
 
-	registry := NewModelRegistry()
+	registry := NewModelRegistry(true)
 	// Register mock provider
-	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
+	mockProvider := NewMockModelProvider("mock", []ModelInfo{
+		{
+			ID:       "gpt-4",
+			Name:     "gpt-4",
+			Provider: "mock",
+		},
+	})
 	mockProvider.SetResponse("Process this topic: artificial intelligence", "Mock analysis of artificial intelligence")
 	mockProvider.SetResponse("Build on: Mock analysis of artificial intelligence", "Extended analysis with more details")
 	mockProvider.SetResponse("Finalize with format summary: Extended analysis with more details", "Final summary completed")
@@ -125,6 +131,7 @@ func TestRuntimeComprehensive_EndToEndWorkflow(t *testing.T) {
 
 	assert.NotNil(t, step1Result)
 	assert.Equal(t, StepStatusCompleted, step1Result.Status)
+	assert.Nil(t, step1Result.Error)
 
 	assert.NotNil(t, step2Result)
 	assert.Equal(t, StepStatusCompleted, step2Result.Status)
@@ -139,9 +146,15 @@ func TestRuntimeComprehensive_EndToEndWorkflow(t *testing.T) {
 
 // TestRuntimeComprehensive_VariableInterpolation tests template variable resolution
 func TestRuntimeComprehensive_VariableInterpolation(t *testing.T) {
-	registry := NewModelRegistry()
+	registry := NewModelRegistry(true)
 	// Register mock provider for gpt-4
-	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
+	mockProvider := NewMockModelProvider("mock", []ModelInfo{
+		{
+			ID:       "gpt-4",
+			Name:     "gpt-4",
+			Provider: "mock",
+		},
+	})
 	mockProvider.SetResponse("Hello, Alice! You are 25 years old.", "Mock greeting response")
 	mockProvider.SetResponse("Summary for Alice: Mock greeting response", "Mock summary response")
 
@@ -214,9 +227,15 @@ func TestRuntimeComprehensive_VariableInterpolation(t *testing.T) {
 
 // TestRuntimeComprehensive_ConditionalExecution tests step conditions and skip logic
 func TestRuntimeComprehensive_ConditionalExecution(t *testing.T) {
-	registry := NewModelRegistry()
+	registry := NewModelRegistry(true)
 	// Register mock provider for gpt-4
-	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
+	mockProvider := NewMockModelProvider("mock", []ModelInfo{
+		{
+			ID:       "gpt-4",
+			Name:     "gpt-4",
+			Provider: "mock",
+		},
+	})
 	mockProvider.SetResponse("This always runs", "Mock always response")
 	mockProvider.SetResponse("This runs conditionally", "Mock conditional response")
 	mockProvider.SetResponse("This runs after conditional", "Mock final response")
@@ -333,9 +352,15 @@ func TestRuntimeComprehensive_ConditionalExecution(t *testing.T) {
 
 // TestRuntimeComprehensive_ErrorHandling tests error scenarios and recovery
 func TestRuntimeComprehensive_ErrorHandling(t *testing.T) {
-	registry := NewModelRegistry()
+	registry := NewModelRegistry(true)
 	// Register mock provider for gpt-4
-	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
+	mockProvider := NewMockModelProvider("mock", []ModelInfo{
+		{
+			ID:       "gpt-4",
+			Name:     "gpt-4",
+			Provider: "mock",
+		},
+	})
 	mockProvider.SetResponse("test", "Mock test response")
 
 	err := registry.RegisterProvider(mockProvider)
@@ -433,10 +458,16 @@ func TestRuntimeComprehensive_ErrorHandling(t *testing.T) {
 
 // TestRuntimeComprehensive_StateManagement tests state persistence and updates
 func TestRuntimeComprehensive_StateManagement(t *testing.T) {
-	registry := NewModelRegistry()
+	registry := NewModelRegistry(true)
 
 	// Register mock provider for gpt-4
-	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
+	mockProvider := NewMockModelProvider("mock", []ModelInfo{
+		{
+			ID:       "gpt-4",
+			Name:     "gpt-4",
+			Provider: "mock",
+		},
+	})
 	mockProvider.SetResponse("Processing item 1", "Mock item 1 response")
 	mockProvider.SetResponse("Adding item to list", "Mock item list response")
 	mockProvider.SetResponse("Updating metadata", "Mock metadata response")
@@ -520,10 +551,16 @@ func TestRuntimeComprehensive_StateManagement(t *testing.T) {
 
 // TestRuntimeComprehensive_Performance tests runtime performance characteristics
 func TestRuntimeComprehensive_Performance(t *testing.T) {
-	registry := NewModelRegistry()
+	registry := NewModelRegistry(true)
 
 	// Register mock provider for gpt-4
-	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
+	mockProvider := NewMockModelProvider("mock", []ModelInfo{
+		{
+			ID:       "gpt-4",
+			Name:     "gpt-4",
+			Provider: "mock",
+		},
+	})
 	for i := 0; i < 10; i++ {
 		mockProvider.SetResponse(fmt.Sprintf("Processing step %d", i), fmt.Sprintf("Mock response for step %d", i))
 	}
@@ -589,7 +626,7 @@ func TestRuntimeComprehensive_Performance(t *testing.T) {
 
 // TestRuntimeComprehensive_ConcurrentExecution tests concurrent step execution scenarios
 func TestRuntimeComprehensive_ConcurrentExecution(t *testing.T) {
-	registry := NewModelRegistry()
+	registry := NewModelRegistry(true)
 	// Configure executor for concurrent execution
 	config := &ExecutorConfig{
 		MaxConcurrentSteps: 3,
@@ -598,7 +635,13 @@ func TestRuntimeComprehensive_ConcurrentExecution(t *testing.T) {
 	}
 
 	// Register mock provider for gpt-4
-	mockProvider := NewMockModelProvider("mock", []string{"gpt-4"})
+	mockProvider := NewMockModelProvider("mock", []ModelInfo{
+		{
+			ID:       "gpt-4",
+			Name:     "gpt-4",
+			Provider: "mock",
+		},
+	})
 	mockProvider.SetResponse("Independent task 1", "Mock response 1")
 	mockProvider.SetResponse("Independent task 2", "Mock response 2")
 	mockProvider.SetResponse("Independent task 3", "Mock response 3")
@@ -668,7 +711,7 @@ func TestRuntimeComprehensive_ConcurrentExecution(t *testing.T) {
 // TestRuntimeComprehensive_HTTPMocked tests with real HTTP calls to mock servers
 func TestRuntimeComprehensive_HTTPMocked(t *testing.T) {
 	// Create mock OpenAI server
-	openaiServer := createMockOpenAIServer(t)
+	openaiServer := createMockOpenAIServer(t, func(prompt string) {})
 	defer openaiServer.Close()
 
 	// Create mock Anthropic server
@@ -692,7 +735,11 @@ func TestRuntimeComprehensive_HTTPMocked(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		assert.Equal(t, ExecutionStatusCompleted, result.Status)
+		if !assert.Equal(t, ExecutionStatusCompleted, result.Status) {
+			for _, step := range result.Steps {
+				assert.Nil(t, step.Error)
+			}
+		}
 		assert.Equal(t, 3, len(result.Steps))
 
 		// Verify responses match what we mocked
@@ -709,10 +756,16 @@ func TestRuntimeComprehensive_HTTPMocked(t *testing.T) {
 
 	// Test Anthropic workflow
 	t.Run("Anthropic Claude workflow", func(t *testing.T) {
-		registry := NewModelRegistry()
+		registry := NewModelRegistry(true)
 
 		// Register mock Anthropic provider since real provider requires API key
-		mockAnthropic := NewMockModelProvider("anthropic", []string{"claude-3-sonnet"})
+		mockAnthropic := NewMockModelProvider("anthropic", []ModelInfo{
+			{
+				ID:       "claude-3-sonnet",
+				Name:     "claude-3-sonnet",
+				Provider: "anthropic",
+			},
+		})
 		mockAnthropic.SetResponse("Process this topic: machine learning", "Mock Claude response for: Process this topic: machine learning")
 		mockAnthropic.SetResponse("Build on: Mock Claude response for: Process this topic: machine learning", "Mock Claude extended response")
 		mockAnthropic.SetResponse("Finalize: Mock Claude extended response", "Mock Claude final response")
@@ -906,32 +959,53 @@ func TestRuntimeComprehensive_HTTPConcurrentRequests(t *testing.T) {
 	var requestsMutex sync.Mutex
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Record when each request started
-		requestsMutex.Lock()
-		requestID := fmt.Sprintf("req_%d", len(requestTimes))
-		requestTimes[requestID] = time.Now()
-		requestsMutex.Unlock()
-
-		// Simulate some processing time
-		time.Sleep(100 * time.Millisecond)
-
-		// Return response
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"choices": []map[string]interface{}{
-				{
-					"message": map[string]interface{}{
-						"content": fmt.Sprintf("Concurrent response %s", requestID),
+		switch r.URL.Path {
+		case "/v1/models":
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"object": "list",
+				"data": []map[string]interface{}{
+					{
+						"id":       "gpt-4",
+						"object":   "model",
+						"created":  1677610602,
+						"owned_by": "openai",
 					},
-					"finish_reason": "stop",
+					{
+						"id":       "gpt-3.5-turbo",
+						"object":   "model",
+						"created":  1677610602,
+						"owned_by": "openai",
+					},
 				},
-			},
-			"usage": map[string]interface{}{
-				"prompt_tokens":     5,
-				"completion_tokens": 10,
-				"total_tokens":      15,
-			},
-		})
+			})
+		case "/chat/completions":
+			// Record when each request started
+			requestsMutex.Lock()
+			requestID := fmt.Sprintf("req_%d", len(requestTimes))
+			requestTimes[requestID] = time.Now()
+			requestsMutex.Unlock()
+			// Simulate some processing time
+			time.Sleep(100 * time.Millisecond)
+
+			// Return response
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"choices": []map[string]interface{}{
+					{
+						"message": map[string]interface{}{
+							"content": fmt.Sprintf("Concurrent response %s", requestID),
+						},
+						"finish_reason": "stop",
+					},
+				},
+				"usage": map[string]interface{}{
+					"prompt_tokens":     5,
+					"completion_tokens": 10,
+					"total_tokens":      15,
+				},
+			})
+		}
 	}))
 	defer server.Close()
 
@@ -973,7 +1047,11 @@ func TestRuntimeComprehensive_HTTPConcurrentRequests(t *testing.T) {
 	duration := time.Since(start)
 
 	require.NoError(t, err)
-	assert.Equal(t, ExecutionStatusCompleted, result.Status)
+	if !assert.Equal(t, ExecutionStatusCompleted, result.Status) {
+		for _, step := range result.Steps {
+			assert.Nil(t, step.Error)
+		}
+	}
 
 	// With concurrency, should complete faster than 3 sequential requests (300ms)
 	assert.Less(t, duration, 250*time.Millisecond, "Concurrent execution should be faster than sequential")
@@ -985,40 +1063,12 @@ func TestRuntimeComprehensive_HTTPConcurrentRequests(t *testing.T) {
 // TestRuntimeComprehensive_HTTPVariableInterpolation tests variable substitution in HTTP requests
 func TestRuntimeComprehensive_HTTPVariableInterpolation(t *testing.T) {
 	var capturedPrompts []string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Capture the actual prompt sent in the request
-		var reqBody map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&reqBody)
-
-		if messages, ok := reqBody["messages"].([]interface{}); ok && len(messages) > 0 {
-			if msg, ok := messages[0].(map[string]interface{}); ok {
-				if content, ok := msg["content"].(string); ok {
-					capturedPrompts = append(capturedPrompts, content)
-				}
-			}
-		}
-
-		// Return mock response
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"choices": []map[string]interface{}{
-				{
-					"message": map[string]interface{}{
-						"content": fmt.Sprintf("Response to: %s", capturedPrompts[len(capturedPrompts)-1]),
-					},
-					"finish_reason": "stop",
-				},
-			},
-			"usage": map[string]interface{}{
-				"prompt_tokens":     10,
-				"completion_tokens": 20,
-				"total_tokens":      30,
-			},
-		})
-	}))
+	server := createMockOpenAIServer(t, func(prompt string) {
+		capturedPrompts = append(capturedPrompts, prompt)
+	})
 	defer server.Close()
-
-	t.Setenv("OPENAI_API_KEY", "test-key")
+	// Set environment variables to point to our mock servers
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 	t.Setenv("OPENAI_BASE_URL", server.URL)
 
 	workflow := &ast.Workflow{
@@ -1064,93 +1114,177 @@ func TestRuntimeComprehensive_HTTPVariableInterpolation(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, ExecutionStatusCompleted, result.Status)
+	if !assert.Equal(t, ExecutionStatusCompleted, result.Status) {
+		for _, step := range result.Steps {
+			assert.Nil(t, step.Error)
+		}
+	}
 
 	// Verify that variable interpolation worked in the actual HTTP requests
 	require.Equal(t, 2, len(capturedPrompts))
 	assert.Equal(t, "Hello, Alice! Let's discuss machine learning.", capturedPrompts[0])
-	assert.Contains(t, capturedPrompts[1], "Response to: Hello, Alice! Let's discuss machine learning.")
-	assert.Contains(t, capturedPrompts[1], "machine learning")
+	assert.Contains(t, capturedPrompts[1], "Based on the greeting: Mock GPT-4 response for: Hello, Alice! Let's discuss machine learning., continue the conversation about machine learning.")
 }
 
 // Helper functions for HTTP tests
 
-func createMockOpenAIServer(t *testing.T) *httptest.Server {
+func createMockOpenAIServer(t *testing.T, callback func(prompt string)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify it's a valid OpenAI API call
-		assert.Equal(t, "POST", r.Method)
-		assert.Contains(t, r.URL.Path, "/chat/completions")
+		// Verify authorization header is present
 		assert.Equal(t, "Bearer test-openai-key", r.Header.Get("Authorization"))
 
-		// Parse request to get prompt
-		var reqBody map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&reqBody)
-		require.NoError(t, err)
+		// Handle different endpoints
+		switch {
+		case r.Method == "GET" && strings.Contains(r.URL.Path, "/v1/models"):
+			// Mock the models endpoint
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"object": "list",
+				"data": []map[string]interface{}{
+					{
+						"id":       "gpt-4",
+						"object":   "model",
+						"created":  1677610602,
+						"owned_by": "openai",
+					},
+					{
+						"id":       "gpt-3.5-turbo",
+						"object":   "model",
+						"created":  1677610602,
+						"owned_by": "openai",
+					},
+				},
+			})
 
-		prompt := "unknown prompt"
-		if messages, ok := reqBody["messages"].([]interface{}); ok && len(messages) > 0 {
-			if msg, ok := messages[0].(map[string]interface{}); ok {
-				if content, ok := msg["content"].(string); ok {
-					prompt = content
+		case r.Method == "POST" && strings.Contains(r.URL.Path, "/chat/completions"):
+			// Handle chat completions
+			// Parse request to get prompt
+			var reqBody map[string]interface{}
+			err := json.NewDecoder(r.Body).Decode(&reqBody)
+			require.NoError(t, err)
+
+			prompt := "unknown prompt"
+			if messages, ok := reqBody["messages"].([]interface{}); ok && len(messages) > 0 {
+				if msg, ok := messages[0].(map[string]interface{}); ok {
+					if content, ok := msg["content"].(string); ok {
+						prompt = content
+					}
 				}
 			}
-		}
 
-		// Return mock OpenAI response
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"choices": []map[string]interface{}{
-				{
-					"message": map[string]interface{}{
-						"content": fmt.Sprintf("Mock GPT-4 response for: %s", prompt),
+			callback(prompt)
+
+			// Return mock OpenAI response
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"choices": []map[string]interface{}{
+					{
+						"message": map[string]interface{}{
+							"content": fmt.Sprintf("Mock GPT-4 response for: %s", prompt),
+						},
+						"finish_reason": "stop",
 					},
-					"finish_reason": "stop",
 				},
-			},
-			"usage": map[string]interface{}{
-				"prompt_tokens":     len(strings.Split(prompt, " ")),
-				"completion_tokens": 20,
-				"total_tokens":      len(strings.Split(prompt, " ")) + 20,
-			},
-		})
+				"usage": map[string]interface{}{
+					"prompt_tokens":     len(strings.Split(prompt, " ")),
+					"completion_tokens": 20,
+					"total_tokens":      len(strings.Split(prompt, " ")) + 20,
+				},
+			})
+
+		default:
+			// Unhandled endpoint
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(fmt.Sprintf("Unhandled endpoint: %s %s", r.Method, r.URL.Path)))
+		}
 	}))
 }
 
 func createMockAnthropicServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify it's a valid Anthropic API call
-		assert.Equal(t, "POST", r.Method)
-		assert.Contains(t, r.URL.Path, "/messages")
+		// Verify authorization header is present
 		assert.Equal(t, "test-anthropic-key", r.Header.Get("x-api-key"))
 
-		// Parse request to get prompt
-		var reqBody map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&reqBody)
-		require.NoError(t, err)
+		// Handle different endpoints
+		switch {
+		case r.Method == "GET" && strings.Contains(r.URL.Path, "/v1/models"):
+			// Mock the models endpoint
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": []map[string]interface{}{
+					{
+						"id":           "claude-3-5-sonnet-20241022",
+						"display_name": "Claude 3.5 Sonnet",
+						"created_at":   "2024-10-22T00:00:00Z",
+						"type":         "message",
+					},
+					{
+						"id":           "claude-3-opus-20240229",
+						"display_name": "Claude 3 Opus",
+						"created_at":   "2024-02-29T00:00:00Z",
+						"type":         "message",
+					},
+					{
+						"id":           "claude-3-sonnet-20240229",
+						"display_name": "Claude 3 Sonnet",
+						"created_at":   "2024-02-29T00:00:00Z",
+						"type":         "message",
+					},
+					{
+						"id":           "claude-3-haiku-20240307",
+						"display_name": "Claude 3 Haiku",
+						"created_at":   "2024-03-07T00:00:00Z",
+						"type":         "message",
+					},
+				},
+				"has_more": false,
+			})
 
-		prompt := "unknown prompt"
-		if messages, ok := reqBody["messages"].([]interface{}); ok && len(messages) > 0 {
-			if msg, ok := messages[0].(map[string]interface{}); ok {
-				if content, ok := msg["content"].(string); ok {
-					prompt = content
+		case r.Method == "POST" && strings.Contains(r.URL.Path, "/v1/messages"):
+			// Handle messages endpoint
+			// Parse request to get prompt
+			var reqBody map[string]interface{}
+			err := json.NewDecoder(r.Body).Decode(&reqBody)
+			require.NoError(t, err)
+
+			prompt := "unknown prompt"
+			if messages, ok := reqBody["messages"].([]interface{}); ok && len(messages) > 0 {
+				if msg, ok := messages[0].(map[string]interface{}); ok {
+					if content, ok := msg["content"].([]interface{}); ok && len(content) > 0 {
+						if contentItem, ok := content[0].(map[string]interface{}); ok {
+							if text, ok := contentItem["text"].(string); ok {
+								prompt = text
+							}
+						}
+					}
 				}
 			}
-		}
 
-		// Return mock Anthropic response
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"content": []map[string]interface{}{
-				{
-					"type": "text",
-					"text": fmt.Sprintf("Mock Claude response for: %s", prompt),
+			// Return mock Anthropic response
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":   "msg_test123",
+				"type": "message",
+				"role": "assistant",
+				"content": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": fmt.Sprintf("Mock Claude response for: %s", prompt),
+					},
 				},
-			},
-			"usage": map[string]interface{}{
-				"input_tokens":  len(strings.Split(prompt, " ")),
-				"output_tokens": 15,
-			},
-		})
+				"model":       "claude-3-5-sonnet-20241022",
+				"stop_reason": "end_turn",
+				"usage": map[string]interface{}{
+					"input_tokens":  len(strings.Split(prompt, " ")),
+					"output_tokens": 15,
+				},
+			})
+
+		default:
+			// Unhandled endpoint
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(fmt.Sprintf("Unhandled endpoint: %s %s", r.Method, r.URL.Path)))
+		}
 	}))
 }
 
