@@ -1,6 +1,6 @@
 <div align="center">
-<img src="https://github.com/user-attachments/assets/0c61330d-be8b-4e7d-bb7a-3fea9b7fe0aa">
-  
+<img src="https://github.com/user-attachments/assets/3f60a020-402e-460e-a547-68f2521b2a5f">
+
 [Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](https://docs.lacquer.ai) • [Examples](examples/) • [Community](https://discord.gg/lacquer)
 </div>
 
