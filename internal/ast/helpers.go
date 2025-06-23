@@ -124,6 +124,16 @@ func (s *Step) IsActionStep() bool {
 	return s.Action != ""
 }
 
+// IsScriptStep returns true if this is a script execution step
+func (s *Step) IsScriptStep() bool {
+	return s.Script != ""
+}
+
+// IsContainerStep returns true if this is a container execution step
+func (s *Step) IsContainerStep() bool {
+	return s.Container != ""
+}
+
 // GetStepType returns the type of step as a string
 func (s *Step) GetStepType() string {
 	switch {
@@ -133,6 +143,10 @@ func (s *Step) GetStepType() string {
 		return "block"
 	case s.IsActionStep():
 		return "action"
+	case s.IsScriptStep():
+		return "script"
+	case s.IsContainerStep():
+		return "container"
 	default:
 		return "unknown"
 	}
@@ -155,9 +169,15 @@ func (s *Step) Validate() error {
 	if s.IsActionStep() {
 		methods++
 	}
+	if s.IsScriptStep() {
+		methods++
+	}
+	if s.IsContainerStep() {
+		methods++
+	}
 
 	if methods == 0 {
-		return fmt.Errorf("step must specify either agent+prompt, uses, or action")
+		return fmt.Errorf("step must specify either agent+prompt, uses, script, container, or action")
 	}
 	if methods > 1 {
 		return fmt.Errorf("step cannot specify multiple execution methods")
@@ -177,6 +197,20 @@ func (s *Step) Validate() error {
 	if s.IsBlockStep() {
 		if s.Uses == "" {
 			return fmt.Errorf("uses is required for block steps")
+		}
+	}
+
+	// Validate script steps
+	if s.IsScriptStep() {
+		if s.Script == "" {
+			return fmt.Errorf("script is required for script steps")
+		}
+	}
+
+	// Validate container steps
+	if s.IsContainerStep() {
+		if s.Container == "" {
+			return fmt.Errorf("container is required for container steps")
 		}
 	}
 

@@ -162,6 +162,33 @@ func TestStep_Validation(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name: "Valid script step",
+			step: &Step{
+				ID:     "test",
+				Script: "./scripts/process.go",
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid inline script step",
+			step: &Step{
+				ID: "test",
+				Script: `package main
+				func main() {
+					println("Hello")
+				}`,
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid container step",
+			step: &Step{
+				ID:        "test",
+				Container: "alpine:latest",
+			},
+			expectError: false,
+		},
+		{
 			name: "Missing ID",
 			step: &Step{
 				Agent:  "agent",
@@ -179,12 +206,22 @@ func TestStep_Validation(t *testing.T) {
 			errorMsg:    "must specify either",
 		},
 		{
-			name: "Multiple execution methods",
+			name: "Multiple execution methods - agent and script",
 			step: &Step{
 				ID:     "test",
 				Agent:  "agent",
 				Prompt: "Hello",
-				Uses:   "lacquer/test@v1",
+				Script: "./script.go",
+			},
+			expectError: true,
+			errorMsg:    "cannot specify multiple",
+		},
+		{
+			name: "Multiple execution methods - script and container",
+			step: &Step{
+				ID:        "test",
+				Script:    "./script.go",
+				Container: "alpine:latest",
 			},
 			expectError: true,
 			errorMsg:    "cannot specify multiple",
@@ -207,6 +244,24 @@ func TestStep_Validation(t *testing.T) {
 			expectError: true,
 			errorMsg:    "requires updates field",
 		},
+		{
+			name: "Script step without script",
+			step: &Step{
+				ID:     "test",
+				Script: "",
+			},
+			expectError: true,
+			errorMsg:    "must specify either",
+		},
+		{
+			name: "Container step without container",
+			step: &Step{
+				ID:        "test",
+				Container: "",
+			},
+			expectError: true,
+			errorMsg:    "must specify either",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -227,12 +282,14 @@ func TestStep_Validation(t *testing.T) {
 
 func TestStep_TypeDetection(t *testing.T) {
 	testCases := []struct {
-		name     string
-		step     *Step
-		stepType string
-		isAgent  bool
-		isBlock  bool
-		isAction bool
+		name        string
+		step        *Step
+		stepType    string
+		isAgent     bool
+		isBlock     bool
+		isAction    bool
+		isScript    bool
+		isContainer bool
 	}{
 		{
 			name: "Agent step",
@@ -240,30 +297,60 @@ func TestStep_TypeDetection(t *testing.T) {
 				Agent:  "test_agent",
 				Prompt: "Hello",
 			},
-			stepType: "agent",
-			isAgent:  true,
-			isBlock:  false,
-			isAction: false,
+			stepType:    "agent",
+			isAgent:     true,
+			isBlock:     false,
+			isAction:    false,
+			isScript:    false,
+			isContainer: false,
 		},
 		{
 			name: "Block step",
 			step: &Step{
 				Uses: "lacquer/test@v1",
 			},
-			stepType: "block",
-			isAgent:  false,
-			isBlock:  true,
-			isAction: false,
+			stepType:    "block",
+			isAgent:     false,
+			isBlock:     true,
+			isAction:    false,
+			isScript:    false,
+			isContainer: false,
 		},
 		{
 			name: "Action step",
 			step: &Step{
 				Action: "human_input",
 			},
-			stepType: "action",
-			isAgent:  false,
-			isBlock:  false,
-			isAction: true,
+			stepType:    "action",
+			isAgent:     false,
+			isBlock:     false,
+			isAction:    true,
+			isScript:    false,
+			isContainer: false,
+		},
+		{
+			name: "Script step",
+			step: &Step{
+				Script: "./scripts/analyzer.go",
+			},
+			stepType:    "script",
+			isAgent:     false,
+			isBlock:     false,
+			isAction:    false,
+			isScript:    true,
+			isContainer: false,
+		},
+		{
+			name: "Container step",
+			step: &Step{
+				Container: "alpine:latest",
+			},
+			stepType:    "container",
+			isAgent:     false,
+			isBlock:     false,
+			isAction:    false,
+			isScript:    false,
+			isContainer: true,
 		},
 	}
 
@@ -273,6 +360,8 @@ func TestStep_TypeDetection(t *testing.T) {
 			assert.Equal(t, tc.isAgent, tc.step.IsAgentStep())
 			assert.Equal(t, tc.isBlock, tc.step.IsBlockStep())
 			assert.Equal(t, tc.isAction, tc.step.IsActionStep())
+			assert.Equal(t, tc.isScript, tc.step.IsScriptStep())
+			assert.Equal(t, tc.isContainer, tc.step.IsContainerStep())
 		})
 	}
 }
@@ -615,4 +704,107 @@ func TestWorkflow_HelperMethods(t *testing.T) {
 
 	stepIDs := workflow.ListStepIDs()
 	assert.Equal(t, []string{"step1", "step2"}, stepIDs)
+}
+
+func TestStep_YAMLUnmarshalingWithNewFields(t *testing.T) {
+	testCases := []struct {
+		name     string
+		yamlStr  string
+		expected *Step
+	}{
+		{
+			name: "Script step from file",
+			yamlStr: `
+id: analyze
+script: ./scripts/analyzer.go
+with:
+  text: "some text"
+  mode: "analyze"
+`,
+			expected: &Step{
+				ID:     "analyze",
+				Script: "./scripts/analyzer.go",
+				With: map[string]interface{}{
+					"text": "some text",
+					"mode": "analyze",
+				},
+			},
+		},
+		{
+			name: "Script step inline",
+			yamlStr: `
+id: process
+script: |
+  package main
+  import "fmt"
+  func main() {
+    fmt.Println("Hello")
+  }
+with:
+  input: "data"
+`,
+			expected: &Step{
+				ID: "process",
+				Script: `package main
+import "fmt"
+func main() {
+  fmt.Println("Hello")
+}
+`,
+				With: map[string]interface{}{
+					"input": "data",
+				},
+			},
+		},
+		{
+			name: "Container step",
+			yamlStr: `
+id: run_container
+container: alpine:latest
+with:
+  command: "echo hello"
+timeout: 30s
+`,
+			expected: &Step{
+				ID:        "run_container",
+				Container: "alpine:latest",
+				With: map[string]interface{}{
+					"command": "echo hello",
+				},
+				Timeout: &Duration{Duration: 30 * time.Second},
+			},
+		},
+		{
+			name: "Container with local Dockerfile",
+			yamlStr: `
+id: build_and_run
+container: ./docker/analyzer
+with:
+  text: "analyze this"
+`,
+			expected: &Step{
+				ID:        "build_and_run",
+				Container: "./docker/analyzer",
+				With: map[string]interface{}{
+					"text": "analyze this",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var step Step
+			err := yaml.Unmarshal([]byte(tc.yamlStr), &step)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected.ID, step.ID)
+			assert.Equal(t, tc.expected.Script, step.Script)
+			assert.Equal(t, tc.expected.Container, step.Container)
+			assert.Equal(t, tc.expected.With, step.With)
+			if tc.expected.Timeout != nil {
+				assert.Equal(t, tc.expected.Timeout.Duration, step.Timeout.Duration)
+			}
+		})
+	}
 }

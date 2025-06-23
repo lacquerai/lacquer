@@ -209,6 +209,8 @@ type Step struct {
 	Agent     string                 `yaml:"agent,omitempty" json:"agent,omitempty"`
 	Prompt    string                 `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 	Uses      string                 `yaml:"uses,omitempty" json:"uses,omitempty"`
+	Script    string                 `yaml:"script,omitempty" json:"script,omitempty"`
+	Container string                 `yaml:"container,omitempty" json:"container,omitempty"`
 	With      map[string]interface{} `yaml:"with,omitempty" json:"with,omitempty"`
 	Action    string                 `yaml:"action,omitempty" json:"action,omitempty"`
 	Updates   map[string]interface{} `yaml:"updates,omitempty" json:"updates,omitempty"`
