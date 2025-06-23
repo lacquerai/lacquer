@@ -19,7 +19,6 @@ type AnthropicProvider struct {
 	name       string
 	apiKey     string
 	baseURL    string
-	models     []string
 	httpClient *http.Client
 	config     *AnthropicConfig
 }
@@ -192,7 +191,6 @@ func NewAnthropicProvider(config *AnthropicConfig) (*AnthropicProvider, error) {
 		name:       "anthropic",
 		apiKey:     config.APIKey,
 		baseURL:    config.BaseURL,
-		models:     getSupportedAnthropicModels(),
 		httpClient: httpClient,
 		config:     config,
 	}
@@ -200,7 +198,6 @@ func NewAnthropicProvider(config *AnthropicConfig) (*AnthropicProvider, error) {
 	log.Info().
 		Str("base_url", config.BaseURL).
 		Str("anthropic_version", config.AnthropicVersion).
-		Int("supported_models", len(provider.models)).
 		Msg("Anthropic provider initialized")
 
 	return provider, nil
@@ -303,16 +300,6 @@ func (p *AnthropicProvider) ListModels(ctx context.Context) ([]ModelInfo, error)
 		Msg("Successfully fetched models from Anthropic API")
 
 	return models, nil
-}
-
-// IsModelSupported checks if a model is supported
-func (p *AnthropicProvider) IsModelSupported(model string) bool {
-	for _, supported := range p.models {
-		if supported == model {
-			return true
-		}
-	}
-	return false
 }
 
 // Close cleans up resources
@@ -553,17 +540,6 @@ func (p *AnthropicProvider) calculateCost(model string, usage AnthropicUsage) fl
 	outputCost := float64(usage.OutputTokens) * outputCostPer1K / 1000
 
 	return inputCost + outputCost
-}
-
-// getSupportedAnthropicModels returns the list of supported Anthropic models
-func getSupportedAnthropicModels() []string {
-	return []string{
-		"claude-3-5-sonnet-20241022",
-		"claude-3-5-sonnet-20240620",
-		"claude-3-opus-20240229",
-		"claude-3-sonnet-20240229",
-		"claude-3-haiku-20240307",
-	}
 }
 
 // GetAnthropicAPIKeyFromEnv gets the API key from environment variables

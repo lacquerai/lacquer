@@ -47,10 +47,8 @@ func NewManager(cacheDir string) (*Manager, error) {
 }
 
 // RegisterNativeExecutor registers the native executor with a workflow engine
-func (m *Manager) RegisterNativeExecutor(engine interface{}) {
-	// This is a placeholder - the actual workflow engine interface would be defined
-	// in the workflow package
-	nativeExecutor := &NativeExecutor{}
+func (m *Manager) RegisterNativeExecutor(engine WorkflowEngine) {
+	nativeExecutor := NewNativeExecutor(engine)
 	m.registry.Register(RuntimeNative, nativeExecutor)
 }
 

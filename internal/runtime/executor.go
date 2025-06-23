@@ -102,6 +102,10 @@ func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *Model
 		return nil, fmt.Errorf("failed to create block manager: %w", err)
 	}
 
+	// Register native executor with workflow engine
+	workflowEngine := NewRuntimeWorkflowEngine(config, registry)
+	blockManager.RegisterNativeExecutor(workflowEngine)
+
 	// Create Go executor for script execution
 	goExecutor, err := block.NewGoExecutor(cacheDir)
 	if err != nil {
@@ -840,11 +844,22 @@ func (e *Executor) executeScriptStep(execCtx *ExecutionContext, step *ast.Step) 
 		inputs[key] = rendered
 	}
 
+	// Get script content - either from file or inline
+	scriptContent := step.Script
+	if strings.HasPrefix(step.Script, "./") || strings.HasPrefix(step.Script, "/") {
+		// It's a file path, read the content
+		contentBytes, err := os.ReadFile(step.Script)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read script file %s: %w", step.Script, err)
+		}
+		scriptContent = string(contentBytes)
+	}
+
 	// Create a temporary block configuration for Go script execution
 	tempBlock := &block.Block{
 		Name:    fmt.Sprintf("script-%s", step.ID),
 		Runtime: block.RuntimeGo,
-		Script:  step.Script,
+		Script:  scriptContent,
 		Inputs:  make(map[string]block.InputSchema),
 		Outputs: make(map[string]block.OutputSchema),
 	}

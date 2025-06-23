@@ -398,19 +398,6 @@ func TestAnthropicProvider_Close(t *testing.T) {
 	err = provider.Close()
 	assert.NoError(t, err)
 }
-
-func TestGetSupportedAnthropicModels(t *testing.T) {
-	models := getSupportedAnthropicModels()
-
-	assert.NotEmpty(t, models)
-	assert.Contains(t, models, "claude-3-5-sonnet-20241022")
-	assert.Contains(t, models, "claude-3-5-sonnet-20240620")
-	assert.Contains(t, models, "claude-3-opus-20240229")
-	assert.Contains(t, models, "claude-3-sonnet-20240229")
-	assert.Contains(t, models, "claude-3-haiku-20240307")
-}
-
-// Benchmark test for Anthropic provider
 func BenchmarkAnthropicProvider_Generate(b *testing.B) {
 	// Skip if no API key is available
 	apiKey := GetAnthropicAPIKeyFromEnv()

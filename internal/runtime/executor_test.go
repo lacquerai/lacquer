@@ -285,6 +285,9 @@ func TestExecutor_ExecuteBlockStep(t *testing.T) {
 	step := &ast.Step{
 		ID:   "block_test",
 		Uses: "lacquer/http-request@v1",
+		With: map[string]interface{}{
+			"url": "https://api.example.com/test",
+		},
 	}
 
 	output, err := executor.executeBlockStep(execCtx, step)

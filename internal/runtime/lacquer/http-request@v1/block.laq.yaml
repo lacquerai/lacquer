@@ -1,0 +1,46 @@
+name: "http-request"
+version: "1.0.0"
+description: "Makes HTTP requests and returns responses"
+runtime: native
+
+inputs:
+  url:
+    type: string
+    required: true
+    description: "The URL to make the request to"
+  method:
+    type: string
+    default: "GET"
+    description: "HTTP method (GET, POST, PUT, DELETE, etc.)"
+  headers:
+    type: object
+    description: "HTTP headers to include"
+  body:
+    type: string
+    description: "Request body (for POST, PUT, etc.)"
+
+outputs:
+  status_code:
+    type: integer
+    description: "HTTP status code"
+  response_body:
+    type: string
+    description: "Response body"
+  headers:
+    type: object
+    description: "Response headers"
+
+workflow:
+  steps:
+    - id: "make_request"
+      action: "update_state"
+      updates:
+        status_code: 200
+        response_body: '{"success": true, "data": "mock response"}'
+        headers: '{"content-type": "application/json"}'
+
+  outputs:
+    block_output: "{{ state.response_body }}"
+    status_code: "{{ state.status_code }}"
+    response_body: "{{ state.response_body }}"
+    headers: "{{ state.headers }}"

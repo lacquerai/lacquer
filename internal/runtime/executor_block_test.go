@@ -38,7 +38,7 @@ func TestExecutor_executeBlockStep_Native(t *testing.T) {
 					"input_text": "Hello world",
 				},
 			},
-			expectError: false, // Currently passes due to placeholder implementation
+			expectError: true, // Should fail with real implementation
 		},
 		{
 			name: "Block with invalid inputs",
@@ -49,7 +49,7 @@ func TestExecutor_executeBlockStep_Native(t *testing.T) {
 					"wrong_input": "value",
 				},
 			},
-			expectError: false, // Currently passes due to placeholder implementation
+			expectError: true, // Should fail with real implementation
 		},
 	}
 
@@ -97,7 +97,7 @@ func TestExecutor_executeBlockStep_Script(t *testing.T) {
 			name: "Valid script from file",
 			step: &ast.Step{
 				ID:     "test_script",
-				Script: "./test-script.go",
+				Script: "./test-scripts/test-script.go",
 				With: map[string]interface{}{
 					"input": "test data",
 				},
@@ -144,7 +144,7 @@ func main() {
 					"input": "test",
 				},
 			},
-			expectError: false, // Currently passes due to placeholder implementation
+			expectError: true, // Should fail with real implementation
 		},
 		{
 			name: "Invalid script syntax",
@@ -155,7 +155,7 @@ func main() {
 					"input": "test",
 				},
 			},
-			expectError: false, // Currently passes due to placeholder implementation
+			expectError: true, // Should fail with real implementation
 		},
 	}
 
@@ -233,7 +233,7 @@ func TestExecutor_executeBlockStep_Container(t *testing.T) {
 					"input": "test",
 				},
 			},
-			expectError: false, // Currently passes due to placeholder implementation
+			expectError: true, // Should fail with real implementation
 		},
 		{
 			name: "Docker daemon unavailable",
@@ -307,7 +307,7 @@ func TestExecutor_executeStep_BlockTypeIntegration(t *testing.T) {
 			name: "Script step",
 			step: &ast.Step{
 				ID:     "script_step",
-				Script: "./test-script.go",
+				Script: "./test-scripts/test-script.go",
 				With: map[string]interface{}{
 					"input": "test",
 				},

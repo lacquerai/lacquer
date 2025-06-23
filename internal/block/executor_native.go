@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// WorkflowEngine is a placeholder interface for workflow execution
+// WorkflowEngine interface for workflow execution
 type WorkflowEngine interface {
 	Execute(ctx context.Context, workflow interface{}, inputs map[string]interface{}) (map[string]interface{}, error)
 }
@@ -35,26 +35,51 @@ func (e *NativeExecutor) Validate(block *Block) error {
 
 // Execute runs a native block
 func (e *NativeExecutor) Execute(ctx context.Context, block *Block, inputs map[string]interface{}, execCtx *ExecutionContext) (map[string]interface{}, error) {
-	// Convert block workflow to proper workflow definition
-	// This would need to parse the workflow field and create a workflow.Workflow struct
-	// For now, we'll outline the approach:
+	// 1. Validate and map inputs according to block schema
+	mappedInputs, err := e.validateAndMapInputs(block, inputs)
+	if err != nil {
+		return nil, fmt.Errorf("input validation failed: %w", err)
+	}
 
-	// 1. Parse the block.Workflow into a workflow.Workflow struct
-	// 2. Create a new workflow context with the block inputs
-	// 3. Execute the workflow using the engine
-	// 4. Extract outputs from the workflow context
-	// 5. Return the outputs
+	// 2. Execute the workflow using the engine
+	outputs, err := e.engine.Execute(ctx, block.Workflow, mappedInputs)
+	if err != nil {
+		return nil, fmt.Errorf("workflow execution failed: %w", err)
+	}
 
-	// Placeholder implementation
-	// In a real implementation, this would:
-	// - Parse block.Workflow YAML into workflow.Workflow
-	// - Set up isolated execution context
-	// - Map inputs to workflow inputs
-	// - Execute workflow steps
-	// - Extract and return outputs
+	return outputs, nil
+}
 
-	return map[string]interface{}{
-		"status": "native block execution not yet implemented",
-		"block":  block.Name,
-	}, nil
+// validateAndMapInputs validates inputs against block schema and applies defaults
+func (e *NativeExecutor) validateAndMapInputs(block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+
+	// Process each defined input schema
+	for inputName, schema := range block.Inputs {
+		value, exists := inputs[inputName]
+
+		if !exists {
+			// Check if input is required
+			if schema.Required {
+				return nil, fmt.Errorf("required input '%s' is missing", inputName)
+			}
+			
+			// Apply default value if available
+			if schema.Default != nil {
+				result[inputName] = schema.Default
+			}
+			// If no default and not required, skip this input
+			continue
+		}
+
+		// TODO: Add type validation here
+		// For now, accept the value as-is
+		result[inputName] = value
+	}
+
+	// For context isolation, we only pass inputs that are explicitly defined
+	// in the block's input schema. This prevents parent workflow state from
+	// leaking into child workflows.
+
+	return result, nil
 }

@@ -1,0 +1,25 @@
+name: "test-block"
+version: "1.0.0"
+description: "A test block for runtime testing"
+runtime: native
+
+inputs:
+  input_text:
+    type: string
+    required: true
+    description: "Text input for testing"
+
+outputs:
+  result:
+    type: string
+    description: "Processed result"
+
+workflow:
+  steps:
+    - id: "process_text"
+      action: "update_state"
+      updates:
+        result: "{{ inputs.input_text }}"
+
+  outputs:
+    result: "{{ state.result }}"
