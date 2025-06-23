@@ -1,0 +1,62 @@
+version: "1.0"
+metadata:
+  name: text-analyzer
+  description: A simple text analyzer worklow
+  author: lacquer-team
+
+inputs:
+  text:
+    type: string
+    description: The text to analyze
+    required: true
+  analysis_type:
+    type: string
+    description: Type of analysis to perform
+    enum: ["sentiment", "summary", "keywords", "all"]
+    default: "all"
+
+workflow:
+  agents:
+    analyzer:
+      provider: anthropic
+      model: claude-3-5-sonnet-20241022
+      temperature: 0.3
+      system_prompt: "You are a text analysis expert."
+
+  steps:
+    - id: sentiment_analysis
+      condition: "{{ inputs.analysis_type == 'sentiment' || inputs.analysis_type == 'all' }}"
+      agent: analyzer
+      prompt: |
+        Analyze the sentiment of this text and provide a score from -1 (very negative) to 1 (very positive):
+        
+        Text: {{ inputs.text }}
+        
+        Return only a JSON object with: {"sentiment": score, "explanation": "brief explanation"}
+      outputs:
+        sentiment:
+          type: number
+        explanation:
+          type: string
+
+    - id: summary
+      condition: "{{ inputs.analysis_type == 'summary' || inputs.analysis_type == 'all' }}"
+      agent: analyzer
+      prompt: |
+        Provide a concise summary of this text in 1-2 sentences:
+        
+        Text: {{ inputs.text }}
+
+    - id: keywords
+      condition: "{{ inputs.analysis_type == 'keywords' || inputs.analysis_type == 'all' }}"
+      agent: analyzer
+      prompt: |
+        Extract the top 5 keywords or key phrases from this text:
+        
+        Text: {{ inputs.text }}
+        
+        Return as a JSON array: ["keyword1", "keyword2", ...]
+
+outputs:
+  sentiment: "{{ steps.sentiment_analysis.outputs.sentiment }}"
+  explanation: "{{ steps.sentiment_analysis.outputs.explanation }}"

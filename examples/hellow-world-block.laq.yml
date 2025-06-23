@@ -1,0 +1,40 @@
+# The simplest Lacquer workflow - Hello World
+version: "1.0"
+metadata:
+  name: hello-world
+  description: A simple greeting workflow demonstrating basic Lacquer syntax
+  author: lacquer-team
+
+# Define a single agent using Claude 3.5 Sonnet
+agents:
+  greeter:
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    temperature: 0.7
+    system_prompt: You are a friendly assistant who gives warm greetings.
+
+# Define the workflow
+workflow:
+  # Input parameter - name to greet
+  inputs:
+    name:
+      type: string
+      description: Name of the person to greet
+      default: "World"
+  
+  # Single step workflow
+  steps:
+    - id: say_hello
+      agent: greeter
+      prompt: |
+        Say hello to {{ inputs.name }} in a creative and friendly way.
+        Make it warm and welcoming!
+    - id: analyze_sentiment 
+      uses: ./blocks/text-analyzer
+      with:
+        text: "{{ steps.say_hello.output }}"
+        analysis_type: "sentiment"
+
+  # Return the greeting as output
+  outputs:
+    sentiment: "{{ steps.analyze_sentiment.outputs }}"
