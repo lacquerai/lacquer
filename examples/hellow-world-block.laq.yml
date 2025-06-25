@@ -25,16 +25,35 @@ workflow:
   # Single step workflow
   steps:
     - id: say_hello
-      agent: greeter
-      prompt: |
-        Say hello to {{ inputs.name }} in a creative and friendly way.
-        Make it warm and welcoming!
-    - id: analyze_sentiment 
-      uses: ./blocks/text-analyzer
+      script: |
+        package main
+        import (
+          "encoding/json"
+          "os"
+        )
+
+        type Context struct {
+          Inputs Inputs `json:"inputs"`
+        }
+        type Inputs struct {
+          Name string `json:"name"`
+        }
+
+        func main() {
+          var context Context
+          err := json.NewDecoder(os.Stdin).Decode(&context)
+          if err != nil {
+            panic(err)
+          }
+          json.NewEncoder(os.Stdout).Encode(map[string]interface{}{
+            "outputs": map[string]interface{}{
+              "greeting": "Hello, " + context.Inputs.Name + "!",
+            },
+          })
+        }
       with:
-        text: "{{ steps.say_hello.output }}"
-        analysis_type: "sentiment"
+        name: "{{ inputs.name }}"
 
   # Return the greeting as output
   outputs:
-    sentiment: "{{ steps.analyze_sentiment.outputs }}"
+    greeting: "{{ steps.say_hello.outputs.greeting }}"

@@ -91,12 +91,12 @@ func TestExecutor_realBlockExecution_Native(t *testing.T) {
 				}
 			} else {
 				assert.NoError(t, err)
-				
+
 				// Check step result
 				result, exists := execCtx.GetStepResult(tc.step.ID)
 				assert.True(t, exists)
 				assert.Equal(t, StepStatusCompleted, result.Status)
-				
+
 				// Check expected output keys
 				for _, key := range tc.expectedKeys {
 					assert.Contains(t, result.Output, key)
@@ -181,7 +181,7 @@ func main() {
 			name: "Empty script",
 			step: &ast.Step{
 				ID:     "empty_script",
-				Script: " ",  // Non-empty but whitespace only to trigger compilation error
+				Script: " ", // Non-empty but whitespace only to trigger compilation error
 				With: map[string]interface{}{
 					"input": "test",
 				},
@@ -231,12 +231,12 @@ func main() {
 				}
 			} else {
 				assert.NoError(t, err)
-				
+
 				// Check step result
 				result, exists := execCtx.GetStepResult(tc.step.ID)
 				assert.True(t, exists)
 				assert.Equal(t, StepStatusCompleted, result.Status)
-				
+
 				// Check expected output keys
 				for _, key := range tc.expectedKeys {
 					assert.Contains(t, result.Output, key)
@@ -274,7 +274,7 @@ func TestExecutor_realBlockExecution_Container(t *testing.T) {
 		{
 			name: "Container with simple processing",
 			step: &ast.Step{
-				ID:        "test_processing_container", 
+				ID:        "test_processing_container",
 				Container: "alpine:latest",
 				With: map[string]interface{}{
 					"text": "hello world",
@@ -325,12 +325,12 @@ func TestExecutor_realBlockExecution_Container(t *testing.T) {
 				}
 			} else {
 				assert.NoError(t, err)
-				
+
 				// Check step result
 				result, exists := execCtx.GetStepResult(tc.step.ID)
 				assert.True(t, exists)
 				assert.Equal(t, StepStatusCompleted, result.Status)
-				
+
 				// Check expected output keys
 				for _, key := range tc.expectedKeys {
 					assert.Contains(t, result.Output, key)

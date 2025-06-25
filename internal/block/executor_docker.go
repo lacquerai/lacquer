@@ -30,12 +30,12 @@ func (e *DockerExecutor) Validate(block *Block) error {
 	if block.Image == "" {
 		return fmt.Errorf("docker block missing image")
 	}
-	
+
 	// Check if Docker is available
 	if err := e.checkDockerAvailable(); err != nil {
 		return fmt.Errorf("docker not available: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -73,10 +73,10 @@ func (e *DockerExecutor) Execute(ctx context.Context, block *Block, inputs map[s
 
 	// Build Docker run command
 	args := []string{"run", "--rm"}
-	
+
 	// Add LACQUER_INPUTS environment variable with the execution input
 	args = append(args, "-e", fmt.Sprintf("LACQUER_INPUTS=%s", string(inputJSON)))
-	
+
 	// Add environment variables from block config
 	for key, value := range execInput.Env {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
@@ -100,7 +100,7 @@ func (e *DockerExecutor) Execute(ctx context.Context, block *Block, inputs map[s
 
 	// Execute Docker container
 	cmd := exec.CommandContext(ctx, "docker", args...)
-	
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -148,7 +148,7 @@ func (e *DockerExecutor) pullImageIfNeeded(ctx context.Context, image string) er
 	defer cancel()
 
 	cmd = exec.CommandContext(pullCtx, "docker", "pull", image)
-	
+
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -163,7 +163,7 @@ func (e *DockerExecutor) streamLogs(ctx context.Context, containerID string) {
 	// Stream container logs for debugging
 	// This is a simplified version - in production, you'd want better log management
 	cmd := exec.CommandContext(ctx, "docker", "logs", "-f", containerID)
-	
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return

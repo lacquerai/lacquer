@@ -244,8 +244,8 @@ func TestExecutor_executeBlockStep_Container(t *testing.T) {
 					"input": "test",
 				},
 			},
-			expectError:  false, // Currently passes due to placeholder implementation
-			skipReason:   "Requires Docker daemon to be unavailable",
+			expectError: false, // Currently passes due to placeholder implementation
+			skipReason:  "Requires Docker daemon to be unavailable",
 		},
 	}
 

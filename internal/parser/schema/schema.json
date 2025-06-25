@@ -302,6 +302,12 @@
         },
         {
           "required": ["action"]
+        },
+        {
+          "required": ["script"]
+        },
+        {
+          "required": ["container"]
         }
       ],
       "properties": {
@@ -322,6 +328,14 @@
           "type": "string",
           "pattern": "^(lacquer/[a-z0-9-]+(@v[0-9]+(\\.[0-9]+)*)?|github\\.com/[a-zA-Z0-9][a-zA-Z0-9._-]*/[a-zA-Z0-9][a-zA-Z0-9._-]*(@[a-zA-Z0-9][a-zA-Z0-9._-]*)?|\\.\\./[^\\s]+|\\./[^\\s]+)$",
           "description": "Reference to a reusable block"
+        },
+        "script": {
+          "type": "string",
+          "description": "Local script path or inline script"
+        },
+        "container": {  
+          "type": "string",
+          "description": "Container image to use for this step"
         },
         "with": {
           "type": "object",

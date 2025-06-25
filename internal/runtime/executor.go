@@ -824,7 +824,9 @@ func (e *Executor) executeBlockStep(execCtx *ExecutionContext, step *ast.Step) (
 		return nil, fmt.Errorf("block execution failed: %w", err)
 	}
 
-	return outputs, nil
+	return map[string]interface{}{
+		"outputs": outputs,
+	}, nil
 }
 
 // executeScriptStep executes a step that runs a Go script

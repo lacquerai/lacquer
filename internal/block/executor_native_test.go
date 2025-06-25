@@ -175,10 +175,10 @@ func TestNativeExecutor_BasicExecution(t *testing.T) {
 	}
 
 	outputs, err := executor.Execute(context.Background(), block, inputs, execCtx)
-	
+
 	assert.NoError(t, err)
 	assert.Equal(t, expectedOutputs, outputs)
-	
+
 	// Verify mock was called with correct parameters
 	engine.AssertExpectations(t)
 }
@@ -322,10 +322,10 @@ func TestNativeExecutor_WorkflowFailure(t *testing.T) {
 	}
 
 	_, err = executor.Execute(context.Background(), block, map[string]interface{}{}, execCtx)
-	
+
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "workflow execution failed")
-	
+
 	engine.AssertExpectations(t)
 }
 
@@ -374,14 +374,14 @@ func TestNativeExecutor_ContextIsolation(t *testing.T) {
 	defer os.RemoveAll(workspace)
 
 	execCtx := &ExecutionContext{
-		WorkflowID: "test-workflow", 
+		WorkflowID: "test-workflow",
 		StepID:     "test-step",
 		Workspace:  workspace,
 		Context:    context.Background(),
 	}
 
 	_, err = executor.Execute(context.Background(), block, parentInputs, execCtx)
-	
+
 	assert.NoError(t, err)
 	engine.AssertExpectations(t)
 }
@@ -423,10 +423,10 @@ func TestNativeExecutor_Timeout(t *testing.T) {
 	}
 
 	_, err = executor.Execute(ctx, block, map[string]interface{}{}, execCtx)
-	
+
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "context")
-	
+
 	engine.AssertExpectations(t)
 }
 
@@ -478,7 +478,7 @@ func TestNativeExecutor_ComplexWorkflow(t *testing.T) {
 				},
 				map[string]interface{}{
 					"id":        "summarize",
-					"agent":     "summarizer", 
+					"agent":     "summarizer",
 					"prompt":    "Summarize: {{ inputs.text }}",
 					"condition": "{{ inputs.analysis_type == 'full' }}",
 				},
@@ -502,7 +502,7 @@ func TestNativeExecutor_ComplexWorkflow(t *testing.T) {
 		"text":          "This is a complex test text for analysis",
 		"analysis_type": "full",
 	}
-	
+
 	expectedOutputs := map[string]interface{}{
 		"sentiment": 0.75,
 		"summary":   "Complex analysis summary",
@@ -523,14 +523,14 @@ func TestNativeExecutor_ComplexWorkflow(t *testing.T) {
 	}
 
 	outputs, err := executor.Execute(context.Background(), block, expectedInputs, execCtx)
-	
+
 	assert.NoError(t, err)
 	assert.Equal(t, expectedOutputs, outputs)
-	
+
 	// Verify the outputs match expected schema types
 	assert.IsType(t, float64(0), outputs["sentiment"])
 	assert.IsType(t, "", outputs["summary"])
 	assert.IsType(t, []interface{}{}, outputs["keywords"])
-	
+
 	engine.AssertExpectations(t)
 }

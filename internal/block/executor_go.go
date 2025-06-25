@@ -23,7 +23,7 @@ func NewGoExecutor(cacheDir string) (*GoExecutor, error) {
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}
-	
+
 	return &GoExecutor{
 		cacheDir: cacheDir,
 	}, nil
@@ -72,7 +72,7 @@ func (e *GoExecutor) Execute(ctx context.Context, block *Block, inputs map[strin
 	// Execute the binary
 	cmd := exec.CommandContext(ctx, binaryPath)
 	cmd.Stdin = bytes.NewReader(inputJSON)
-	
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -104,8 +104,10 @@ func (e *GoExecutor) Execute(ctx context.Context, block *Block, inputs map[strin
 		return nil, fmt.Errorf("block execution timeout")
 	}
 
-	// Parse output
+	// @TODO remove the necessity to have the ExecutionOutput type
+	// programs should be able to return a map[string]interface{} directly
 	var output ExecutionOutput
+
 	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse block output: %w", err)
 	}
@@ -117,7 +119,7 @@ func (e *GoExecutor) getOrCompile(ctx context.Context, block *Block) (string, er
 	// Generate cache key based on script content
 	hash := sha256.Sum256([]byte(block.Script))
 	cacheKey := hex.EncodeToString(hash[:])
-	
+
 	binaryName := fmt.Sprintf("block_%s_%s", block.Name, cacheKey[:8])
 	binaryPath := filepath.Join(e.cacheDir, binaryName)
 
@@ -143,7 +145,7 @@ func (e *GoExecutor) getOrCompile(ctx context.Context, block *Block) (string, er
 	// Compile the script
 	cmd := exec.CommandContext(ctx, "go", "build", "-o", binaryPath, scriptPath)
 	cmd.Dir = tmpDir
-	
+
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 

@@ -63,7 +63,7 @@ func (e *NativeExecutor) validateAndMapInputs(block *Block, inputs map[string]in
 			if schema.Required {
 				return nil, fmt.Errorf("required input '%s' is missing", inputName)
 			}
-			
+
 			// Apply default value if available
 			if schema.Default != nil {
 				result[inputName] = schema.Default

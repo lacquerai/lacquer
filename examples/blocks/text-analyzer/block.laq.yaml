@@ -1,4 +1,5 @@
 version: "1.0"
+name: text-analyzer
 metadata:
   name: text-analyzer
   description: A simple text analyzer worklow
@@ -25,7 +26,6 @@ workflow:
 
   steps:
     - id: sentiment_analysis
-      condition: "{{ inputs.analysis_type == 'sentiment' || inputs.analysis_type == 'all' }}"
       agent: analyzer
       prompt: |
         Analyze the sentiment of this text and provide a score from -1 (very negative) to 1 (very positive):
@@ -39,24 +39,5 @@ workflow:
         explanation:
           type: string
 
-    - id: summary
-      condition: "{{ inputs.analysis_type == 'summary' || inputs.analysis_type == 'all' }}"
-      agent: analyzer
-      prompt: |
-        Provide a concise summary of this text in 1-2 sentences:
-        
-        Text: {{ inputs.text }}
-
-    - id: keywords
-      condition: "{{ inputs.analysis_type == 'keywords' || inputs.analysis_type == 'all' }}"
-      agent: analyzer
-      prompt: |
-        Extract the top 5 keywords or key phrases from this text:
-        
-        Text: {{ inputs.text }}
-        
-        Return as a JSON array: ["keyword1", "keyword2", ...]
-
-outputs:
-  sentiment: "{{ steps.sentiment_analysis.outputs.sentiment }}"
-  explanation: "{{ steps.sentiment_analysis.outputs.explanation }}"
+  outputs:
+    sentiment: "{{ steps.sentiment_analysis.outputs.sentiment }}"

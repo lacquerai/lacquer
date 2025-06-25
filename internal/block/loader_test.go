@@ -283,7 +283,7 @@ inputs:
 
 			// Both should resolve to the same absolute path
 			if block1.Path != block2.Path {
-				t.Errorf("Absolute and relative paths should resolve to same path: %s vs %s", 
+				t.Errorf("Absolute and relative paths should resolve to same path: %s vs %s",
 					block1.Path, block2.Path)
 			}
 		}

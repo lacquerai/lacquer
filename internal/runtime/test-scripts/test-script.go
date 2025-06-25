@@ -16,10 +16,10 @@ type ExecutionOutput struct {
 func main() {
 	var input ExecutionInput
 	json.NewDecoder(os.Stdin).Decode(&input)
-	
+
 	output := ExecutionOutput{
 		Result: "Processed: " + input.Input,
 	}
-	
+
 	json.NewEncoder(os.Stdout).Encode(output)
 }

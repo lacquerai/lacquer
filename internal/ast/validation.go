@@ -349,6 +349,12 @@ func (v *Validator) validateStep(step *Step, path string, result *ValidationResu
 	if step.Action != "" {
 		stepTypes++
 	}
+	if step.Script != "" {
+		stepTypes++
+	}
+	if step.Container != "" {
+		stepTypes++
+	}
 
 	if stepTypes == 0 {
 		result.AddError(path, "step must specify either agent+prompt, uses, or action")

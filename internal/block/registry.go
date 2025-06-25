@@ -47,5 +47,12 @@ func (r *ExecutorRegistry) Execute(ctx context.Context, block *Block, inputs map
 	}
 
 	// Execute the block
-	return executor.Execute(ctx, block, inputs, execCtx)
+	outputs, err := executor.Execute(ctx, block, inputs, execCtx)
+	if err != nil {
+		return nil, fmt.Errorf("block execution failed: %w", err)
+	}
+
+	return map[string]interface{}{
+		"outputs": outputs,
+	}, nil
 }

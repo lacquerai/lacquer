@@ -125,7 +125,7 @@ func (l *FileLoader) InvalidateCache(path string) {
 		return
 	}
 	configPath := filepath.Join(absPath, blockConfigFile)
-	
+
 	l.cacheMu.Lock()
 	delete(l.cache, configPath)
 	l.cacheMu.Unlock()

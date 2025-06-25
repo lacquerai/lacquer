@@ -156,6 +156,15 @@ func (te *TemplateEngine) resolveStepField(result *StepResult, field string, rem
 		value = result.Status == StepStatusCompleted
 	case "failed":
 		value = result.Status == StepStatusFailed
+	case "outputs":
+		// `outputs` is a special case which is used to access the outputs of the step
+		// so if this key is not found, we return the entire output map
+		v, ok := result.Output[field]
+		if !ok {
+			value = result.Output
+		} else {
+			value = v
+		}
 	default:
 		// Try to find field in output
 		if result.Output != nil {

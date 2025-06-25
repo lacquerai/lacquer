@@ -16,23 +16,24 @@ const (
 
 // Block represents a reusable workflow component
 type Block struct {
-	Name        string                 `yaml:"name"`
-	Path        string                 `yaml:"-"` // Filesystem path
-	Runtime     RuntimeType            `yaml:"runtime"`
-	Description string                 `yaml:"description,omitempty"`
-	Inputs      map[string]InputSchema `yaml:"inputs,omitempty"`
+	Name        string                  `yaml:"name"`
+	Metadata    map[string]interface{}  `yaml:"metadata,omitempty"`
+	Path        string                  `yaml:"-"` // Filesystem path
+	Runtime     RuntimeType             `yaml:"runtime"`
+	Description string                  `yaml:"description,omitempty"`
+	Inputs      map[string]InputSchema  `yaml:"inputs,omitempty"`
 	Outputs     map[string]OutputSchema `yaml:"outputs,omitempty"`
-	
+
 	// Runtime-specific fields
-	Workflow    interface{}            `yaml:"workflow,omitempty"`    // For native blocks
-	Script      string                 `yaml:"script,omitempty"`      // For go blocks
-	Image       string                 `yaml:"image,omitempty"`       // For docker blocks
-	Command     []string               `yaml:"command,omitempty"`     // For docker blocks
-	Env         map[string]string      `yaml:"env,omitempty"`         // For docker blocks
-	
+	Workflow interface{}       `yaml:"workflow,omitempty"` // For native blocks
+	Script   string            `yaml:"script,omitempty"`   // For go blocks
+	Image    string            `yaml:"image,omitempty"`    // For docker blocks
+	Command  []string          `yaml:"command,omitempty"`  // For docker blocks
+	Env      map[string]string `yaml:"env,omitempty"`      // For docker blocks
+
 	// Cached data
-	ModTime     time.Time              `yaml:"-"`
-	CompiledPath string                `yaml:"-"` // For go blocks
+	ModTime      time.Time `yaml:"-"`
+	CompiledPath string    `yaml:"-"` // For go blocks
 }
 
 // InputSchema defines the schema for a block input parameter
@@ -42,24 +43,24 @@ type InputSchema struct {
 	Required    bool        `yaml:"required,omitempty"`
 	Default     interface{} `yaml:"default,omitempty"`
 	Enum        []string    `yaml:"enum,omitempty"`
-	Items       interface{} `yaml:"items,omitempty"`       // For arrays
-	Properties  interface{} `yaml:"properties,omitempty"`  // For objects
+	Items       interface{} `yaml:"items,omitempty"`      // For arrays
+	Properties  interface{} `yaml:"properties,omitempty"` // For objects
 }
 
 // OutputSchema defines the schema for a block output parameter
 type OutputSchema struct {
-	Type        string      `yaml:"type"`
-	Description string      `yaml:"description,omitempty"`
-	From        string      `yaml:"from,omitempty"` // For docker blocks reading from files
+	Type        string `yaml:"type"`
+	Description string `yaml:"description,omitempty"`
+	From        string `yaml:"from,omitempty"` // For docker blocks reading from files
 }
 
 // ExecutionContext provides context for block execution
 type ExecutionContext struct {
-	WorkflowID  string
-	StepID      string
-	Workspace   string // Temporary workspace directory
-	Timeout     time.Duration
-	Context     context.Context
+	WorkflowID string
+	StepID     string
+	Workspace  string // Temporary workspace directory
+	Timeout    time.Duration
+	Context    context.Context
 }
 
 // ExecutionInput represents the JSON input sent to blocks
@@ -77,6 +78,9 @@ type ExecutionContextJSON struct {
 }
 
 // ExecutionOutput represents the JSON output from blocks
+// @TODO remove the necessity to have the ExecutionOutput type
+// programs should be able to return a map[string]interface{} directly
+// and the executor should be able to handle it
 type ExecutionOutput struct {
 	Outputs map[string]interface{} `json:"outputs"`
 }
@@ -93,10 +97,10 @@ type ExecutionError struct {
 type Loader interface {
 	// Load loads a block from the given path
 	Load(ctx context.Context, path string) (*Block, error)
-	
+
 	// GetFromCache returns a cached block if available
 	GetFromCache(path string) (*Block, bool)
-	
+
 	// InvalidateCache removes a block from the cache
 	InvalidateCache(path string)
 }
@@ -105,7 +109,7 @@ type Loader interface {
 type Executor interface {
 	// Execute runs a block with the given inputs
 	Execute(ctx context.Context, block *Block, inputs map[string]interface{}, execCtx *ExecutionContext) (map[string]interface{}, error)
-	
+
 	// Validate checks if the executor can handle the given block
 	Validate(block *Block) error
 }
@@ -114,7 +118,7 @@ type Executor interface {
 type Registry interface {
 	// Register registers an executor for a runtime type
 	Register(runtime RuntimeType, executor Executor)
-	
+
 	// Get returns the executor for a runtime type
 	Get(runtime RuntimeType) (Executor, bool)
 }
