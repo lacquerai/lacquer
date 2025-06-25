@@ -315,7 +315,12 @@ func (p *AnthropicProvider) Close() error {
 
 // buildAnthropicRequest converts a ModelRequest to an AnthropicRequest
 func (p *AnthropicProvider) buildAnthropicRequest(request *ModelRequest) (*AnthropicRequest, error) {
-	// Build messages array
+	// Check if this is a tool-enabled request
+	if request.Metadata != nil && request.Metadata["provider_type"] == "anthropic" {
+		return p.buildAnthropicRequestWithTools(request)
+	}
+
+	// Build messages array for simple request
 	messages := []AnthropicMessage{
 		{
 			Role: "user",
@@ -362,6 +367,136 @@ func (p *AnthropicProvider) buildAnthropicRequest(request *ModelRequest) (*Anthr
 	}
 
 	return anthropicReq, nil
+}
+
+// buildAnthropicRequestWithTools builds a request with tool support
+func (p *AnthropicProvider) buildAnthropicRequestWithTools(request *ModelRequest) (*AnthropicRequest, error) {
+	// Extract conversation from metadata
+	conversation, ok := request.Metadata["conversation"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid conversation format in metadata")
+	}
+
+	// Convert conversation to Anthropic messages
+	messages, err := p.convertConversationToMessages(conversation)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert conversation: %w", err)
+	}
+
+	// Set default max tokens if not specified
+	maxTokens := 4096
+	if request.MaxTokens != nil {
+		maxTokens = *request.MaxTokens
+	}
+
+	anthropicReq := &AnthropicRequest{
+		Model:     request.Model,
+		MaxTokens: maxTokens,
+		Messages:  messages,
+		System:    request.SystemPrompt,
+	}
+
+	// Add tools if available
+	if tools, ok := request.Metadata["tools"].([]AnthropicTool); ok {
+		anthropicReq.Tools = tools
+		// Enable tool use
+		anthropicReq.ToolChoice = &AnthropicToolChoice{Type: "auto"}
+	}
+
+	// Set optional parameters
+	if request.Temperature != nil {
+		anthropicReq.Temperature = request.Temperature
+	}
+
+	if request.TopP != nil {
+		anthropicReq.TopP = request.TopP
+	}
+
+	return anthropicReq, nil
+}
+
+// convertConversationToMessages converts conversation format to Anthropic messages
+func (p *AnthropicProvider) convertConversationToMessages(conversation []interface{}) ([]AnthropicMessage, error) {
+	var messages []AnthropicMessage
+
+	for _, msg := range conversation {
+		msgMap, ok := msg.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		role, ok := msgMap["role"].(string)
+		if !ok {
+			continue
+		}
+
+		switch role {
+		case "user":
+			content, ok := msgMap["content"].(string)
+			if !ok {
+				continue
+			}
+			messages = append(messages, AnthropicMessage{
+				Role: "user",
+				Content: []AnthropicContent{
+					{Type: "text", Text: content},
+				},
+			})
+
+		case "assistant":
+			var contents []AnthropicContent
+			
+			// Add text content if available
+			if content, ok := msgMap["content"].(string); ok && content != "" {
+				contents = append(contents, AnthropicContent{
+					Type: "text",
+					Text: content,
+				})
+			}
+
+			// Add tool calls if available
+			if toolCalls, ok := msgMap["tool_calls"].([]map[string]interface{}); ok {
+				for _, toolCall := range toolCalls {
+					if toolName, ok := toolCall["function"].(string); ok {
+						if args, ok := toolCall["arguments"].(map[string]interface{}); ok {
+							contents = append(contents, AnthropicContent{
+								Type:  "tool_use",
+								ID:    fmt.Sprintf("%v", toolCall["id"]),
+								Name:  toolName,
+								Input: args,
+							})
+						}
+					}
+				}
+			}
+
+			if len(contents) > 0 {
+				messages = append(messages, AnthropicMessage{
+					Role:    "assistant",
+					Content: contents,
+				})
+			}
+
+		case "tool":
+			// Tool result
+			if toolCallID, ok := msgMap["tool_call_id"].(string); ok {
+				if content, ok := msgMap["content"].(string); ok {
+					messages = append(messages, AnthropicMessage{
+						Role: "user",
+						Content: []AnthropicContent{
+							{
+								Type:    "tool_result",
+								ID:      toolCallID,
+								Content: content,
+							},
+						},
+					})
+				}
+			}
+		}
+	}
+
+	return messages, nil
 }
 
 // makeAPICall makes the actual HTTP request to the Anthropic API
@@ -474,11 +609,39 @@ func (p *AnthropicProvider) doHTTPRequest(req *http.Request) (*AnthropicResponse
 // extractResponseContent extracts the text content from an Anthropic response
 func (p *AnthropicProvider) extractResponseContent(response *AnthropicResponse) string {
 	var textParts []string
+	var toolCalls []map[string]interface{}
 
 	for _, content := range response.Content {
-		if content.Type == "text" && content.Text != "" {
-			textParts = append(textParts, content.Text)
+		switch content.Type {
+		case "text":
+			if content.Text != "" {
+				textParts = append(textParts, content.Text)
+			}
+		case "tool_use":
+			// Include tool calls in the response for processing by the executor
+			toolCall := map[string]interface{}{
+				"id":        content.ID,
+				"function":  content.Name,
+				"arguments": content.Input,
+			}
+			toolCalls = append(toolCalls, toolCall)
 		}
+	}
+
+	// If we have tool calls, format the response to include them
+	if len(toolCalls) > 0 {
+		response := strings.Join(textParts, "\n")
+		if response != "" {
+			response += "\n"
+		}
+		
+		// Add tool calls in a format that can be detected by extractToolCallsFromResponse
+		toolCallsJSON, err := json.Marshal(toolCalls)
+		if err == nil {
+			response += fmt.Sprintf("<tool_calls>%s</tool_calls>", string(toolCallsJSON))
+		}
+		
+		return response
 	}
 
 	return strings.Join(textParts, "\n")

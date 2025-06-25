@@ -340,7 +340,12 @@ func (p *OpenAIProvider) Close() error {
 
 // buildOpenAIRequest converts a ModelRequest to an OpenAI API request
 func (p *OpenAIProvider) buildOpenAIRequest(request *ModelRequest) (*OpenAIRequest, error) {
-	// Build messages array
+	// Check if this is a tool-enabled request
+	if request.Metadata != nil && request.Metadata["provider_type"] == "openai" {
+		return p.buildOpenAIRequestWithTools(request)
+	}
+
+	// Build messages array for simple request
 	messages := []OpenAIMessage{}
 
 	// Add system message if provided
@@ -374,6 +379,132 @@ func (p *OpenAIProvider) buildOpenAIRequest(request *ModelRequest) (*OpenAIReque
 	}
 
 	return openaiReq, nil
+}
+
+// buildOpenAIRequestWithTools builds a request with tool support
+func (p *OpenAIProvider) buildOpenAIRequestWithTools(request *ModelRequest) (*OpenAIRequest, error) {
+	// Extract conversation from metadata
+	conversation, ok := request.Metadata["conversation"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid conversation format in metadata")
+	}
+
+	// Convert conversation to OpenAI messages
+	messages, err := p.convertConversationToMessages(conversation, request.SystemPrompt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert conversation: %w", err)
+	}
+
+	openaiReq := &OpenAIRequest{
+		Model:       request.Model,
+		Messages:    messages,
+		Temperature: request.Temperature,
+		MaxTokens:   request.MaxTokens,
+		TopP:        request.TopP,
+		N:           1,
+		Stream:      false,
+		Stop:        request.Stop,
+	}
+
+	// Add tools if available
+	if tools, ok := request.Metadata["tools"].([]OpenAITool); ok {
+		openaiReq.Tools = tools
+		openaiReq.ToolChoice = "auto"
+	}
+
+	// Set user ID for tracking
+	if request.RequestID != "" {
+		openaiReq.User = request.RequestID
+	}
+
+	return openaiReq, nil
+}
+
+// convertConversationToMessages converts conversation format to OpenAI messages
+func (p *OpenAIProvider) convertConversationToMessages(conversation []interface{}, systemPrompt string) ([]OpenAIMessage, error) {
+	var messages []OpenAIMessage
+
+	// Add system message if provided
+	if systemPrompt != "" {
+		messages = append(messages, OpenAIMessage{
+			Role:    "system",
+			Content: systemPrompt,
+		})
+	}
+
+	for _, msg := range conversation {
+		msgMap, ok := msg.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		role, ok := msgMap["role"].(string)
+		if !ok {
+			continue
+		}
+
+		switch role {
+		case "user":
+			content, ok := msgMap["content"].(string)
+			if !ok {
+				continue
+			}
+			messages = append(messages, OpenAIMessage{
+				Role:    "user",
+				Content: content,
+			})
+
+		case "assistant":
+			message := OpenAIMessage{
+				Role: "assistant",
+			}
+
+			// Add text content if available
+			if content, ok := msgMap["content"].(string); ok && content != "" {
+				message.Content = content
+			}
+
+			// Add tool calls if available
+			if toolCalls, ok := msgMap["tool_calls"].([]map[string]interface{}); ok {
+				var openaiToolCalls []OpenAIToolCall
+				for _, toolCall := range toolCalls {
+					if toolName, ok := toolCall["function"].(string); ok {
+						if args, ok := toolCall["arguments"].(map[string]interface{}); ok {
+							argsJSON, err := json.Marshal(args)
+							if err != nil {
+								continue
+							}
+							openaiToolCalls = append(openaiToolCalls, OpenAIToolCall{
+								ID:   fmt.Sprintf("%v", toolCall["id"]),
+								Type: "function",
+								Function: &OpenAIFunctionCall{
+									Name:      toolName,
+									Arguments: string(argsJSON),
+								},
+							})
+						}
+					}
+				}
+				message.ToolCalls = openaiToolCalls
+			}
+
+			messages = append(messages, message)
+
+		case "tool":
+			// Tool result
+			if toolCallID, ok := msgMap["tool_call_id"].(string); ok {
+				if content, ok := msgMap["content"].(string); ok {
+					messages = append(messages, OpenAIMessage{
+						Role:       "tool",
+						Content:    content,
+						ToolCallID: toolCallID,
+					})
+				}
+			}
+		}
+	}
+
+	return messages, nil
 }
 
 // makeAPICall makes the actual HTTP request to OpenAI with retries
@@ -466,7 +597,49 @@ func (p *OpenAIProvider) extractResponseContent(response *OpenAIResponse) string
 		return ""
 	}
 
-	return strings.TrimSpace(response.Choices[0].Message.Content)
+	choice := response.Choices[0]
+	content := strings.TrimSpace(choice.Message.Content)
+
+	// Check for tool calls
+	if len(choice.Message.ToolCalls) > 0 {
+		var toolCalls []map[string]interface{}
+		
+		for _, toolCall := range choice.Message.ToolCalls {
+			if toolCall.Function != nil {
+				// Parse arguments
+				var args map[string]interface{}
+				if toolCall.Function.Arguments != "" {
+					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
+						args = make(map[string]interface{})
+					}
+				} else {
+					args = make(map[string]interface{})
+				}
+
+				toolCallMap := map[string]interface{}{
+					"id":        toolCall.ID,
+					"function":  toolCall.Function.Name,
+					"arguments": args,
+				}
+				toolCalls = append(toolCalls, toolCallMap)
+			}
+		}
+
+		// Include tool calls in the response
+		if len(toolCalls) > 0 {
+			if content != "" {
+				content += "\n"
+			}
+			
+			// Add tool calls in a format that can be detected by extractToolCallsFromResponse
+			toolCallsJSON, err := json.Marshal(toolCalls)
+			if err == nil {
+				content += fmt.Sprintf("<tool_calls>%s</tool_calls>", string(toolCallsJSON))
+			}
+		}
+	}
+
+	return content
 }
 
 // calculateCost estimates the cost based on token usage and model

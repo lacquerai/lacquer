@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,6 +47,7 @@ type ExecutionEvent struct {
 type Executor struct {
 	templateEngine  *TemplateEngine
 	modelRegistry   *ModelRegistry
+	toolRegistry    *ToolRegistry
 	config          *ExecutorConfig
 	outputParser    *OutputParser
 	schemaGenerator *SchemaGenerator
@@ -115,9 +117,18 @@ func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *Model
 	// Create Docker executor for container execution
 	dockerExecutor := block.NewDockerExecutor()
 
+	// Create tool registry
+	toolRegistry := NewToolRegistry()
+
+	// Initialize tool providers for workflow
+	if err := initializeToolProviders(toolRegistry, workflow, cacheDir); err != nil {
+		return nil, fmt.Errorf("failed to initialize tool providers: %w", err)
+	}
+
 	return &Executor{
 		templateEngine:  NewTemplateEngine(),
 		modelRegistry:   registry,
+		toolRegistry:    toolRegistry,
 		config:          config,
 		outputParser:    NewOutputParser(),
 		schemaGenerator: NewSchemaGenerator(),
@@ -733,6 +744,322 @@ func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (
 		return "", nil, fmt.Errorf("agent %s not found", step.Agent)
 	}
 
+	// Get available tools for this agent
+	availableTools, err := e.toolRegistry.GetToolsForAgent(agent)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("agent", step.Agent).
+			Msg("Failed to get tools for agent, proceeding without tools")
+		availableTools = []*ToolDefinition{}
+	}
+
+	// Execute agent with tools if available
+	if len(availableTools) > 0 {
+		return e.executeAgentStepWithTools(execCtx, step, agent, availableTools)
+	}
+
+	// Fallback to original implementation without tools
+	return e.executeAgentStepSimple(execCtx, step, agent)
+}
+
+// executeAgentStepWithTools executes an agent step with tool support
+func (e *Executor) executeAgentStepWithTools(execCtx *ExecutionContext, step *ast.Step, agent *ast.Agent, tools []*ToolDefinition) (string, *TokenUsage, error) {
+	// Render the prompt template
+	prompt, err := e.templateEngine.Render(step.Prompt, execCtx)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to render prompt template: %w", err)
+	}
+
+	// Get model provider
+	provider, err := e.modelRegistry.GetProviderForModel(agent.Provider, agent.Model)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get provider %s for model %s: %w", agent.Provider, agent.Model, err)
+	}
+
+	// Execute with timeout
+	timeout := e.config.DefaultTimeout
+	if step.Timeout != nil {
+		timeout = step.Timeout.Duration
+	}
+
+	ctx, cancel := context.WithTimeout(execCtx.Context, timeout)
+	defer cancel()
+
+	// Execute conversation with tools
+	return e.executeConversationWithTools(ctx, provider, agent, prompt, tools, execCtx, step)
+}
+
+// executeConversationWithTools handles multi-turn conversation with tool calling
+func (e *Executor) executeConversationWithTools(ctx context.Context, provider ModelProvider, agent *ast.Agent, initialPrompt string, tools []*ToolDefinition, execCtx *ExecutionContext, step *ast.Step) (string, *TokenUsage, error) {
+	totalTokenUsage := &TokenUsage{}
+	maxTurns := 10 // Prevent infinite loops
+	
+	// Build conversation messages
+	conversation := []interface{}{
+		map[string]interface{}{
+			"role":    "user",
+			"content": initialPrompt,
+		},
+	}
+
+	for turn := 0; turn < maxTurns; turn++ {
+		// Create request with tools
+		request, err := e.createModelRequestWithTools(agent, conversation, tools, provider.GetName())
+		if err != nil {
+			return "", totalTokenUsage, fmt.Errorf("failed to create model request: %w", err)
+		}
+
+		// Call the model
+		response, tokenUsage, err := provider.Generate(ctx, request, e.progressChan)
+		if err != nil {
+			return "", totalTokenUsage, fmt.Errorf("model generation failed: %w", err)
+		}
+
+		// Accumulate token usage
+		if tokenUsage != nil {
+			totalTokenUsage.PromptTokens += tokenUsage.PromptTokens
+			totalTokenUsage.CompletionTokens += tokenUsage.CompletionTokens
+			totalTokenUsage.TotalTokens += tokenUsage.TotalTokens
+			totalTokenUsage.EstimatedCost += tokenUsage.EstimatedCost
+		}
+
+		// Check if the response contains tool calls
+		toolCalls, hasToolCalls := e.extractToolCallsFromResponse(response, provider.GetName())
+		if !hasToolCalls {
+			// No tool calls, return the response
+			return response, totalTokenUsage, nil
+		}
+
+		// Add assistant message to conversation
+		conversation = append(conversation, map[string]interface{}{
+			"role":       "assistant",
+			"content":    response,
+			"tool_calls": toolCalls,
+		})
+
+		// Execute tool calls
+		toolResults, err := e.executeToolCalls(ctx, toolCalls, execCtx, step)
+		if err != nil {
+			return "", totalTokenUsage, fmt.Errorf("tool execution failed: %w", err)
+		}
+
+		// Add tool results to conversation
+		for _, result := range toolResults {
+			conversation = append(conversation, map[string]interface{}{
+				"role":         "tool",
+				"tool_call_id": result["tool_call_id"],
+				"content":      result["content"],
+			})
+		}
+	}
+
+	return "Max conversation turns reached without completion", totalTokenUsage, nil
+}
+
+// createModelRequestWithTools creates a model request with tool schemas
+func (e *Executor) createModelRequestWithTools(agent *ast.Agent, conversation []interface{}, tools []*ToolDefinition, providerName string) (*ModelRequest, error) {
+	// Generate function schemas for the provider
+	toolSchemas, err := GenerateFunctionSchema(tools, providerName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate function schemas: %w", err)
+	}
+
+	// Create request based on provider type
+	switch providerName {
+	case "anthropic":
+		return e.createAnthropicRequestWithTools(agent, conversation, toolSchemas)
+	case "openai":
+		return e.createOpenAIRequestWithTools(agent, conversation, toolSchemas)
+	default:
+		return nil, fmt.Errorf("unsupported provider for tool calling: %s", providerName)
+	}
+}
+
+// createAnthropicRequestWithTools creates an Anthropic request with tools
+func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, conversation []interface{}, toolSchemas interface{}) (*ModelRequest, error) {
+	// For MVP, implement basic Anthropic tool request
+	// In full implementation, this would properly format the conversation and tools
+	
+	request := &ModelRequest{
+		Model:        agent.Model,
+		SystemPrompt: agent.SystemPrompt,
+		Temperature:  agent.Temperature,
+		MaxTokens:    agent.MaxTokens,
+		TopP:         agent.TopP,
+		Metadata: map[string]interface{}{
+			"tools":         toolSchemas,
+			"conversation":  conversation,
+			"provider_type": "anthropic",
+		},
+	}
+
+	// Convert conversation to prompt (simplified for MVP)
+	if len(conversation) > 0 {
+		if userMsg, ok := conversation[len(conversation)-1].(map[string]interface{}); ok {
+			if content, ok := userMsg["content"].(string); ok {
+				request.Prompt = content
+			}
+		}
+	}
+
+	return request, nil
+}
+
+// createOpenAIRequestWithTools creates an OpenAI request with tools
+func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, conversation []interface{}, toolSchemas interface{}) (*ModelRequest, error) {
+	// For MVP, implement basic OpenAI tool request
+	// In full implementation, this would properly format the conversation and tools
+	
+	request := &ModelRequest{
+		Model:        agent.Model,
+		SystemPrompt: agent.SystemPrompt,
+		Temperature:  agent.Temperature,
+		MaxTokens:    agent.MaxTokens,
+		TopP:         agent.TopP,
+		Metadata: map[string]interface{}{
+			"tools":         toolSchemas,
+			"conversation":  conversation,
+			"provider_type": "openai",
+		},
+	}
+
+	// Convert conversation to prompt (simplified for MVP)
+	if len(conversation) > 0 {
+		if userMsg, ok := conversation[len(conversation)-1].(map[string]interface{}); ok {
+			if content, ok := userMsg["content"].(string); ok {
+				request.Prompt = content
+			}
+		}
+	}
+
+	return request, nil
+}
+
+// extractToolCallsFromResponse extracts tool calls from model response
+func (e *Executor) extractToolCallsFromResponse(response string, providerName string) ([]map[string]interface{}, bool) {
+	switch providerName {
+	case "anthropic":
+		return e.extractAnthropicToolCalls(response)
+	case "openai":
+		return e.extractOpenAIToolCalls(response)
+	default:
+		return nil, false
+	}
+}
+
+// extractAnthropicToolCalls extracts tool calls from Anthropic response
+func (e *Executor) extractAnthropicToolCalls(response string) ([]map[string]interface{}, bool) {
+	// Look for tool calls in the response
+	if !strings.Contains(response, "<tool_calls>") {
+		return nil, false
+	}
+
+	// Extract JSON from tool_calls tags
+	start := strings.Index(response, "<tool_calls>")
+	end := strings.Index(response, "</tool_calls>")
+	if start == -1 || end == -1 || end <= start {
+		return nil, false
+	}
+
+	jsonStr := response[start+len("<tool_calls>") : end]
+	
+	var toolCalls []map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &toolCalls); err != nil {
+		log.Warn().Err(err).Msg("Failed to parse Anthropic tool calls")
+		return nil, false
+	}
+
+	return toolCalls, len(toolCalls) > 0
+}
+
+// extractOpenAIToolCalls extracts tool calls from OpenAI response
+func (e *Executor) extractOpenAIToolCalls(response string) ([]map[string]interface{}, bool) {
+	// Look for tool calls in the response (same format as Anthropic)
+	if !strings.Contains(response, "<tool_calls>") {
+		return nil, false
+	}
+
+	// Extract JSON from tool_calls tags
+	start := strings.Index(response, "<tool_calls>")
+	end := strings.Index(response, "</tool_calls>")
+	if start == -1 || end == -1 || end <= start {
+		return nil, false
+	}
+
+	jsonStr := response[start+len("<tool_calls>") : end]
+	
+	var toolCalls []map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &toolCalls); err != nil {
+		log.Warn().Err(err).Msg("Failed to parse OpenAI tool calls")
+		return nil, false
+	}
+
+	return toolCalls, len(toolCalls) > 0
+}
+
+// executeToolCalls executes the tool calls and returns results
+func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []map[string]interface{}, execCtx *ExecutionContext, step *ast.Step) ([]map[string]interface{}, error) {
+	var results []map[string]interface{}
+
+	for _, toolCall := range toolCalls {
+		toolName, ok := toolCall["function"].(string)
+		if !ok {
+			continue
+		}
+
+		parameters, _ := toolCall["arguments"].(map[string]interface{})
+		if parameters == nil {
+			parameters = make(map[string]interface{})
+		}
+
+		// Create tool execution context
+		toolExecCtx := &ToolExecutionContext{
+			WorkflowID: execCtx.RunID,
+			StepID:     step.ID,
+			AgentID:    step.Agent,
+			RunID:      execCtx.RunID,
+			Context:    ctx,
+			Timeout:    e.config.DefaultTimeout,
+		}
+
+		// Execute the tool
+		result, err := e.toolRegistry.ExecuteTool(ctx, toolName, parameters, toolExecCtx)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("tool", toolName).
+				Msg("Tool execution failed")
+			
+			// Add error result
+			results = append(results, map[string]interface{}{
+				"tool_call_id": toolCall["id"],
+				"content":      fmt.Sprintf("Tool execution failed: %s", err.Error()),
+			})
+			continue
+		}
+
+		// Format tool result
+		content := "Tool executed successfully"
+		if result.Success && result.Output != nil {
+			if outputJSON, err := json.Marshal(result.Output); err == nil {
+				content = string(outputJSON)
+			}
+		} else if !result.Success {
+			content = fmt.Sprintf("Tool failed: %s", result.Error)
+		}
+
+		results = append(results, map[string]interface{}{
+			"tool_call_id": toolCall["id"],
+			"content":      content,
+		})
+	}
+
+	return results, nil
+}
+
+// executeAgentStepSimple executes an agent step without tools (original implementation)
+func (e *Executor) executeAgentStepSimple(execCtx *ExecutionContext, step *ast.Step, agent *ast.Agent) (string, *TokenUsage, error) {
 	// Render the prompt template
 	prompt, err := e.templateEngine.Render(step.Prompt, execCtx)
 	if err != nil {
@@ -1155,6 +1482,81 @@ func initializeRequiredProviders(registry *ModelRegistry, requiredProviders map[
 	}
 
 	return nil
+}
+
+// initializeToolProviders initializes tool providers for the workflow
+func initializeToolProviders(toolRegistry *ToolRegistry, workflow *ast.Workflow, cacheDir string) error {
+	// Create script tool provider for local script tools
+	scriptProvider, err := NewScriptToolProvider("script", cacheDir)
+	if err != nil {
+		return fmt.Errorf("failed to create script tool provider: %w", err)
+	}
+
+	if err := toolRegistry.RegisterProvider(scriptProvider); err != nil {
+		return fmt.Errorf("failed to register script tool provider: %w", err)
+	}
+
+	// Initialize MCP providers based on agent tool configurations
+	mcpServers := extractMCPServersFromWorkflow(workflow)
+	for serverURL, providerName := range mcpServers {
+		mcpConfig := &MCPConfig{
+			ServerURL: serverURL,
+		}
+
+		mcpProvider, err := NewMCPToolProvider(providerName, mcpConfig)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("server_url", serverURL).
+				Msg("Failed to create MCP tool provider, skipping")
+			continue
+		}
+
+		if err := toolRegistry.RegisterProvider(mcpProvider); err != nil {
+			log.Warn().
+				Err(err).
+				Str("provider", providerName).
+				Msg("Failed to register MCP tool provider, skipping")
+			continue
+		}
+
+		log.Info().
+			Str("provider", providerName).
+			Str("server_url", serverURL).
+			Msg("MCP tool provider registered")
+	}
+
+	// Discover tools from all providers
+	if err := toolRegistry.DiscoverTools(context.Background()); err != nil {
+		log.Warn().Err(err).Msg("Failed to discover tools, continuing without tools")
+	}
+
+	return nil
+}
+
+// extractMCPServersFromWorkflow extracts MCP server URLs from agent tool configurations
+func extractMCPServersFromWorkflow(workflow *ast.Workflow) map[string]string {
+	mcpServers := make(map[string]string)
+
+	if workflow.Agents == nil {
+		return mcpServers
+	}
+
+	for _, agent := range workflow.Agents {
+		if agent.Tools == nil {
+			continue
+		}
+
+		for _, tool := range agent.Tools {
+			if tool.MCPServer != "" {
+				// Generate provider name from server URL
+				providerName := fmt.Sprintf("mcp_%s", tool.Name)
+				mcpServers[tool.MCPServer] = providerName
+			}
+		}
+	}
+
+	return mcpServers
 }
 
 // collectWorkflowOutputs collects and renders workflow-level outputs using the template engine

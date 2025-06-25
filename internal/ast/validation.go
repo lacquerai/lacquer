@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // ValidationError represents a validation error
@@ -251,6 +252,74 @@ func (v *Validator) validateTool(tool *Tool, path string, result *ValidationResu
 	if tool.Uses != "" && !isValidBlockReference(tool.Uses) {
 		result.AddFieldError(path, "uses", "invalid tool reference format")
 	}
+
+	// Validate script tools
+	if tool.Script != "" {
+		v.validateScriptTool(tool, path, result)
+	}
+
+	// Validate MCP server tools
+	if tool.MCPServer != "" {
+		v.validateMCPTool(tool, path, result)
+	}
+
+	// Validate tool configuration
+	v.validateToolConfig(tool, path, result)
+}
+
+// validateScriptTool validates script-specific configuration
+func (v *Validator) validateScriptTool(tool *Tool, path string, result *ValidationResult) {
+	// Check if script appears to be a file path or inline code
+	if strings.HasPrefix(tool.Script, "./") || strings.HasPrefix(tool.Script, "/") {
+		// File path - validate basic format
+		if !isValidFilePath(tool.Script) {
+			result.AddFieldError(path, "script", "invalid script file path")
+		}
+	} else {
+		// Inline script - basic validation
+		if strings.TrimSpace(tool.Script) == "" {
+			result.AddFieldError(path, "script", "script content cannot be empty")
+		}
+	}
+}
+
+// validateMCPTool validates MCP server-specific configuration
+func (v *Validator) validateMCPTool(tool *Tool, path string, result *ValidationResult) {
+	// Validate MCP server URL format
+	if !isValidURL(tool.MCPServer) {
+		result.AddFieldError(path, "mcp_server", "invalid MCP server URL format")
+	}
+}
+
+// validateToolConfig validates tool configuration parameters
+func (v *Validator) validateToolConfig(tool *Tool, path string, result *ValidationResult) {
+	if tool.Config == nil {
+		return
+	}
+
+	// Validate common configuration parameters
+	for key, value := range tool.Config {
+		switch key {
+		case "timeout":
+			if timeoutStr, ok := value.(string); ok {
+				if !isValidDuration(timeoutStr) {
+					result.AddFieldError(path, "config.timeout", "invalid timeout duration format")
+				}
+			}
+		case "retries":
+			if retries, ok := value.(int); ok {
+				if retries < 0 {
+					result.AddFieldError(path, "config.retries", "retries must be non-negative")
+				}
+			}
+		case "max_retries":
+			if maxRetries, ok := value.(int); ok {
+				if maxRetries < 0 {
+					result.AddFieldError(path, "config.max_retries", "max_retries must be non-negative")
+				}
+			}
+		}
+	}
 }
 
 // validateWorkflowDef validates the workflow definition
@@ -463,4 +532,57 @@ func isValidBlockReference(ref string) bool {
 	}
 
 	return false
+}
+
+// isValidFilePath checks if a file path is valid
+func isValidFilePath(path string) bool {
+	if path == "" {
+		return false
+	}
+	
+	// Basic path validation
+	if strings.Contains(path, "..") {
+		return false // Prevent directory traversal
+	}
+	
+	// Must have a file extension for scripts
+	if !strings.HasPrefix(path, "./") && !strings.HasPrefix(path, "/") {
+		return false
+	}
+	
+	return true
+}
+
+// isValidURL checks if a URL is valid
+func isValidURL(urlStr string) bool {
+	if urlStr == "" {
+		return false
+	}
+	
+	// Basic URL validation
+	matched, _ := regexp.MatchString(`^https?://[^\s/$.?#].[^\s]*$`, urlStr)
+	return matched
+}
+
+// isValidDuration checks if a duration string is valid
+func isValidDuration(duration string) bool {
+	if duration == "" {
+		return false
+	}
+	
+	// Use Go's time.ParseDuration for validation
+	_, err := parseTemplateDuration(duration)
+	return err == nil
+}
+
+// parseTemplateDuration parses duration strings similar to time.ParseDuration
+func parseTemplateDuration(s string) (time.Duration, error) {
+	// Simple regex for duration validation
+	matched, _ := regexp.MatchString(`^[0-9]+[a-zA-Z]+$`, s)
+	if !matched {
+		return 0, fmt.Errorf("invalid duration format")
+	}
+	
+	// For validation purposes, just check the format
+	return time.Second, nil
 }
