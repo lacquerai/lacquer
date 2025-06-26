@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/lipgloss/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -75,22 +76,30 @@ func printTable(headers []string, rows [][]string) {
 	}
 }
 
-// Success prints a success message
+// Success prints a success message with styling
 func Success(message string) {
-	fmt.Printf("✅ %s\n", message)
+	icon := lipgloss.NewStyle().Foreground(lipgloss.Color("#66BB6A")).Bold(true).Render("✓")
+	msg := lipgloss.NewStyle().Foreground(lipgloss.Color("#66BB6A")).Render(message)
+	fmt.Printf("%s %s\n", icon, msg)
 }
 
-// Error prints an error message
+// Error prints an error message with styling
 func Error(message string) {
-	fmt.Fprintf(os.Stderr, "❌ %s\n", message)
+	icon := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")).Bold(true).Render("✗")
+	msg := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")).Render(message)
+	fmt.Fprintf(os.Stderr, "%s %s\n", icon, msg)
 }
 
-// Warning prints a warning message
+// Warning prints a warning message with styling
 func Warning(message string) {
-	fmt.Printf("⚠️  %s\n", message)
+	icon := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA726")).Bold(true).Render("⚠")
+	msg := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA726")).Render(message)
+	fmt.Printf("%s %s\n", icon, msg)
 }
 
-// Info prints an info message
+// Info prints an info message with styling
 func Info(message string) {
-	fmt.Printf("ℹ️  %s\n", message)
+	icon := lipgloss.NewStyle().Foreground(lipgloss.Color("#42A5F5")).Bold(true).Render("ℹ")
+	msg := lipgloss.NewStyle().Foreground(lipgloss.Color("#42A5F5")).Render(message)
+	fmt.Printf("%s %s\n", icon, msg)
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/parser"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -300,144 +301,139 @@ func printValidationSummary(summary ValidationSummary) {
 		// Show detailed error information for failed files
 		for _, result := range summary.Results {
 			if !result.Valid {
-				printValidationResult(result)
+				printValidationResultStyled(result)
 			}
 		}
 	}
 }
 
-// printValidationResult prints detailed information about a validation result
-func printValidationResult(result ValidationResult) {
+// printValidationResultStyled prints detailed information about a validation result with styling
+func printValidationResultStyled(result ValidationResult) {
 	if result.Valid {
 		return // Don't print valid results in summary
 	}
 
-	fmt.Printf("\n%s\n\n", result.File)
+	fmt.Printf("\n%s\n", formatFilePath(result.File))
 
 	// Print enhanced error details if available
 	if result.EnhancedError != nil {
 		for _, issue := range result.EnhancedError.GetAllIssues() {
-			printEnhancedIssue(issue)
+			printEnhancedIssueStyled(issue)
 		}
 	} else if len(result.Issues) > 0 {
 		for _, issue := range result.Issues {
-			printValidationIssue(issue)
+			printValidationIssueStyled(issue)
 		}
 	} else {
 		// Fallback to simple error messages
 		for _, errMsg := range result.Errors {
-			fmt.Printf("  %s\n", errMsg)
+			fmt.Printf("  %s\n", errorStyle.Render(errMsg))
 		}
 	}
 }
 
-// printValidationIssue prints a detailed validation issue
-func printValidationIssue(issue *ValidationIssue) {
-	// Error header with position
-	severityIcon := "❌"
-	switch issue.Severity {
-	case "warning":
-		severityIcon = "⚠️"
-	case "info":
-		severityIcon = "ℹ️"
-	}
+// printValidationIssueStyled prints a detailed validation issue with styling
+func printValidationIssueStyled(issue *ValidationIssue) {
+	var output strings.Builder
 
-	// Add a separator line before each error (except the first one)
-	fmt.Printf("  ┌─ %s %s at %d:%d: %s\n", severityIcon, issue.Severity, issue.Line, issue.Column, issue.Title)
+	// Build the header
+	severityIcon := getSeverityIcon(issue.Severity)
+	severityStyled := getSeverityStyle(issue.Severity)
+	position := formatPosition(issue.Line, issue.Column)
+
+	// Create the issue box
+	header := fmt.Sprintf("%s %s at %s", severityIcon, severityStyled.Render(issue.Severity), position)
+	output.WriteString(header + "\n")
+	output.WriteString(titleStyle.Render(issue.Title) + "\n")
 
 	if issue.Message != "" && issue.Message != issue.Title {
-		fmt.Printf("  │  %s\n", issue.Message)
+		output.WriteString("\n" + messageStyle.Render(issue.Message) + "\n")
 	}
 
 	if issue.Suggestion != nil {
-		fmt.Printf("  │\n") // Add spacing before suggestions
-		fmt.Printf("  │  💡 %s", issue.Suggestion.Title)
-		if issue.Suggestion.Description != "" {
-			fmt.Printf(": %s", issue.Suggestion.Description)
-		}
-		fmt.Printf("\n")
-
-		// Show examples if available
-		if len(issue.Suggestion.Examples) > 0 {
-			fmt.Printf("  │\n") // Add spacing before examples
-			fmt.Printf("  │  Example:\n")
-			for _, example := range issue.Suggestion.Examples {
-				fmt.Printf("  │    %s\n", example)
-			}
-		}
-
-		// Show documentation link
-		if issue.Suggestion.DocsURL != "" {
-			fmt.Printf("  │\n") // Add spacing before docs link
-			fmt.Printf("  │  📖 See: %s\n", issue.Suggestion.DocsURL)
-		}
+		suggestionText := renderSuggestion(
+			issue.Suggestion.Title,
+			issue.Suggestion.Description,
+			issue.Suggestion.Examples,
+			issue.Suggestion.DocsURL,
+		)
+		output.WriteString("\n" + suggestionText)
 	}
 
-	fmt.Printf("  └─\n\n") // Clear end separator with extra spacing
+	// Apply box styling based on severity
+	var boxStyle lipgloss.Style
+	switch issue.Severity {
+	case "error":
+		boxStyle = errorBoxStyle
+	case "warning":
+		boxStyle = warningBoxStyle
+	default:
+		boxStyle = infoBoxStyle
+	}
+
+	fmt.Print(boxStyle.Render(output.String()))
 }
 
-// printEnhancedIssue prints a detailed enhanced error with full context
-func printEnhancedIssue(issue *parser.EnhancedError) {
-	// Error header with position
-	severityIcon := "❌"
-	if issue.Severity == parser.SeverityWarning {
-		severityIcon = "⚠️"
-	} else if issue.Severity == parser.SeverityInfo {
-		severityIcon = "ℹ️"
-	}
+// printEnhancedIssueStyled prints a detailed enhanced error with full context and styling
+func printEnhancedIssueStyled(issue *parser.EnhancedError) {
+	var output strings.Builder
 
-	fmt.Printf("  ┌─ %s %s at %d:%d: %s\n", severityIcon, issue.Severity, issue.Position.Line, issue.Position.Column, issue.Title)
+	// Build the header
+	severityIcon := getSeverityIcon(string(issue.Severity))
+	severityStyled := getSeverityStyle(string(issue.Severity))
+	position := formatPosition(issue.Position.Line, issue.Position.Column)
+
+	// Create the issue header
+	header := fmt.Sprintf("%s %s at %s", severityIcon, severityStyled.Render(string(issue.Severity)), position)
+	output.WriteString(header + "\n")
+	output.WriteString(titleStyle.Render(issue.Title) + "\n")
 
 	if issue.Message != "" && issue.Message != issue.Title {
-		fmt.Printf("  │  %s\n", issue.Message)
+		output.WriteString("\n" + messageStyle.Render(issue.Message) + "\n")
 	}
 
 	// Print source context if available
 	if issue.Context != nil && len(issue.Context.Lines) > 0 {
-		fmt.Printf("  │\n") // Add spacing before context
+		var contextLines strings.Builder
 		for _, line := range issue.Context.Lines {
-			if line.IsError {
-				// Highlight the error line
-				fmt.Printf("  │→ %4d | %s\n", line.Number, line.Content)
-				// Add highlighting indicator if available
-				if issue.Context.Highlight.Length > 0 {
-					spaces := fmt.Sprintf("%*s", issue.Context.Highlight.StartColumn-1, "")
-					highlight := fmt.Sprintf("%*s", issue.Context.Highlight.Length, "")
-					for i := range highlight {
-						highlight = highlight[:i] + "^" + highlight[i+1:]
-					}
-					fmt.Printf("  │  %4s   %s%s\n", "", spaces, highlight)
-				}
-			} else {
-				// Regular context line
-				fmt.Printf("  │  %4d | %s\n", line.Number, line.Content)
+			hl := &highlightInfo{
+				startCol: issue.Context.Highlight.StartColumn,
+				endCol:   issue.Context.Highlight.EndColumn,
+			}
+			renderedLine := renderCodeLine(line.Number, line.Content, line.IsError, hl)
+			contextLines.WriteString(renderedLine + "\n")
+
+			// Add highlighting indicator if this is the error line
+			if line.IsError && issue.Context.Highlight.Length > 0 {
+				indicator := renderHighlightIndicator(issue.Context.Highlight.StartColumn, issue.Context.Highlight.Length)
+				contextLines.WriteString(indicator + "\n")
 			}
 		}
+		output.WriteString("\n")
+		output.WriteString(contextBoxStyle.Render(strings.TrimSuffix(contextLines.String(), "\n")))
+		output.WriteString("\n")
 	}
 
 	if issue.Suggestion != nil {
-		fmt.Printf("  │\n") // Add spacing before suggestions
-		fmt.Printf("  │  💡 %s", issue.Suggestion.Title)
-		if issue.Suggestion.Description != "" {
-			fmt.Printf(": %s", issue.Suggestion.Description)
-		}
-		fmt.Printf("\n")
-
-		// Show examples if available
-		if len(issue.Suggestion.Examples) > 0 {
-			fmt.Printf("  │\n") // Add spacing before examples
-			fmt.Printf("  │  Example:\n")
-			for _, example := range issue.Suggestion.Examples {
-				fmt.Printf("  │    %s\n", example)
-			}
-		}
-
-		// Show documentation link
-		if issue.Suggestion.DocsURL != "" {
-			fmt.Printf("  │\n") // Add spacing before docs link
-			fmt.Printf("  │  📖 See: %s\n", issue.Suggestion.DocsURL)
-		}
+		suggestionText := renderSuggestion(
+			issue.Suggestion.Title,
+			issue.Suggestion.Description,
+			issue.Suggestion.Examples,
+			issue.Suggestion.DocsURL,
+		)
+		output.WriteString("\n" + suggestionText)
 	}
 
-	fmt.Printf("  └─\n\n") // Clear end separator with extra spacing
+	// Apply box styling based on severity
+	var boxStyle lipgloss.Style
+	switch issue.Severity {
+	case parser.SeverityError:
+		boxStyle = errorBoxStyle
+	case parser.SeverityWarning:
+		boxStyle = warningBoxStyle
+	default:
+		boxStyle = infoBoxStyle
+	}
+
+	fmt.Print(boxStyle.Render(output.String()))
 }
