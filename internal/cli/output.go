@@ -205,6 +205,27 @@ func renderSuggestion(title, description string, examples []string, docsURL stri
 	return result.String()
 }
 
+// Progress styles for run command
+var (
+	stepRunningStyle = lipgloss.NewStyle().
+				Foreground(infoColor)
+
+	stepCompletedStyle = lipgloss.NewStyle().
+				Foreground(successColor).
+				Bold(true)
+
+	stepFailedStyle = lipgloss.NewStyle().
+			Foreground(errorColor).
+			Bold(true)
+
+	stepNameStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#E4E4E7"))
+
+	durationStyle = lipgloss.NewStyle().
+			Foreground(mutedColor).
+			Italic(true)
+)
+
 // formatFilePath formats a file path with proper styling
 func formatFilePath(path string) string {
 	return fileStyle.Render(path)
@@ -284,28 +305,47 @@ func printTable(headers []string, rows [][]string) {
 
 // Success prints a success message with styling
 func Success(message string) {
-	icon := lipgloss.NewStyle().Foreground(lipgloss.Color("#66BB6A")).Bold(true).Render("✓")
-	msg := lipgloss.NewStyle().Foreground(lipgloss.Color("#66BB6A")).Render(message)
+	icon := lipgloss.NewStyle().Foreground(successColor).Bold(true).Render("✓")
+	msg := lipgloss.NewStyle().Foreground(successColor).Render(message)
 	fmt.Printf("%s %s\n", icon, msg)
+}
+
+func SuccessIcon() string {
+	return lipgloss.NewStyle().Foreground(successColor).Bold(true).Render("✓")
+}
+
+// Success prints a success message with styling
+func SuccessString(message string) string {
+	icon := lipgloss.NewStyle().Foreground(successColor).Bold(true).Render("✓")
+	msg := lipgloss.NewStyle().Foreground(successColor).Render(message)
+	return fmt.Sprintf("%s %s", icon, msg)
+}
+
+func ErrorIcon() string {
+	return lipgloss.NewStyle().Foreground(errorColor).Bold(true).Render("✗")
 }
 
 // Error prints an error message with styling
 func Error(message string) {
-	icon := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")).Bold(true).Render("✗")
-	msg := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")).Render(message)
+	icon := lipgloss.NewStyle().Foreground(errorColor).Bold(true).Render("✗")
+	msg := lipgloss.NewStyle().Foreground(errorColor).Render(message)
 	fmt.Fprintf(os.Stderr, "%s %s\n", icon, msg)
+}
+
+func WarningIcon() string {
+	return lipgloss.NewStyle().Foreground(warningColor).Bold(true).Render("⚠")
 }
 
 // Warning prints a warning message with styling
 func Warning(message string) {
-	icon := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA726")).Bold(true).Render("⚠")
-	msg := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA726")).Render(message)
+	icon := lipgloss.NewStyle().Foreground(warningColor).Bold(true).Render("⚠")
+	msg := lipgloss.NewStyle().Foreground(warningColor).Render(message)
 	fmt.Printf("%s %s\n", icon, msg)
 }
 
 // Info prints an info message with styling
 func Info(message string) {
-	icon := lipgloss.NewStyle().Foreground(lipgloss.Color("#42A5F5")).Bold(true).Render("ℹ")
-	msg := lipgloss.NewStyle().Foreground(lipgloss.Color("#42A5F5")).Render(message)
+	icon := lipgloss.NewStyle().Foreground(infoColor).Bold(true).Render("ℹ")
+	msg := lipgloss.NewStyle().Foreground(infoColor).Render(message)
 	fmt.Printf("%s %s\n", icon, msg)
 }

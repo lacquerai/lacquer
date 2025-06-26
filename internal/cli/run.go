@@ -7,9 +7,12 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/briandowns/spinner"
+	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/parser"
 	"github.com/lacquerai/lacquer/internal/runtime"
@@ -53,9 +56,7 @@ var (
 	maxRetries int
 	timeout    time.Duration
 
-	// Output options
-	showProgress bool
-	showSteps    bool
+	// Removed showProgress and showSteps - using single clean format
 )
 
 func init() {
@@ -70,9 +71,7 @@ func init() {
 	runCmd.Flags().IntVar(&maxRetries, "max-retries", 3, "maximum number of retries for failed steps")
 	runCmd.Flags().DurationVar(&timeout, "timeout", 30*time.Minute, "overall execution timeout")
 
-	// Output flags
-	runCmd.Flags().BoolVar(&showProgress, "progress", true, "show real-time progress")
-	runCmd.Flags().BoolVar(&showSteps, "show-steps", false, "show detailed step information")
+	// Removed verbose output flags - using single clean format
 }
 
 // ExecutionResult represents the result of running a workflow
@@ -121,6 +120,26 @@ type TokenUsage struct {
 	CompletionTokens int     `json:"completion_tokens" yaml:"completion_tokens"`
 	TotalTokens      int     `json:"total_tokens" yaml:"total_tokens"`
 	EstimatedCost    float64 `json:"estimated_cost" yaml:"estimated_cost"`
+}
+
+// StepProgressState tracks the visual state of each step for spinner display
+type StepProgressState struct {
+	stepID     string
+	stepIndex  int
+	totalSteps int
+	status     string // "running", "completed", "failed"
+	startTime  time.Time
+	endTime    time.Time
+	spinner    *spinner.Spinner
+	mu         sync.RWMutex
+}
+
+// ProgressTracker manages the visual progress display for all steps
+type ProgressTracker struct {
+	steps map[string]*StepProgressState
+	mu    sync.RWMutex
+	done  chan struct{}
+	wg    sync.WaitGroup
 }
 
 func runWorkflow(workflowFile string) {
@@ -198,7 +217,7 @@ func runWorkflow(workflowFile string) {
 
 	// Show workflow info
 	if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
-		printWorkflowInfo(workflow, workflowInputs)
+		printWorkflowInfo(workflow)
 	}
 
 	// Dry run mode
@@ -237,9 +256,7 @@ func runWorkflow(workflowFile string) {
 		StepsTotal:   len(workflow.Workflow.Steps),
 	}
 
-	if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
-		fmt.Printf("\n🚀 Starting workflow execution (Run ID: %s)\n\n", execCtx.RunID)
-	}
+	// Removed verbose execution start message
 
 	// Execute with progress reporting
 	err = executeWithProgress(ctx, executor, execCtx, &result)
@@ -284,11 +301,12 @@ func runWorkflow(workflowFile string) {
 func executeWithProgress(ctx context.Context, executor *runtime.Executor, execCtx *runtime.ExecutionContext, result *ExecutionResult) error {
 	// Create a progress channel for real-time updates
 	progressChan := make(chan runtime.ExecutionEvent, 100)
-	now := time.Now()
 
-	// Start progress reporter if enabled
-	if showProgress && !viper.GetBool("quiet") && viper.GetString("output") == "text" {
-		go progressReporter(progressChan, result, now)
+	// Start progress reporter if not quiet and text output
+	if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
+		tracker := NewProgressTracker()
+		go tracker.Start(progressChan, result)
+		defer tracker.Stop()
 	}
 
 	// Execute the workflow
@@ -300,36 +318,137 @@ func executeWithProgress(ctx context.Context, executor *runtime.Executor, execCt
 	return err
 }
 
-func progressReporter(progressChan <-chan runtime.ExecutionEvent, result *ExecutionResult, now time.Time) {
+// NewProgressTracker creates a new progress tracker
+func NewProgressTracker() *ProgressTracker {
+	return &ProgressTracker{
+		steps: make(map[string]*StepProgressState),
+		done:  make(chan struct{}),
+	}
+}
+
+// Start begins the progress tracking
+func (pt *ProgressTracker) Start(progressChan <-chan runtime.ExecutionEvent, result *ExecutionResult) {
+	pt.wg.Add(1)
+	defer pt.wg.Done()
+
+	// Process events - spinners handle their own animation
 	for event := range progressChan {
 		switch event.Type {
 		case runtime.EventStepStarted:
 			result.StepsExecuted++
-			if showSteps {
-				fmt.Printf("  📝 Step %d/%d: %s\n", result.StepsExecuted, result.StepsTotal, event.StepID)
-			} else {
-				fmt.Printf("  ▶️ Step %d/%d\n", result.StepsExecuted, result.StepsTotal)
-			}
-		case runtime.EventStepProgress:
-			message := strings.TrimSuffix(event.Metadata["message"].(string), "\n")
-			fmt.Printf("    %s\n", message)
+			pt.startStep(event.StepID, event.StepIndex, result.StepsTotal)
+
 		case runtime.EventStepCompleted:
-			if showSteps {
-				fmt.Printf("  ✅ Completed: %s (%.2fs)\n", event.StepID, event.Duration.Seconds())
-			}
+			pt.completeStep(event.StepID, event.Duration)
 
 		case runtime.EventStepFailed:
-			if showSteps {
-				fmt.Printf("  ❌ Failed: %s - %s\n", event.StepID, event.Error)
-			}
+			pt.failStep(event.StepID, event.Duration, event.Error)
 
 		case runtime.EventStepRetrying:
-			if showSteps {
-				fmt.Printf("  🔄 Retrying: %s (attempt %d)\n", event.StepID, event.Attempt)
-			}
+			pt.retryStep(event.StepID, event.Attempt)
+
+		case runtime.EventStepProgress:
+			pt.updateStepProgress(event.StepID, event.Metadata)
 		}
 	}
 }
+
+// Stop halts the progress tracker and ensures all spinners are stopped
+func (pt *ProgressTracker) Stop() {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	// Stop any running spinners
+	for _, state := range pt.steps {
+		if state.spinner != nil && state.status == "running" {
+			state.spinner.Stop()
+		}
+	}
+
+	close(pt.done)
+	pt.wg.Wait()
+}
+
+// startStep initializes a new step in running state
+func (pt *ProgressTracker) startStep(stepID string, stepIndex, totalSteps int) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	// Create and configure spinner
+	s := spinner.New(spinner.CharSets[9], 100*time.Millisecond) // Dots spinner with 100ms delay
+	s.Suffix = fmt.Sprintf(" Step %d/%d: %s", stepIndex, totalSteps, stepID)
+
+	state := &StepProgressState{
+		stepID:     stepID,
+		stepIndex:  stepIndex,
+		totalSteps: totalSteps,
+		status:     "running",
+		startTime:  time.Now(),
+		spinner:    s,
+	}
+	pt.steps[stepID] = state
+
+	// Start the spinner
+	s.Start()
+}
+
+// updateStepProgress updates the progress of a step
+func (pt *ProgressTracker) updateStepProgress(stepID string, metadata map[string]interface{}) {
+	pt.mu.RLock()
+	defer pt.mu.RUnlock()
+
+	if state, exists := pt.steps[stepID]; exists {
+		state.mu.Lock()
+		state.spinner.Suffix = fmt.Sprintf(" %v", metadata["message"])
+		state.mu.Unlock()
+	}
+}
+
+// completeStep marks a step as completed
+func (pt *ProgressTracker) completeStep(stepID string, duration time.Duration) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	if state, exists := pt.steps[stepID]; exists {
+		state.mu.Lock()
+		state.status = "completed"
+		state.endTime = time.Now()
+		state.spinner.FinalMSG = SuccessIcon() + " " + strings.TrimSpace(state.spinner.Suffix) + "\n"
+		state.spinner.Stop()
+		state.mu.Unlock()
+	}
+}
+
+// failStep marks a step as failed
+func (pt *ProgressTracker) failStep(stepID string, duration time.Duration, _ string) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	if state, exists := pt.steps[stepID]; exists {
+		state.mu.Lock()
+		state.status = "failed"
+		state.endTime = time.Now()
+		state.spinner.FinalMSG = ErrorIcon() + " " + strings.TrimSpace(state.spinner.Suffix) + "\n"
+		state.spinner.Stop()
+		state.mu.Unlock()
+	}
+}
+
+// retryStep shows retry information
+func (pt *ProgressTracker) retryStep(stepID string, attempt int) {
+	pt.mu.RLock()
+	defer pt.mu.RUnlock()
+
+	if state, exists := pt.steps[stepID]; exists {
+		// Stop current spinner and update suffix to show retry
+		state.spinner.Stop()
+		state.spinner.Suffix = fmt.Sprintf(" Step %d/%d: %s (retry %d)",
+			state.stepIndex, state.totalSteps, stepID, attempt)
+		state.spinner.Start()
+	}
+}
+
+// No animation functions needed - briandowns/spinner handles animation automatically
 
 func collectExecutionResults(execCtx *runtime.ExecutionContext, result *ExecutionResult) {
 	summary := execCtx.GetExecutionSummary()
@@ -377,19 +496,12 @@ func collectExecutionResults(execCtx *runtime.ExecutionContext, result *Executio
 	}
 }
 
-func printWorkflowInfo(workflow *ast.Workflow, inputs map[string]interface{}) {
-	fmt.Printf("📋 Workflow: %s\n", getWorkflowName(workflow))
-	if workflow.Metadata != nil && workflow.Metadata.Description != "" {
-		fmt.Printf("📝 Description: %s\n", workflow.Metadata.Description)
-	}
-	fmt.Printf("🔢 Steps: %d\n", len(workflow.Workflow.Steps))
+func printWorkflowInfo(workflow *ast.Workflow) {
+	name := getWorkflowName(workflow)
+	stepCount := len(workflow.Workflow.Steps)
 
-	if len(inputs) > 0 {
-		fmt.Printf("📥 Inputs:\n")
-		for k, v := range inputs {
-			fmt.Printf("  %s = %v\n", k, v)
-		}
-	}
+	fmt.Printf("Running %s (%d steps)\n\n", lipgloss.NewStyle().Bold(true).Render(name), stepCount)
+
 }
 
 func getWorkflowName(workflow *ast.Workflow) string {
@@ -419,74 +531,35 @@ func printExecutionSummary(result ExecutionResult) {
 
 	fmt.Printf("\n")
 
+	// Show success or failure with duration
 	if result.Status == "completed" {
-		Success(fmt.Sprintf("Workflow completed successfully in %v", result.Duration))
+		fmt.Printf("%s Workflow completed in %v\n", SuccessIcon(), result.Duration)
+
 	} else {
-		Error(fmt.Sprintf("Workflow failed after %v: %s", result.Duration, result.Error))
-	}
-
-	// Print execution stats
-	fmt.Printf("\n📊 Execution Summary:\n")
-	fmt.Printf("  Run ID: %s\n", result.RunID)
-	fmt.Printf("  Duration: %v\n", result.Duration)
-	fmt.Printf("  Steps: %d/%d executed\n", result.StepsExecuted, result.StepsTotal)
-
-	if result.TokenUsage != nil {
-		fmt.Printf("  Tokens: %d total (%.4f estimated cost)\n",
-			result.TokenUsage.TotalTokens, result.TokenUsage.EstimatedCost)
-	}
-
-	// Show step details if verbose or if there were failures
-	if viper.GetBool("verbose") || result.Status == "failed" {
-		fmt.Printf("\n📋 Step Details:\n")
-		headers := []string{"Step", "Status", "Duration", "Tokens", "Cost"}
-		rows := make([][]string, len(result.StepResults))
-
-		for i, step := range result.StepResults {
-			status := "✅"
-			if step.Status == "failed" {
-				status = "❌"
-			} else if step.Status == "skipped" {
-				status = "⏭️"
-			}
-
-			tokens := "-"
-			cost := "-"
-			if step.TokenUsage != nil {
-				tokens = fmt.Sprintf("%d", step.TokenUsage.TotalTokens)
-				cost = fmt.Sprintf("$%.4f", step.TokenUsage.EstimatedCost)
-			}
-
-			rows[i] = []string{
-				step.StepID,
-				status,
-				step.Duration.String(),
-				tokens,
-				cost,
-			}
+		fmt.Printf("%s Workflow failed after %v\n", ErrorIcon(), result.Duration)
+		// Show error details for failures
+		if result.Error != "" {
+			fmt.Printf("   %s\n", result.Error)
 		}
-
-		printTable(headers, rows)
 	}
 
-	// Show workflow outputs if available
 	if len(result.Outputs) > 0 {
-		fmt.Printf("\n📤 Workflow Outputs:\n")
+		var outputContent strings.Builder
+		outputContent.WriteString("\n")
+		outputContent.WriteString(lipgloss.NewStyle().Bold(true).Underline(true).Render("Outputs"))
+		outputContent.WriteString("\n\n")
+		var i int
 		for k, v := range result.Outputs {
-			fmt.Printf("  %s: %v\n", k, v)
+			outputContent.WriteString(lipgloss.NewStyle().Bold(true).Underline(true).Render(k))
+			outputContent.WriteString(fmt.Sprintf(": %v", v))
+			if i < len(result.Outputs)-1 {
+				outputContent.WriteString("\n")
+			}
+			i++
 		}
+		fmt.Printf("%s\n", outputContent.String())
 	}
 
-	// Show final state if verbose and not empty
-	if viper.GetBool("verbose") && len(result.FinalState) > 0 {
-		fmt.Printf("\n🏁 Final State:\n")
-		for k, v := range result.FinalState {
-			if k == "_last_saved" {
-				continue // Skip internal state
-			}
-			fmt.Printf("  %s = %v\n", k, v)
-		}
-	}
 }
 
 func printValidationErrors(validationResult *runtime.InputValidationResult) {
@@ -509,4 +582,8 @@ func printValidationErrors(validationResult *runtime.InputValidationResult) {
 	}
 
 	fmt.Printf("\n💡 Please check your input parameters and try again.\n")
+}
+
+func formatDuration(duration time.Duration) string {
+	return fmt.Sprintf("%.2fs", duration.Seconds())
 }
