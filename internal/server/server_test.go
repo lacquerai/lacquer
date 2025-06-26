@@ -81,10 +81,10 @@ func findAvailablePort() int {
 
 // Test suite setup
 type ServerTestSuite struct {
-	server     *Server
-	tempDir    string
+	server        *Server
+	tempDir       string
 	workflowFiles []string
-	config     *Config
+	config        *Config
 }
 
 func setupTestSuite(t *testing.T) *ServerTestSuite {
@@ -104,7 +104,7 @@ func setupTestSuite(t *testing.T) *ServerTestSuite {
 
 	// Find available port for testing
 	testPort := findAvailablePort()
-	
+
 	config := &Config{
 		Host:          "127.0.0.1",
 		Port:          testPort,
@@ -210,20 +210,20 @@ func TestServerIntegration_ListWorkflows(t *testing.T) {
 	}
 	assert.Len(t, workflows, 2)
 
-	// Check test-workflow (note: key includes .laq extension)
-	testWorkflow, ok := workflows["test-workflow.laq"].(map[string]any)
+	// Check test-workflow (note: key is without .laq extension)
+	testWorkflow, ok := workflows["test-workflow"].(map[string]any)
 	if !ok {
-		t.Fatalf("test-workflow.laq not found or wrong type: %+v", workflows)
+		t.Fatalf("test-workflow not found or wrong type: %+v", workflows)
 	}
 	assert.Equal(t, "test-workflow", testWorkflow["name"])
 	assert.Equal(t, "A test workflow for server testing", testWorkflow["description"])
 	assert.Equal(t, "1.0", testWorkflow["version"])
 	assert.Equal(t, float64(1), testWorkflow["steps"])
 
-	// Check simple-workflow (note: key includes .laq extension)
-	simpleWorkflow, ok := workflows["simple-workflow.laq"].(map[string]any)
+	// Check simple-workflow (note: key is without .laq extension)
+	simpleWorkflow, ok := workflows["simple-workflow"].(map[string]any)
 	if !ok {
-		t.Fatalf("simple-workflow.laq not found or wrong type: %+v", workflows)
+		t.Fatalf("simple-workflow not found or wrong type: %+v", workflows)
 	}
 	assert.Equal(t, "simple-workflow", simpleWorkflow["name"])
 	assert.Equal(t, "A simple test workflow", simpleWorkflow["description"])
@@ -238,7 +238,7 @@ func TestServerIntegration_ExecuteWorkflow_NotFound(t *testing.T) {
 	// Test executing non-existent workflow
 	reqBody := map[string]any{
 		"inputs": map[string]any{
-			"input_name": "Test",
+			"inputName": "Test",
 		},
 	}
 	body, _ := json.Marshal(reqBody)
@@ -266,7 +266,7 @@ func TestServerIntegration_ExecuteWorkflow_BadJSON(t *testing.T) {
 
 	// Test executing with bad JSON
 	resp, err := http.Post(
-		fmt.Sprintf("http://%s/api/v1/workflows/test-workflow.laq/execute", addr),
+		fmt.Sprintf("http://%s/api/v1/workflows/test-workflow/execute", addr),
 		"application/json",
 		strings.NewReader("{invalid json}"),
 	)
@@ -289,13 +289,13 @@ func TestServerIntegration_ExecuteWorkflow_Success(t *testing.T) {
 	// Test successful workflow execution
 	reqBody := map[string]any{
 		"inputs": map[string]any{
-			"input_name": "Integration Test",
+			"inputName": "Integration Test",
 		},
 	}
 	body, _ := json.Marshal(reqBody)
 
 	resp, err := http.Post(
-		fmt.Sprintf("http://%s/api/v1/workflows/test-workflow.laq/execute", addr),
+		fmt.Sprintf("http://%s/api/v1/workflows/test-workflow/execute", addr),
 		"application/json",
 		bytes.NewReader(body),
 	)
@@ -310,7 +310,7 @@ func TestServerIntegration_ExecuteWorkflow_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, result, "run_id")
-	assert.Equal(t, "test-workflow.laq", result["workflow_id"])
+	assert.Equal(t, "test-workflow", result["workflow_id"])
 	assert.Equal(t, "running", result["status"])
 	assert.Contains(t, result, "started_at")
 
@@ -332,7 +332,7 @@ func TestServerIntegration_ExecuteWorkflow_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, runID, execution.RunID)
-	assert.Equal(t, "test-workflow.laq", execution.WorkflowID)
+	assert.Equal(t, "test-workflow", execution.WorkflowID)
 	assert.Contains(t, []string{"running", "completed", "failed"}, execution.Status)
 	assert.NotEmpty(t, execution.StartTime)
 }
@@ -372,7 +372,7 @@ func TestServerIntegration_ConcurrencyLimit(t *testing.T) {
 
 	// Start first execution
 	resp1, err := http.Post(
-		fmt.Sprintf("http://%s/api/v1/workflows/simple-workflow.laq/execute", addr),
+		fmt.Sprintf("http://%s/api/v1/workflows/simple-workflow/execute", addr),
 		"application/json",
 		bytes.NewReader(body),
 	)
@@ -383,7 +383,7 @@ func TestServerIntegration_ConcurrencyLimit(t *testing.T) {
 
 	// Immediately try second execution (should be rejected due to concurrency limit)
 	resp2, err := http.Post(
-		fmt.Sprintf("http://%s/api/v1/workflows/simple-workflow.laq/execute", addr),
+		fmt.Sprintf("http://%s/api/v1/workflows/simple-workflow/execute", addr),
 		"application/json",
 		bytes.NewReader(body),
 	)
@@ -405,7 +405,7 @@ func TestServerIntegration_WebSocketStream_NotFound(t *testing.T) {
 	addr := suite.startServerInBackground(t)
 
 	// Test WebSocket with non-existent run ID
-	wsURL := fmt.Sprintf("ws://%s/api/v1/workflows/test-workflow.laq/stream?run_id=non-existent", addr)
+	wsURL := fmt.Sprintf("ws://%s/api/v1/workflows/test-workflow/stream?run_id=non-existent", addr)
 	_, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	assert.Error(t, err)
 	// WebSocket dial should fail or return error status
@@ -418,7 +418,7 @@ func TestServerIntegration_WebSocketStream_MissingRunID(t *testing.T) {
 	addr := suite.startServerInBackground(t)
 
 	// Test WebSocket without run_id parameter
-	wsURL := fmt.Sprintf("ws://%s/api/v1/workflows/test-workflow.laq/stream", addr)
+	wsURL := fmt.Sprintf("ws://%s/api/v1/workflows/test-workflow/stream", addr)
 	_, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	assert.Error(t, err)
 	// Should fail due to missing run_id parameter
@@ -540,7 +540,7 @@ func TestServerIntegration_WorkflowDirectory(t *testing.T) {
 
 	// Verify workflow was loaded correctly
 	workflows := server.registry.List()
-	assert.Contains(t, workflows, "dir-workflow.laq")
+	assert.Contains(t, workflows, "dir-workflow")
 }
 
 func TestServerIntegration_InvalidWorkflowFile(t *testing.T) {
@@ -616,4 +616,655 @@ func BenchmarkServer_HealthCheck(b *testing.B) {
 		}
 		resp.Body.Close()
 	}
+}
+
+// Input Validation Integration Tests
+
+const validationTestWorkflowYAML = `version: "1.0"
+metadata:
+  name: validation-test-workflow
+  description: Workflow for testing input validation
+  author: test
+agents:
+  validationAgent:
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    temperature: 0.7
+    system_prompt: You are a validation test assistant.
+workflow:
+  inputs:
+    name:
+      type: string
+      description: User name
+      required: true
+      pattern: '^[A-Za-z\s]+$'
+    age:
+      type: integer
+      description: User age
+      minimum: 18
+      maximum: 120
+      default: 25
+    email:
+      type: string
+      description: Email address
+      pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    skills:
+      type: array
+      description: List of skills
+      min_items: 1
+      max_items: 10
+    role:
+      type: string
+      description: User role
+      enum: ["user", "admin", "moderator"]
+      default: "user"
+    active:
+      type: boolean
+      description: Is user active
+      default: true
+    metadata:
+      type: object
+      description: Additional metadata
+  steps:
+    - id: validationStep
+      agent: validationAgent
+      prompt: "Hello {{ inputs.name }}! You are {{ inputs.age }} years old."
+  outputs:
+    result: "{{ steps.validationStep.output }}"
+`
+
+func setupValidationTestSuite(t *testing.T) *ServerTestSuite {
+	tempDir, err := os.MkdirTemp("", "lacquer-validation-test-*")
+	require.NoError(t, err)
+
+	// Create validation test workflow file
+	testWorkflowFile := filepath.Join(tempDir, "validation-test.laq.yaml")
+	err = os.WriteFile(testWorkflowFile, []byte(validationTestWorkflowYAML), 0644)
+	require.NoError(t, err)
+
+	workflowFiles := []string{testWorkflowFile}
+
+	// Find available port for testing
+	testPort := findAvailablePort()
+
+	config := &Config{
+		Host:          "127.0.0.1",
+		Port:          testPort,
+		Concurrency:   2,
+		Timeout:       30 * time.Second,
+		EnableMetrics: false,
+		EnableCORS:    true,
+		WorkflowFiles: workflowFiles,
+		ReadTimeout:   5 * time.Second,
+		WriteTimeout:  5 * time.Second,
+		IdleTimeout:   30 * time.Second,
+	}
+
+	server, err := New(config)
+	require.NoError(t, err)
+
+	// Use separate metrics registry for tests
+	server.manager = NewExecutionManagerWithRegistry(config.Concurrency, nil)
+
+	err = server.LoadWorkflows()
+	require.NoError(t, err)
+
+	return &ServerTestSuite{
+		server:        server,
+		tempDir:       tempDir,
+		workflowFiles: workflowFiles,
+		config:        config,
+	}
+}
+
+func TestServerIntegration_InputValidation_RequiredFieldMissing(t *testing.T) {
+	suite := setupValidationTestSuite(t)
+	defer suite.cleanup(t)
+
+	addr := suite.startServerInBackground(t)
+
+	// Test missing required field
+	reqBody := map[string]any{
+		"inputs": map[string]any{
+			"age": 30,
+			// missing required "name" field
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+		"application/json",
+		bytes.NewReader(body),
+	)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Input validation failed", result["error"])
+
+	details := result["details"].([]any)
+	assert.Len(t, details, 1)
+
+	errorDetail := details[0].(map[string]any)
+	assert.Equal(t, "name", errorDetail["field"])
+	assert.Contains(t, errorDetail["message"], "required field is missing")
+}
+
+func TestServerIntegration_InputValidation_DefaultValues(t *testing.T) {
+	suite := setupValidationTestSuite(t)
+	defer suite.cleanup(t)
+
+	addr := suite.startServerInBackground(t)
+
+	// Test request with minimal inputs (defaults should be applied)
+	reqBody := map[string]any{
+		"inputs": map[string]any{
+			"name":   "Alice Smith",
+			"skills": []string{"golang", "testing"},
+			// age, role, and active should get defaults
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+		"application/json",
+		bytes.NewReader(body),
+	)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Contains(t, result, "run_id")
+	assert.Equal(t, "validation-test", result["workflow_id"])
+	assert.Equal(t, "running", result["status"])
+}
+
+func TestServerIntegration_InputValidation_TypeConversion(t *testing.T) {
+	suite := setupValidationTestSuite(t)
+	defer suite.cleanup(t)
+
+	addr := suite.startServerInBackground(t)
+
+	// Test type conversion (string to int, string to bool)
+	reqBody := map[string]any{
+		"inputs": map[string]any{
+			"name":   "Bob Johnson",
+			"age":    "42",    // string to int
+			"active": "false", // string to bool
+			"skills": []string{"python", "docker"},
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+		"application/json",
+		bytes.NewReader(body),
+	)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Contains(t, result, "run_id")
+	assert.Equal(t, "validation-test", result["workflow_id"])
+	assert.Equal(t, "running", result["status"])
+}
+
+func TestServerIntegration_InputValidation_TypeValidationFailure(t *testing.T) {
+	suite := setupValidationTestSuite(t)
+	defer suite.cleanup(t)
+
+	addr := suite.startServerInBackground(t)
+
+	// Test invalid type conversion
+	reqBody := map[string]any{
+		"inputs": map[string]any{
+			"name":   "Charlie Brown",
+			"age":    "not-a-number", // invalid int
+			"skills": []string{"java"},
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+		"application/json",
+		bytes.NewReader(body),
+	)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Input validation failed", result["error"])
+
+	details := result["details"].([]any)
+	assert.Len(t, details, 1)
+
+	errorDetail := details[0].(map[string]any)
+	assert.Equal(t, "age", errorDetail["field"])
+	assert.Contains(t, errorDetail["message"], "invalid type")
+	assert.Equal(t, "not-a-number", errorDetail["value"])
+}
+
+func TestServerIntegration_InputValidation_StringConstraints(t *testing.T) {
+	t.Run("Pattern validation failure", func(t *testing.T) {
+		suite := setupValidationTestSuite(t)
+		defer suite.cleanup(t)
+
+		addr := suite.startServerInBackground(t)
+		reqBody := map[string]any{
+			"inputs": map[string]any{
+				"name":   "Alice123", // invalid pattern (contains numbers)
+				"skills": []string{"golang"},
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		resp, err := http.Post(
+			fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+			"application/json",
+			bytes.NewReader(body),
+		)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusBadRequest {
+			responseBody, _ := io.ReadAll(resp.Body)
+			t.Logf("Expected 400, got %d. Response: %s", resp.StatusCode, string(responseBody))
+		}
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		var result map[string]any
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		details := result["details"].([]any)
+		assert.Len(t, details, 1)
+
+		errorDetail := details[0].(map[string]any)
+		assert.Equal(t, "name", errorDetail["field"])
+		assert.Contains(t, errorDetail["message"], "does not match required pattern")
+	})
+
+	t.Run("Enum validation failure", func(t *testing.T) {
+		suite := setupValidationTestSuite(t)
+		defer suite.cleanup(t)
+
+		addr := suite.startServerInBackground(t)
+		reqBody := map[string]any{
+			"inputs": map[string]any{
+				"name":   "Alice Smith",
+				"role":   "superuser", // invalid enum value
+				"skills": []string{"golang"},
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		resp, err := http.Post(
+			fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+			"application/json",
+			bytes.NewReader(body),
+		)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		var result map[string]any
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		details := result["details"].([]any)
+		assert.Len(t, details, 1)
+
+		errorDetail := details[0].(map[string]any)
+		assert.Equal(t, "role", errorDetail["field"])
+		assert.Contains(t, errorDetail["message"], "must be one of")
+	})
+
+	t.Run("Email pattern validation", func(t *testing.T) {
+		suite := setupValidationTestSuite(t)
+		defer suite.cleanup(t)
+
+		addr := suite.startServerInBackground(t)
+		reqBody := map[string]any{
+			"inputs": map[string]any{
+				"name":   "Alice Smith",
+				"email":  "invalid-email", // invalid email pattern
+				"skills": []string{"golang"},
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		resp, err := http.Post(
+			fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+			"application/json",
+			bytes.NewReader(body),
+		)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		var result map[string]any
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		details := result["details"].([]any)
+		assert.Len(t, details, 1)
+
+		errorDetail := details[0].(map[string]any)
+		assert.Equal(t, "email", errorDetail["field"])
+		assert.Contains(t, errorDetail["message"], "does not match required pattern")
+	})
+}
+
+func TestServerIntegration_InputValidation_NumericConstraints(t *testing.T) {
+	t.Run("Below minimum", func(t *testing.T) {
+		suite := setupValidationTestSuite(t)
+		defer suite.cleanup(t)
+
+		addr := suite.startServerInBackground(t)
+		reqBody := map[string]any{
+			"inputs": map[string]any{
+				"name":   "Alice Smith",
+				"age":    15, // below minimum of 18
+				"skills": []string{"golang"},
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		resp, err := http.Post(
+			fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+			"application/json",
+			bytes.NewReader(body),
+		)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		var result map[string]any
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		details := result["details"].([]any)
+		assert.Len(t, details, 1)
+
+		errorDetail := details[0].(map[string]any)
+		assert.Equal(t, "age", errorDetail["field"])
+		assert.Contains(t, errorDetail["message"], "less than minimum")
+	})
+
+	t.Run("Above maximum", func(t *testing.T) {
+		suite := setupValidationTestSuite(t)
+		defer suite.cleanup(t)
+
+		addr := suite.startServerInBackground(t)
+		reqBody := map[string]any{
+			"inputs": map[string]any{
+				"name":   "Alice Smith",
+				"age":    150, // above maximum of 120
+				"skills": []string{"golang"},
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		resp, err := http.Post(
+			fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+			"application/json",
+			bytes.NewReader(body),
+		)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		var result map[string]any
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		details := result["details"].([]any)
+		assert.Len(t, details, 1)
+
+		errorDetail := details[0].(map[string]any)
+		assert.Equal(t, "age", errorDetail["field"])
+		assert.Contains(t, errorDetail["message"], "greater than maximum")
+	})
+}
+
+func TestServerIntegration_InputValidation_ArrayConstraints(t *testing.T) {
+	t.Run("Too few items", func(t *testing.T) {
+		suite := setupValidationTestSuite(t)
+		defer suite.cleanup(t)
+
+		addr := suite.startServerInBackground(t)
+		reqBody := map[string]any{
+			"inputs": map[string]any{
+				"name":   "Alice Smith",
+				"skills": []string{}, // empty array, min_items is 1
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		resp, err := http.Post(
+			fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+			"application/json",
+			bytes.NewReader(body),
+		)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		var result map[string]any
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		details := result["details"].([]any)
+		assert.Len(t, details, 1)
+
+		errorDetail := details[0].(map[string]any)
+		assert.Equal(t, "skills", errorDetail["field"])
+		assert.Contains(t, errorDetail["message"], "minimum required is")
+	})
+
+	t.Run("Too many items", func(t *testing.T) {
+		suite := setupValidationTestSuite(t)
+		defer suite.cleanup(t)
+
+		addr := suite.startServerInBackground(t)
+		reqBody := map[string]any{
+			"inputs": map[string]any{
+				"name": "Alice Smith",
+				"skills": []string{
+					"golang", "python", "java", "javascript", "typescript",
+					"rust", "c++", "ruby", "php", "swift", "kotlin", // 11 items, max is 10
+				},
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		resp, err := http.Post(
+			fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+			"application/json",
+			bytes.NewReader(body),
+		)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		var result map[string]any
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		require.NoError(t, err)
+
+		details := result["details"].([]any)
+		assert.Len(t, details, 1)
+
+		errorDetail := details[0].(map[string]any)
+		assert.Equal(t, "skills", errorDetail["field"])
+		assert.Contains(t, errorDetail["message"], "maximum allowed is")
+	})
+}
+
+func TestServerIntegration_InputValidation_UnexpectedFields(t *testing.T) {
+	suite := setupValidationTestSuite(t)
+	defer suite.cleanup(t)
+
+	addr := suite.startServerInBackground(t)
+
+	// Test unexpected input fields
+	reqBody := map[string]any{
+		"inputs": map[string]any{
+			"name":        "Alice Smith",
+			"skills":      []string{"golang"},
+			"unexpected":  "value", // unexpected field
+			"another_bad": 123,     // another unexpected field
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+		"application/json",
+		bytes.NewReader(body),
+	)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Input validation failed", result["error"])
+
+	details := result["details"].([]any)
+	assert.Len(t, details, 2)
+
+	// Check that both unexpected fields are reported
+	errorFields := make([]string, len(details))
+	for i, detail := range details {
+		errorDetail := detail.(map[string]any)
+		errorFields[i] = errorDetail["field"].(string)
+		assert.Contains(t, errorDetail["message"], "unexpected input field")
+	}
+	assert.Contains(t, errorFields, "unexpected")
+	assert.Contains(t, errorFields, "another_bad")
+}
+
+func TestServerIntegration_InputValidation_MultipleErrors(t *testing.T) {
+	suite := setupValidationTestSuite(t)
+	defer suite.cleanup(t)
+
+	addr := suite.startServerInBackground(t)
+
+	// Test multiple validation errors at once
+	reqBody := map[string]any{
+		"inputs": map[string]any{
+			"name":       "Alice123",      // invalid pattern
+			"age":        15,              // below minimum
+			"email":      "invalid-email", // invalid pattern
+			"skills":     []string{},      // too few items
+			"role":       "superuser",     // invalid enum
+			"unexpected": "value",         // unexpected field
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+		"application/json",
+		bytes.NewReader(body),
+	)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Input validation failed", result["error"])
+
+	details := result["details"].([]any)
+	assert.Len(t, details, 6) // All 6 errors should be reported
+
+	// Collect all error fields
+	errorFields := make([]string, len(details))
+	for i, detail := range details {
+		errorDetail := detail.(map[string]any)
+		errorFields[i] = errorDetail["field"].(string)
+	}
+
+	// Verify all expected errors are present
+	expectedFields := []string{"name", "age", "email", "skills", "role", "unexpected"}
+	for _, expectedField := range expectedFields {
+		assert.Contains(t, errorFields, expectedField)
+	}
+}
+
+func TestServerIntegration_InputValidation_ValidComplexInput(t *testing.T) {
+	suite := setupValidationTestSuite(t)
+	defer suite.cleanup(t)
+
+	addr := suite.startServerInBackground(t)
+
+	// Test valid complex input with all constraints satisfied
+	reqBody := map[string]any{
+		"inputs": map[string]any{
+			"name":     "Alice Smith",
+			"age":      30,
+			"email":    "alice@example.com",
+			"skills":   []string{"golang", "python", "docker"},
+			"role":     "admin",
+			"active":   true,
+			"metadata": map[string]any{"department": "engineering"},
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/api/v1/workflows/validation-test/execute", addr),
+		"application/json",
+		bytes.NewReader(body),
+	)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, err)
+
+	assert.Contains(t, result, "run_id")
+	assert.Equal(t, "validation-test", result["workflow_id"])
+	assert.Equal(t, "running", result["status"])
 }

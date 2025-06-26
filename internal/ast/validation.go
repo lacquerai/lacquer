@@ -539,17 +539,17 @@ func isValidFilePath(path string) bool {
 	if path == "" {
 		return false
 	}
-	
+
 	// Basic path validation
 	if strings.Contains(path, "..") {
 		return false // Prevent directory traversal
 	}
-	
+
 	// Must have a file extension for scripts
 	if !strings.HasPrefix(path, "./") && !strings.HasPrefix(path, "/") {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -558,7 +558,7 @@ func isValidURL(urlStr string) bool {
 	if urlStr == "" {
 		return false
 	}
-	
+
 	// Basic URL validation
 	matched, _ := regexp.MatchString(`^https?://[^\s/$.?#].[^\s]*$`, urlStr)
 	return matched
@@ -569,7 +569,7 @@ func isValidDuration(duration string) bool {
 	if duration == "" {
 		return false
 	}
-	
+
 	// Use Go's time.ParseDuration for validation
 	_, err := parseTemplateDuration(duration)
 	return err == nil
@@ -582,7 +582,7 @@ func parseTemplateDuration(s string) (time.Duration, error) {
 	if !matched {
 		return 0, fmt.Errorf("invalid duration format")
 	}
-	
+
 	// For validation purposes, just check the format
 	return time.Second, nil
 }

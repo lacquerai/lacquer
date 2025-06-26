@@ -445,7 +445,7 @@ func (p *AnthropicProvider) convertConversationToMessages(conversation []interfa
 
 		case "assistant":
 			var contents []AnthropicContent
-			
+
 			// Add text content if available
 			if content, ok := msgMap["content"].(string); ok && content != "" {
 				contents = append(contents, AnthropicContent{
@@ -634,13 +634,13 @@ func (p *AnthropicProvider) extractResponseContent(response *AnthropicResponse) 
 		if response != "" {
 			response += "\n"
 		}
-		
+
 		// Add tool calls in a format that can be detected by extractToolCallsFromResponse
 		toolCallsJSON, err := json.Marshal(toolCalls)
 		if err == nil {
 			response += fmt.Sprintf("<tool_calls>%s</tool_calls>", string(toolCallsJSON))
 		}
-		
+
 		return response
 	}
 

@@ -49,8 +49,8 @@ type MCPResponse struct {
 
 // MCPError represents an error from an MCP server
 type MCPError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
@@ -68,8 +68,8 @@ type MCPTool struct {
 
 // MCPToolResult represents the result of an MCP tool call
 type MCPToolResult struct {
-	Output   interface{} `json:"output"`
-	Error    string      `json:"error,omitempty"`
+	Output   interface{}            `json:"output"`
+	Error    string                 `json:"error,omitempty"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 

@@ -175,6 +175,18 @@ func runWorkflow(workflowFile string) {
 		workflowInputs[k] = v
 	}
 
+	for k, v := range workflow.Workflow.Inputs {
+		if _, ok := workflowInputs[k]; !ok && v.Default != nil {
+			workflowInputs[k] = v.Default
+		}
+	}
+
+	validationResult := runtime.ValidateWorkflowInputs(workflow, workflowInputs)
+	if !validationResult.Valid {
+		printValidationErrors(validationResult)
+		os.Exit(1)
+	}
+
 	// Show workflow info
 	if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
 		printWorkflowInfo(workflow, workflowInputs)
@@ -466,4 +478,26 @@ func printExecutionSummary(result ExecutionResult) {
 			fmt.Printf("  %s = %v\n", k, v)
 		}
 	}
+}
+
+func printValidationErrors(validationResult *runtime.InputValidationResult) {
+	fmt.Printf("\n❌ Input validation failed:\n\n")
+
+	for i, err := range validationResult.Errors {
+		// Add spacing between errors for better readability
+		if i > 0 {
+			fmt.Println()
+		}
+
+		// Format field name with color/emphasis
+		fmt.Printf("   Field: %s\n", err.Field)
+		fmt.Printf("   Error: %s\n", err.Message)
+
+		// Show the actual value if provided
+		if err.Value != nil {
+			fmt.Printf("   Value: %v\n", err.Value)
+		}
+	}
+
+	fmt.Printf("\n💡 Please check your input parameters and try again.\n")
 }

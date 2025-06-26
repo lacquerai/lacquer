@@ -75,15 +75,27 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 		req.Inputs = make(map[string]any)
 	}
 
+	// Validate inputs against workflow definition
+	validationResult := runtime.ValidateWorkflowInputs(workflow, req.Inputs)
+	if !validationResult.Valid {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(formatValidationErrors(validationResult))
+		return
+	}
+
+	// Use the processed inputs (with defaults applied and type conversions)
+	processedInputs := validationResult.ProcessedInputs
+
 	// Create execution context
 	ctx, cancel := context.WithTimeout(r.Context(), s.config.Timeout)
 	defer cancel()
 
-	execCtx := runtime.NewExecutionContext(ctx, workflow, req.Inputs)
+	execCtx := runtime.NewExecutionContext(ctx, workflow, processedInputs)
 	runID := execCtx.RunID
 
 	// Start execution tracking
-	status := s.manager.StartExecution(runID, workflowID, req.Inputs)
+	status := s.manager.StartExecution(runID, workflowID, processedInputs)
 
 	// Return execution info immediately
 	w.Header().Set("Content-Type", "application/json")
@@ -238,10 +250,29 @@ func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]any{
-		"status":             "healthy",
-		"workflows_loaded":   s.registry.Count(),
-		"active_executions":  s.manager.GetActiveExecutions(),
-		"timestamp":          time.Now(),
+		"status":            "healthy",
+		"workflows_loaded":  s.registry.Count(),
+		"active_executions": s.manager.GetActiveExecutions(),
+		"timestamp":         time.Now(),
 	})
 }
 
+// formatValidationErrors formats validation errors for HTTP response
+func formatValidationErrors(result *runtime.InputValidationResult) map[string]any {
+	response := map[string]any{
+		"error":   "Input validation failed",
+		"details": make([]map[string]any, len(result.Errors)),
+	}
+
+	for i, err := range result.Errors {
+		response["details"].([]map[string]any)[i] = map[string]any{
+			"field":   err.Field,
+			"message": err.Message,
+		}
+		if err.Value != nil {
+			response["details"].([]map[string]any)[i]["value"] = err.Value
+		}
+	}
+
+	return response
+}

@@ -271,7 +271,7 @@ func (stp *ScriptToolProvider) executeGoScript(ctx context.Context, scriptTool *
 func (stp *ScriptToolProvider) executePythonScript(ctx context.Context, scriptTool *ScriptTool, parameters map[string]interface{}, execCtx *ToolExecutionContext) (map[string]interface{}, error) {
 	// For MVP, implement basic Python script execution
 	// In a full implementation, this would use a proper Python executor similar to the Go executor
-	
+
 	// Get script content
 	scriptContent := scriptTool.Content
 	if scriptContent == "" && scriptTool.ScriptPath != "" {
@@ -357,7 +357,7 @@ func (stp *ScriptToolProvider) executeScriptWithCommand(ctx context.Context, com
 func (stp *ScriptToolProvider) runScript(ctx context.Context, command string, scriptFile string, inputFile string) (map[string]interface{}, error) {
 	// Import the execution functions from block package
 	cmd := fmt.Sprintf("%s %s < %s", command, scriptFile, inputFile)
-	
+
 	// For now, return a placeholder implementation
 	// In a full implementation, this would properly execute the script and parse JSON output
 	return map[string]interface{}{

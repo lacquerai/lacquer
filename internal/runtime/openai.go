@@ -603,7 +603,7 @@ func (p *OpenAIProvider) extractResponseContent(response *OpenAIResponse) string
 	// Check for tool calls
 	if len(choice.Message.ToolCalls) > 0 {
 		var toolCalls []map[string]interface{}
-		
+
 		for _, toolCall := range choice.Message.ToolCalls {
 			if toolCall.Function != nil {
 				// Parse arguments
@@ -630,7 +630,7 @@ func (p *OpenAIProvider) extractResponseContent(response *OpenAIResponse) string
 			if content != "" {
 				content += "\n"
 			}
-			
+
 			// Add tool calls in a format that can be detected by extractToolCallsFromResponse
 			toolCallsJSON, err := json.Marshal(toolCalls)
 			if err == nil {

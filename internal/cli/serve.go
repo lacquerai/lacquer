@@ -14,14 +14,14 @@ import (
 
 var (
 	// Serve command flags
-	servePort         int
-	serveHost         string
-	serveConcurrency  int
-	serveTimeout      time.Duration
-	serveWorkflows    []string
-	serveWorkflowDir  string
-	serveMetrics      bool
-	serveCORS         bool
+	servePort        int
+	serveHost        string
+	serveConcurrency int
+	serveTimeout     time.Duration
+	serveWorkflows   []string
+	serveWorkflowDir string
+	serveMetrics     bool
+	serveCORS        bool
 )
 
 // serveCmd represents the serve command

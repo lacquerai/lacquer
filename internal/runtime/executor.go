@@ -794,7 +794,7 @@ func (e *Executor) executeAgentStepWithTools(execCtx *ExecutionContext, step *as
 func (e *Executor) executeConversationWithTools(ctx context.Context, provider ModelProvider, agent *ast.Agent, initialPrompt string, tools []*ToolDefinition, execCtx *ExecutionContext, step *ast.Step) (string, *TokenUsage, error) {
 	totalTokenUsage := &TokenUsage{}
 	maxTurns := 10 // Prevent infinite loops
-	
+
 	// Build conversation messages
 	conversation := []interface{}{
 		map[string]interface{}{
@@ -880,7 +880,7 @@ func (e *Executor) createModelRequestWithTools(agent *ast.Agent, conversation []
 func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, conversation []interface{}, toolSchemas interface{}) (*ModelRequest, error) {
 	// For MVP, implement basic Anthropic tool request
 	// In full implementation, this would properly format the conversation and tools
-	
+
 	request := &ModelRequest{
 		Model:        agent.Model,
 		SystemPrompt: agent.SystemPrompt,
@@ -910,7 +910,7 @@ func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, conversatio
 func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, conversation []interface{}, toolSchemas interface{}) (*ModelRequest, error) {
 	// For MVP, implement basic OpenAI tool request
 	// In full implementation, this would properly format the conversation and tools
-	
+
 	request := &ModelRequest{
 		Model:        agent.Model,
 		SystemPrompt: agent.SystemPrompt,
@@ -963,7 +963,7 @@ func (e *Executor) extractAnthropicToolCalls(response string) ([]map[string]inte
 	}
 
 	jsonStr := response[start+len("<tool_calls>") : end]
-	
+
 	var toolCalls []map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &toolCalls); err != nil {
 		log.Warn().Err(err).Msg("Failed to parse Anthropic tool calls")
@@ -988,7 +988,7 @@ func (e *Executor) extractOpenAIToolCalls(response string) ([]map[string]interfa
 	}
 
 	jsonStr := response[start+len("<tool_calls>") : end]
-	
+
 	var toolCalls []map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &toolCalls); err != nil {
 		log.Warn().Err(err).Msg("Failed to parse OpenAI tool calls")
@@ -1030,7 +1030,7 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []map[string]
 				Err(err).
 				Str("tool", toolName).
 				Msg("Tool execution failed")
-			
+
 			// Add error result
 			results = append(results, map[string]interface{}{
 				"tool_call_id": toolCall["id"],

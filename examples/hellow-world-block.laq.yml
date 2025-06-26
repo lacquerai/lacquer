@@ -20,7 +20,8 @@ workflow:
     name:
       type: string
       description: Name of the person to greet
-      default: "World"
+      required: true
+      # default: "World"
   
   # Single step workflow
   steps:
@@ -35,6 +36,7 @@ workflow:
         type Context struct {
           Inputs Inputs `json:"inputs"`
         }
+
         type Inputs struct {
           Name string `json:"name"`
         }

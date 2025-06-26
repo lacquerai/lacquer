@@ -383,7 +383,7 @@ func (mtp *MCPToolProvider) validateParameterEnum(paramName string, value interf
 		}
 	}
 
-	return fmt.Errorf("parameter %s value '%s' is not one of allowed values: %s", 
+	return fmt.Errorf("parameter %s value '%s' is not one of allowed values: %s",
 		paramName, strValue, strings.Join(enumValues, ", "))
 }
 

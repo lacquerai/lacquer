@@ -87,9 +87,6 @@ func (e *DockerExecutor) Execute(ctx context.Context, block *Block, inputs map[s
 		args = append(args, "-v", fmt.Sprintf("%s:/workspace", execCtx.Workspace))
 	}
 
-	// Add resource limits
-	args = append(args, "--memory", "512m", "--cpus", "1.0")
-
 	// Add image
 	args = append(args, block.Image)
 
