@@ -1,7 +1,6 @@
 package ast
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -74,41 +73,6 @@ func (w *Workflow) ListStepIDs() []string {
 	return ids
 }
 
-// Validate performs basic structural validation
-func (w *Workflow) Validate() error {
-	if w.Version != "1.0" {
-		return fmt.Errorf("unsupported version: %s (expected 1.0)", w.Version)
-	}
-
-	if w.Workflow == nil {
-		return fmt.Errorf("workflow definition is required")
-	}
-
-	if len(w.Workflow.Steps) == 0 {
-		return fmt.Errorf("workflow must have at least one step")
-	}
-
-	// Check for duplicate step IDs
-	stepIDs := make(map[string]bool)
-	for _, step := range w.Workflow.Steps {
-		if stepIDs[step.ID] {
-			return fmt.Errorf("duplicate step ID: %s", step.ID)
-		}
-		stepIDs[step.ID] = true
-	}
-
-	// Validate each step
-	for _, step := range w.Workflow.Steps {
-		if err := step.Validate(); err != nil {
-			return fmt.Errorf("step %s: %w", step.ID, err)
-		}
-	}
-
-	return nil
-}
-
-// Step helper methods
-
 // IsAgentStep returns true if this is an agent execution step
 func (s *Step) IsAgentStep() bool {
 	return s.Agent != "" && s.Prompt != ""
@@ -152,84 +116,6 @@ func (s *Step) GetStepType() string {
 	}
 }
 
-// Validate performs basic validation for the step
-func (s *Step) Validate() error {
-	if s.ID == "" {
-		return fmt.Errorf("step ID is required")
-	}
-
-	// Check that exactly one execution method is specified
-	methods := 0
-	if s.IsAgentStep() {
-		methods++
-	}
-	if s.IsBlockStep() {
-		methods++
-	}
-	if s.IsActionStep() {
-		methods++
-	}
-	if s.IsScriptStep() {
-		methods++
-	}
-	if s.IsContainerStep() {
-		methods++
-	}
-
-	if methods == 0 {
-		return fmt.Errorf("step must specify either agent+prompt, uses, script, container, or action")
-	}
-	if methods > 1 {
-		return fmt.Errorf("step cannot specify multiple execution methods")
-	}
-
-	// Validate agent steps
-	if s.IsAgentStep() {
-		if s.Agent == "" {
-			return fmt.Errorf("agent name is required for agent steps")
-		}
-		if s.Prompt == "" {
-			return fmt.Errorf("prompt is required for agent steps")
-		}
-	}
-
-	// Validate block steps
-	if s.IsBlockStep() {
-		if s.Uses == "" {
-			return fmt.Errorf("uses is required for block steps")
-		}
-	}
-
-	// Validate script steps
-	if s.IsScriptStep() {
-		if s.Script == "" {
-			return fmt.Errorf("script is required for script steps")
-		}
-	}
-
-	// Validate container steps
-	if s.IsContainerStep() {
-		if s.Container == "" {
-			return fmt.Errorf("container is required for container steps")
-		}
-	}
-
-	// Validate action steps
-	if s.IsActionStep() {
-		validActions := []string{"human_input", "update_state"}
-		if !contains(validActions, s.Action) {
-			return fmt.Errorf("invalid action: %s (valid actions: %s)",
-				s.Action, strings.Join(validActions, ", "))
-		}
-
-		if s.Action == "update_state" && len(s.Updates) == 0 {
-			return fmt.Errorf("update_state action requires updates field")
-		}
-	}
-
-	return nil
-}
-
 // HasOutput checks if the step produces a specific output
 func (s *Step) HasOutput(name string) bool {
 	if s.Outputs == nil {
@@ -262,47 +148,6 @@ func (a *Agent) IsPreBuilt() bool {
 // IsCustom returns true if this agent has a custom configuration
 func (a *Agent) IsCustom() bool {
 	return a.Model != ""
-}
-
-// Validate performs basic validation for the agent
-func (a *Agent) Validate() error {
-	// Must specify either a model or uses clause
-	if !a.IsCustom() && !a.IsPreBuilt() {
-		return fmt.Errorf("agent must specify either model or uses")
-	}
-
-	if a.IsCustom() && a.IsPreBuilt() {
-		return fmt.Errorf("agent cannot specify both model and uses")
-	}
-
-	// Validate model if specified
-	if a.IsCustom() {
-		validModels := []string{
-			"gpt-4", "gpt-4-turbo", "gpt-3.5-turbo",
-			"claude-3-opus", "claude-3-sonnet", "claude-3-haiku",
-			"gemini-pro", "gemini-pro-vision",
-		}
-		if !contains(validModels, a.Model) {
-			return fmt.Errorf("unsupported model: %s", a.Model)
-		}
-	}
-
-	// Validate temperature range
-	if a.Temperature != nil && (*a.Temperature < 0 || *a.Temperature > 2) {
-		return fmt.Errorf("temperature must be between 0 and 2, got %f", *a.Temperature)
-	}
-
-	// Validate top_p range
-	if a.TopP != nil && (*a.TopP < 0 || *a.TopP > 1) {
-		return fmt.Errorf("top_p must be between 0 and 1, got %f", *a.TopP)
-	}
-
-	// Validate max_tokens
-	if a.MaxTokens != nil && *a.MaxTokens < 1 {
-		return fmt.Errorf("max_tokens must be positive, got %d", *a.MaxTokens)
-	}
-
-	return nil
 }
 
 // HasTool checks if the agent has a specific tool

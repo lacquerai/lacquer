@@ -68,7 +68,7 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 				Title:       "Use correct file extension",
 				Description: "Lacquer workflow files must have .laq.yaml or .laq.yml extension",
 				Examples:    []string{"my-workflow.laq.yaml", "pipeline.laq.yml"},
-				DocsURL:     "https://docs.lacquer.ai/concepts/files",
+				DocsURL:     DocsURL + "/concepts/files",
 			},
 		})
 		return nil, reporter.ToError()
@@ -148,7 +148,7 @@ func (p *YAMLParser) ParseBytes(data []byte) (*ast.Workflow, error) {
 					"    - id: hello",
 					"      prompt: \"Hello, world!\"",
 				},
-				DocsURL: "https://docs.lacquer.ai/getting-started",
+				DocsURL: DocsURL + "/getting-started",
 			},
 		})
 		return nil, reporter.ToError()

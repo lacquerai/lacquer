@@ -111,12 +111,6 @@ func (e *RuntimeWorkflowEngine) convertToASTWorkflow(workflow interface{}, input
 		return nil, fmt.Errorf("failed to unmarshal to ast.Workflow: %w", err)
 	}
 
-	// Validate the workflow
-	err = astWorkflow.Validate()
-	if err != nil {
-		return nil, fmt.Errorf("workflow validation failed: %w", err)
-	}
-
 	return &astWorkflow, nil
 }
 

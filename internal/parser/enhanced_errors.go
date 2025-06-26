@@ -15,6 +15,8 @@ const (
 	SeverityError   ErrorSeverity = "error"
 	SeverityWarning ErrorSeverity = "warning"
 	SeverityInfo    ErrorSeverity = "info"
+
+	DocsURL = "https://lacquer.ai/docs"
 )
 
 // EnhancedError represents a detailed error with rich context
@@ -304,7 +306,7 @@ func (r *ErrorReporter) generateSuggestion(message, category string) *ErrorSugge
 		return &ErrorSuggestion{
 			Title:       "Check the documentation",
 			Description: "Refer to the Lacquer documentation for syntax examples and troubleshooting",
-			DocsURL:     "https://docs.lacquer.ai",
+			DocsURL:     DocsURL,
 		}
 	}
 }
@@ -322,7 +324,7 @@ func (r *ErrorReporter) generateYAMLSuggestion(message string) *ErrorSuggestion 
 				"    - id: example",
 				"      agent: my_agent",
 			},
-			DocsURL: "https://docs.lacquer.ai/syntax/yaml-basics",
+			DocsURL: DocsURL + "/syntax/yaml-basics",
 		}
 	case strings.Contains(message, "duplicate"):
 		return &ErrorSuggestion{
@@ -350,7 +352,7 @@ func (r *ErrorReporter) generateYAMLSuggestion(message string) *ErrorSuggestion 
 		return &ErrorSuggestion{
 			Title:       "Check YAML syntax",
 			Description: "Ensure proper YAML formatting with colons, dashes, and consistent indentation",
-			DocsURL:     "https://docs.lacquer.ai/syntax/yaml-basics",
+			DocsURL:     DocsURL + "/syntax/yaml-basics",
 		}
 	}
 }
@@ -385,7 +387,7 @@ func (r *ErrorReporter) generateSchemaSuggestion(message string) *ErrorSuggestio
 				"    model: gpt-4",
 				"    temperature: 0.7",
 			},
-			DocsURL: "https://docs.lacquer.ai/concepts/agents",
+			DocsURL: DocsURL + "/concepts/agents",
 		}
 	case strings.Contains(message, "steps"):
 		return &ErrorSuggestion{
@@ -397,13 +399,13 @@ func (r *ErrorReporter) generateSchemaSuggestion(message string) *ErrorSuggestio
 				"    agent: assistant",
 				"    prompt: \"Hello, world!\"",
 			},
-			DocsURL: "https://docs.lacquer.ai/concepts/steps",
+			DocsURL: DocsURL + "/concepts/steps",
 		}
 	default:
 		return &ErrorSuggestion{
 			Title:       "Check the schema requirements",
 			Description: "Refer to the Lacquer schema documentation for required fields",
-			DocsURL:     "https://docs.lacquer.ai/reference/schema",
+			DocsURL:     DocsURL + "/reference/schema",
 		}
 	}
 }
@@ -445,13 +447,13 @@ func (r *ErrorReporter) generateSemanticSuggestion(message string) *ErrorSuggest
 				"# Reference inputs:",
 				"prompt: \"Topic: {{ inputs.topic }}\"",
 			},
-			DocsURL: "https://docs.lacquer.ai/concepts/variables",
+			DocsURL: DocsURL + "/concepts/variables",
 		}
 	default:
 		return &ErrorSuggestion{
 			Title:       "Check workflow logic",
 			Description: "Review the workflow structure and dependencies",
-			DocsURL:     "https://docs.lacquer.ai/concepts/workflows",
+			DocsURL:     DocsURL + "/concepts/workflows",
 		}
 	}
 }
@@ -461,7 +463,7 @@ func (r *ErrorReporter) generateValidationSuggestion(message string) *ErrorSugge
 	return &ErrorSuggestion{
 		Title:       "Check validation requirements",
 		Description: "Review the error message and check against Lacquer requirements",
-		DocsURL:     "https://docs.lacquer.ai/reference/validation",
+		DocsURL:     DocsURL + "/reference/validation",
 	}
 }
 

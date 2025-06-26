@@ -61,6 +61,43 @@ type ValidationResult struct {
 	EnhancedError *parser.MultiErrorEnhanced `json:"-" yaml:"-"` // For internal use only
 }
 
+func NewValidationResult(file string) *ValidationResult {
+	return &ValidationResult{
+		File:  file,
+		Valid: true,
+	}
+}
+
+func (v *ValidationResult) CollectError(err error) {
+	if err == nil {
+		return
+	}
+
+	v.Valid = false
+
+	var enhancedErr *parser.MultiErrorEnhanced
+	if errors.As(err, &enhancedErr) {
+		// Store the enhanced error directly for full context
+		v.EnhancedError = enhancedErr
+
+		// Also process individual issues for compatibility
+		for _, issue := range enhancedErr.GetAllIssues() {
+			validationIssue := convertEnhancedErrorToIssue(issue)
+			v.Issues = append(v.Issues, validationIssue)
+
+			// Add simple error messages for backward compatibility
+			if issue.Severity == parser.SeverityError {
+				v.Errors = append(v.Errors, issue.Title)
+			} else if issue.Severity == parser.SeverityWarning {
+				v.Warnings = append(v.Warnings, issue.Title)
+			}
+		}
+	} else {
+		// Fallback to simple error handling
+		v.Errors = append(v.Errors, err.Error())
+	}
+}
+
 // ValidationIssue represents a detailed validation issue
 type ValidationIssue struct {
 	ID         string           `json:"id" yaml:"id"`
@@ -117,7 +154,7 @@ func validateWorkflows(args []string) {
 
 	for _, file := range files {
 		result := validateSingleFile(yamlParser, file)
-		results = append(results, result)
+		results = append(results, *result)
 
 		// Show progress if not quiet and not JSON/YAML output
 		if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
@@ -162,54 +199,16 @@ func validateWorkflows(args []string) {
 	}
 }
 
-func validateSingleFile(p parser.Parser, filename string) ValidationResult {
+func validateSingleFile(p parser.Parser, filename string) *ValidationResult {
 	start := time.Now()
-	result := ValidationResult{
-		File:     filename,
-		Valid:    true,
-		Duration: 0,
-		Errors:   []string{},
-		Warnings: []string{},
-		Issues:   []*ValidationIssue{},
-	}
+	result := NewValidationResult(filename)
 
 	// Parse and validate the file
-	workflow, err := p.ParseFile(filename)
+	_, err := p.ParseFile(filename)
 	result.Duration = time.Since(start)
-
 	if err != nil {
-		result.Valid = false
-
-		// Check if it's an enhanced error (might be wrapped)
-		var enhancedErr *parser.MultiErrorEnhanced
-		if errors.As(err, &enhancedErr) {
-			// Store the enhanced error directly for full context
-			result.EnhancedError = enhancedErr
-
-			// Also process individual issues for compatibility
-			for _, issue := range enhancedErr.GetAllIssues() {
-				validationIssue := convertEnhancedErrorToIssue(issue)
-				result.Issues = append(result.Issues, validationIssue)
-
-				// Add simple error messages for backward compatibility
-				if issue.Severity == parser.SeverityError {
-					result.Errors = append(result.Errors, issue.Title)
-				} else if issue.Severity == parser.SeverityWarning {
-					result.Warnings = append(result.Warnings, issue.Title)
-				}
-			}
-		} else {
-			// Fallback to simple error handling
-			result.Errors = append(result.Errors, err.Error())
-		}
-
+		result.CollectError(err)
 		return result
-	}
-
-	// Additional semantic validation (if not already done by parser)
-	if err := workflow.Validate(); err != nil {
-		result.Valid = false
-		result.Errors = append(result.Errors, err.Error())
 	}
 
 	log.Debug().
@@ -293,9 +292,9 @@ func printValidationSummary(summary ValidationSummary) {
 	if !viper.GetBool("quiet") {
 		fmt.Printf("\n")
 		if summary.Invalid == 0 {
-			Success(fmt.Sprintf("All %d workflow(s) are valid (%v)", summary.Total, summary.Duration))
+			Success(fmt.Sprintf("All %d workflow(s) are valid", summary.Total))
 		} else {
-			Error(fmt.Sprintf("%d of %d workflow(s) failed validation (%v)", summary.Invalid, summary.Total, summary.Duration))
+			Error(fmt.Sprintf("%d of %d workflow(s) failed validation", summary.Invalid, summary.Total))
 		}
 
 		// Show detailed error information for failed files
@@ -303,29 +302,6 @@ func printValidationSummary(summary ValidationSummary) {
 			if !result.Valid {
 				printValidationResult(result)
 			}
-		}
-
-		if viper.GetBool("verbose") {
-			fmt.Printf("\nDetailed results:\n")
-			headers := []string{"File", "Status", "Duration", "Issues"}
-			rows := make([][]string, len(summary.Results))
-
-			for i, result := range summary.Results {
-				status := "✅ Valid"
-				issues := "0"
-				if !result.Valid {
-					status = "❌ Invalid"
-					issues = fmt.Sprintf("%d", len(result.Issues))
-				}
-				rows[i] = []string{
-					result.File,
-					status,
-					result.Duration.String(),
-					issues,
-				}
-			}
-
-			printTable(headers, rows)
 		}
 	}
 }
@@ -336,7 +312,7 @@ func printValidationResult(result ValidationResult) {
 		return // Don't print valid results in summary
 	}
 
-	fmt.Printf("\n❌ %s (%v)\n", result.File, result.Duration)
+	fmt.Printf("\n%s\n\n", result.File)
 
 	// Print enhanced error details if available
 	if result.EnhancedError != nil {
@@ -359,9 +335,10 @@ func printValidationResult(result ValidationResult) {
 func printValidationIssue(issue *ValidationIssue) {
 	// Error header with position
 	severityIcon := "❌"
-	if issue.Severity == "warning" {
+	switch issue.Severity {
+	case "warning":
 		severityIcon = "⚠️"
-	} else if issue.Severity == "info" {
+	case "info":
 		severityIcon = "ℹ️"
 	}
 

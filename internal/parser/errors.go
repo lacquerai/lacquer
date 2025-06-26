@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/lacquerai/lacquer/internal/ast"
-	"gopkg.in/yaml.v3"
 )
 
 // ParseError represents a parsing error with context
@@ -34,64 +33,6 @@ func (e *ParseError) Error() string {
 	return result.String()
 }
 
-// WrapYAMLError wraps a YAML parsing error with additional context
-func WrapYAMLError(err error, source []byte, filename string) error {
-	if err == nil {
-		return nil
-	}
-
-	// Handle different types of YAML errors
-	switch yamlErr := err.(type) {
-	case *yaml.TypeError:
-		return handleTypeError(yamlErr, source, filename)
-	default:
-		// Try to extract position from error message
-		position := extractPositionFromMessage(err.Error(), source)
-		if filename != "" {
-			position.File = filename
-		}
-
-		return &ParseError{
-			Message:    err.Error(),
-			Position:   position,
-			Context:    ast.ExtractContext(source, position, 2),
-			Source:     source,
-			Suggestion: generateSuggestion(err.Error()),
-		}
-	}
-}
-
-// handleTypeError handles YAML type errors specifically
-func handleTypeError(err *yaml.TypeError, source []byte, filename string) error {
-	// For type errors, we'll use the first error in the list
-	if len(err.Errors) == 0 {
-		position := ast.Position{Line: 1, Column: 1}
-		if filename != "" {
-			position.File = filename
-		}
-		return &ParseError{
-			Message:  "YAML type error",
-			Position: position,
-			Source:   source,
-		}
-	}
-
-	// Parse the first error message to extract position
-	firstError := err.Errors[0]
-	position := extractPositionFromMessage(firstError, source)
-	if filename != "" {
-		position.File = filename
-	}
-
-	return &ParseError{
-		Message:    fmt.Sprintf("Type error: %s", firstError),
-		Position:   position,
-		Context:    ast.ExtractContext(source, position, 2),
-		Source:     source,
-		Suggestion: generateSuggestion(firstError),
-	}
-}
-
 // extractPositionFromMessage attempts to extract line/column from error messages
 func extractPositionFromMessage(message string, source []byte) ast.Position {
 	// YAML error messages often contain "line X" patterns
@@ -109,40 +50,6 @@ func extractPositionFromMessage(message string, source []byte) ast.Position {
 
 	// Fallback to beginning of file
 	return ast.Position{Line: 1, Column: 1}
-}
-
-// generateSuggestion provides helpful suggestions based on common errors
-func generateSuggestion(errorMessage string) string {
-	message := strings.ToLower(errorMessage)
-
-	switch {
-	case strings.Contains(message, "cannot unmarshal"):
-		return "Check that the field type matches the expected value (string, number, boolean, array, or object)"
-	case strings.Contains(message, "field") && strings.Contains(message, "not found"):
-		return "Check for typos in field names or refer to the Lacquer DSL documentation for valid fields"
-	case strings.Contains(message, "duplicate"):
-		return "Remove the duplicate key or use a different name"
-	case strings.Contains(message, "indent"):
-		return "Check YAML indentation - use spaces, not tabs, and ensure consistent indentation"
-	case strings.Contains(message, "expected"):
-		return "Check YAML syntax - ensure proper use of colons, dashes, and quotes"
-	case strings.Contains(message, "version"):
-		return "Ensure the version field is set to \"1.0\" (in quotes)"
-	case strings.Contains(message, "agents"):
-		return "Check agent definitions - ensure each agent has a valid model specified"
-	case strings.Contains(message, "steps"):
-		return "Check workflow steps - each step needs an 'id' and either 'agent'+'prompt', 'uses', or 'action'"
-	default:
-		return "Check the YAML syntax and refer to the Lacquer documentation for examples"
-	}
-}
-
-// ValidationError wraps validation errors from the schema validator
-type ValidationError struct {
-	Path       string      `json:"path"`
-	Message    string      `json:"message"`
-	Value      interface{} `json:"value,omitempty"`
-	Suggestion string      `json:"suggestion,omitempty"`
 }
 
 // MultiError represents multiple parsing or validation errors

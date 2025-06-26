@@ -353,11 +353,6 @@ func (s *Server) LoadWorkflows() error {
 			return fmt.Errorf("failed to parse workflow %s: %w", file, err)
 		}
 
-		if err := workflow.Validate(); err != nil {
-			return fmt.Errorf("workflow validation failed for %s: %w", file, err)
-		}
-
-		// Use filename without extension as workflow ID
 		workflowID := strings.TrimSuffix(strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)), ".laq")
 		s.registry.Register(workflowID, workflow)
 

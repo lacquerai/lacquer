@@ -1,7 +1,7 @@
 <div align="center">
 <img src="https://github.com/user-attachments/assets/3f60a020-402e-460e-a547-68f2521b2a5f">
 
-[Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](https://docs.lacquer.ai) • [Examples](examples/) • [Community](https://discord.gg/lacquer)
+[Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](https://lacquer.ai/docs) • [Examples](examples/) • [Community](https://discord.gg/lacquer)
 </div>
 
 ---
@@ -319,7 +319,7 @@ laq list           # List available agents/tools
 - `lacquer/slack@v1` - Slack notifications
 
 ### Resources
-- 📚 [Documentation](https://docs.lacquer.ai)
+- 📚 [Documentation](https://lacquer.ai/docs)
 - 💬 [Discord Community](https://discord.gg/lacquer)
 - 🎯 [Examples](examples/)
 - 📝 [Blog](https://lacquer.ai/blog)
@@ -372,6 +372,6 @@ Lacquer is Apache 2.0 licensed. See [LICENSE](LICENSE) for details.
 
 **Ready to make your AI workflows shine?**
 
-[Get Started](https://docs.lacquer.ai/quickstart) • [Join Discord](https://discord.gg/lacquer) • [Star on GitHub](https://github.com/lacquer/laq)
+[Get Started](https://lacquer.ai/docs/quickstart) • [Join Discord](https://discord.gg/lacquer) • [Star on GitHub](https://github.com/lacquer/laq)
 
 </div>

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -153,16 +154,24 @@ func runWorkflow(workflowFile string) {
 
 	workflow, err := yamlParser.ParseFile(workflowFile)
 	if err != nil {
-		Error(fmt.Sprintf("Failed to parse workflow: %v", err))
+		var enhancedErr *parser.MultiErrorEnhanced
+
+		if errors.As(err, &enhancedErr) {
+			result := NewValidationResult(workflowFile)
+			result.CollectError(err)
+			summary := ValidationSummary{
+				Total:   1,
+				Results: []ValidationResult{*result},
+				Invalid: 1,
+			}
+
+			printValidationSummary(summary)
+		} else {
+			Error(fmt.Sprintf("Failed to parse workflow: %v", err))
+		}
+
 		os.Exit(1)
 	}
-
-	// Validate workflow
-	if err := workflow.Validate(); err != nil {
-		Error(fmt.Sprintf("Workflow validation failed: %v", err))
-		os.Exit(1)
-	}
-
 	log.Info().
 		Str("workflow", workflowFile).
 		Str("version", workflow.Version).

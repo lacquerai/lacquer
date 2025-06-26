@@ -8,7 +8,7 @@ metadata:
 # Define a single agent using Claude 3.5 Sonnet
 agents:
   greeter:
-    provider: anthropic
+    providerd: anthropic
     model: claude-3-5-sonnet-20241022
     temperature: 0.7
     system_prompt: You are a friendly assistant who gives warm greetings.

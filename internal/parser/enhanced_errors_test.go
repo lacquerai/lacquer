@@ -59,7 +59,7 @@ func TestEnhancedError_Error(t *testing.T) {
 				Title:       "Add version field",
 				Description: "Lacquer workflows require a version field set to \"1.0\"",
 				Examples:    []string{"version: \"1.0\""},
-				DocsURL:     "https://docs.lacquer.ai/reference/schema",
+				DocsURL:     "https://lacquer.ai/docs/reference/schema",
 			},
 			Category: "schema",
 		}
@@ -68,7 +68,7 @@ func TestEnhancedError_Error(t *testing.T) {
 		assert.Contains(t, output, "Suggestion: Add version field")
 		assert.Contains(t, output, "Example:")
 		assert.Contains(t, output, "version: \"1.0\"")
-		assert.Contains(t, output, "See: https://docs.lacquer.ai/reference/schema")
+		assert.Contains(t, output, "See: https://lacquer.ai/docs/reference/schema")
 	})
 }
 
