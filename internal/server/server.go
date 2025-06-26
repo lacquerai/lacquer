@@ -117,6 +117,10 @@ type ExecutionStatus struct {
 	// WebSocket connections for streaming
 	clients   map[*websocket.Conn]bool
 	clientsMu sync.RWMutex
+
+	// Context for cancelling the execution
+	// @TODO handle cancelling the execution
+	cancel context.CancelFunc
 }
 
 // ExecutionManager handles concurrent workflow executions
@@ -182,7 +186,7 @@ func (em *ExecutionManager) CanStartExecution() bool {
 }
 
 // StartExecution starts tracking a new execution
-func (em *ExecutionManager) StartExecution(runID, workflowID string, inputs map[string]any) *ExecutionStatus {
+func (em *ExecutionManager) StartExecution(runID, workflowID string, cancel context.CancelFunc, inputs map[string]any) *ExecutionStatus {
 	em.mu.Lock()
 	defer em.mu.Unlock()
 
@@ -194,6 +198,7 @@ func (em *ExecutionManager) StartExecution(runID, workflowID string, inputs map[
 		Inputs:     inputs,
 		Progress:   make([]runtime.ExecutionEvent, 0),
 		clients:    make(map[*websocket.Conn]bool),
+		cancel:     cancel,
 	}
 
 	em.executions[runID] = status

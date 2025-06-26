@@ -87,15 +87,14 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 	// Use the processed inputs (with defaults applied and type conversions)
 	processedInputs := validationResult.ProcessedInputs
 
-	// Create execution context
-	ctx, cancel := context.WithTimeout(r.Context(), s.config.Timeout)
-	defer cancel()
-
+	// use background context as hanging off the request context
+	// will cause the context to be cancelled when the request is finished.
+	ctx, cancel := context.WithCancel(context.Background())
 	execCtx := runtime.NewExecutionContext(ctx, workflow, processedInputs)
 	runID := execCtx.RunID
 
 	// Start execution tracking
-	status := s.manager.StartExecution(runID, workflowID, processedInputs)
+	status := s.manager.StartExecution(runID, workflowID, cancel, processedInputs)
 
 	// Return execution info immediately
 	w.Header().Set("Content-Type", "application/json")
@@ -112,6 +111,7 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 
 // executeWorkflowAsync executes a workflow in the background
 func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflow, execCtx *runtime.ExecutionContext, runID, workflowID string) {
+
 	// Create executor
 	executorConfig := &runtime.ExecutorConfig{
 		MaxConcurrentSteps:   3,

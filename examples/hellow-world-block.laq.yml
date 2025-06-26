@@ -6,17 +6,18 @@ metadata:
   author: lacquer-team
 
 # Define a single agent using Claude 3.5 Sonnet
-agents:
-  greeter:
-    provider: anthropic
-    model: claude-3-5-sonnet-20241022
-    temperature: 0.7
-    system_prompt: You are a friendly assistant who gives warm greetings.
+# agents:
+  # greeter:
+  #   provider: anthropic
+  #   model: claude-3-5-sonnet-20241022
+  #   temperature: 0.7
+  #   system_prompt: You are a friendly assistant who gives warm greetings.
 
 # Define the workflow
 workflow:
   # Input parameter - name to greet
   inputs:
+  
     name:
       type: string
       description: Name of the person to greet

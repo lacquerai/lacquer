@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/lacquerai/lacquer/internal/ast"
-	"github.com/lacquerai/lacquer/internal/parser/schema"
 	"gopkg.in/yaml.v3"
 )
 
@@ -18,24 +17,15 @@ type Parser interface {
 	ParseFile(filename string) (*ast.Workflow, error)
 	ParseBytes(data []byte) (*ast.Workflow, error)
 	ParseReader(r io.Reader) (*ast.Workflow, error)
-	ValidateOnly(data []byte) error
 }
 
 // YAMLParser implements the Parser interface using go-yaml/v3
 type YAMLParser struct {
-	validator         *schema.Validator
 	semanticValidator *SemanticValidator
 }
 
 // ParserOption configures the YAML parser
 type ParserOption func(*YAMLParser)
-
-// WithValidator sets a custom schema validator
-func WithValidator(validator *schema.Validator) ParserOption {
-	return func(p *YAMLParser) {
-		p.validator = validator
-	}
-}
 
 // WithSemanticValidator sets a custom semantic validator
 func WithSemanticValidator(validator *SemanticValidator) ParserOption {
@@ -51,15 +41,6 @@ func NewYAMLParser(opts ...ParserOption) (*YAMLParser, error) {
 	// Apply options
 	for _, opt := range opts {
 		opt(parser)
-	}
-
-	// Create default validator if none provided
-	if parser.validator == nil {
-		validator, err := schema.NewValidator()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create schema validator: %w", err)
-		}
-		parser.validator = validator
 	}
 
 	// Create semantic validator
@@ -193,13 +174,6 @@ func (p *YAMLParser) ParseBytes(data []byte) (*ast.Workflow, error) {
 		}
 	}
 
-	// Validate against schema if validator is available
-	if p.validator != nil {
-		if err := p.validateWorkflowEnhanced(data, reporter); err != nil {
-			return nil, err
-		}
-	}
-
 	// Perform semantic validation
 	if p.semanticValidator != nil {
 		if err := p.validateSemanticsEnhanced(&workflow, reporter); err != nil {
@@ -218,40 +192,6 @@ func (p *YAMLParser) ParseReader(r io.Reader) (*ast.Workflow, error) {
 	}
 
 	return p.ParseBytes(data)
-}
-
-// ValidateOnly validates workflow data without parsing
-func (p *YAMLParser) ValidateOnly(data []byte) error {
-	if p.validator == nil {
-		return fmt.Errorf("no validator configured")
-	}
-
-	return p.validateWorkflow(data)
-}
-
-// validateWorkflow validates the workflow against the schema
-func (p *YAMLParser) validateWorkflow(data []byte) error {
-	result, err := p.validator.ValidateBytes(data)
-	if err != nil {
-		return fmt.Errorf("validation failed: %w", err)
-	}
-
-	if !result.Valid {
-		// Convert validation errors to our error format
-		var multiErr MultiError
-		for _, validationErr := range result.Errors {
-			parseErr := &ParseError{
-				Message:    validationErr.Message,
-				Position:   extractPositionFromPath(validationErr.Path, data),
-				Suggestion: generateSuggestion(validationErr.Message),
-			}
-			multiErr.Add(parseErr)
-		}
-
-		return multiErr.ToError()
-	}
-
-	return nil
 }
 
 // validateSemantics performs semantic validation on the parsed workflow
@@ -492,40 +432,6 @@ func (p *YAMLParser) enhanceYAMLError(err error, data []byte, reporter *ErrorRep
 	}
 
 	return reporter.ToError()
-}
-
-// validateWorkflowEnhanced validates the workflow against the schema with enhanced error reporting
-func (p *YAMLParser) validateWorkflowEnhanced(data []byte, reporter *ErrorReporter) error {
-	result, err := p.validator.ValidateBytes(data)
-	if err != nil {
-		reporter.AddError(&EnhancedError{
-			ID:       "schema_validation_failed",
-			Severity: SeverityError,
-			Title:    "Schema validation failed",
-			Message:  err.Error(),
-			Position: ast.Position{Line: 1, Column: 1},
-			Category: "validation",
-		})
-		return reporter.ToError()
-	}
-
-	if !result.Valid {
-		for _, validationErr := range result.Errors {
-			pos := extractPositionFromPath(validationErr.Path, data)
-			reporter.AddError(&EnhancedError{
-				ID:         generateErrorID("schema", pos),
-				Severity:   SeverityError,
-				Title:      "Schema validation error",
-				Message:    validationErr.Message,
-				Position:   pos,
-				Category:   "schema",
-				Suggestion: reporter.generateSchemaSuggestion(validationErr.Message),
-			})
-		}
-		return reporter.ToError()
-	}
-
-	return nil
 }
 
 // validateSemanticsEnhanced performs semantic validation with enhanced error reporting

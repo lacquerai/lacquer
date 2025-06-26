@@ -14,7 +14,7 @@ func TestNewYAMLParser(t *testing.T) {
 	parser, err := NewYAMLParser()
 	require.NoError(t, err)
 	assert.NotNil(t, parser)
-	assert.NotNil(t, parser.validator)
+	assert.NotNil(t, parser.semanticValidator)
 }
 
 func TestYAMLParser_ParseFile_ValidFiles(t *testing.T) {
@@ -152,40 +152,6 @@ workflow:
 	assert.Contains(t, err.Error(), "minimum")
 }
 
-func TestYAMLParser_ValidateOnly(t *testing.T) {
-	parser, err := NewYAMLParser()
-	require.NoError(t, err)
-
-	validYAML := `
-version: "1.0"
-workflow:
-  steps:
-    - id: test
-      agent: test_agent
-      prompt: "Hello"
-`
-
-	err = parser.ValidateOnly([]byte(validYAML))
-	assert.NoError(t, err)
-}
-
-func TestYAMLParser_ValidateOnly_Invalid(t *testing.T) {
-	parser, err := NewYAMLParser()
-	require.NoError(t, err)
-
-	invalidYAML := `
-version: "2.0"  # Invalid version
-workflow:
-  steps:
-    - id: test
-      agent: test_agent
-      prompt: "Hello"
-`
-
-	err = parser.ValidateOnly([]byte(invalidYAML))
-	assert.Error(t, err)
-}
-
 func TestYAMLParser_ParseReader(t *testing.T) {
 	parser, err := NewYAMLParser()
 	require.NoError(t, err)
@@ -294,30 +260,6 @@ workflow:
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := parser.ParseBytes(data)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkYAMLParser_ValidateOnly(b *testing.B) {
-	parser, err := NewYAMLParser()
-	require.NoError(b, err)
-
-	validYAML := `
-version: "1.0"
-workflow:
-  steps:
-    - id: test
-      agent: test_agent
-      prompt: "Hello"
-`
-
-	data := []byte(validYAML)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err := parser.ValidateOnly(data)
 		if err != nil {
 			b.Fatal(err)
 		}
