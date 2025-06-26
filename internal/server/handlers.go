@@ -1,0 +1,247 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
+	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/runtime"
+	"github.com/rs/zerolog/log"
+)
+
+// HTTP Handlers
+
+// listWorkflows returns all available workflows
+func (s *Server) listWorkflows(w http.ResponseWriter, r *http.Request) {
+	workflows := make(map[string]any)
+
+	for _, id := range s.registry.List() {
+		workflow, _ := s.registry.Get(id)
+		workflows[id] = map[string]any{
+			"version": workflow.Version,
+			"name":    s.getWorkflowName(workflow),
+			"description": func() string {
+				if workflow.Metadata != nil {
+					return workflow.Metadata.Description
+				}
+				return ""
+			}(),
+			"steps": len(workflow.Workflow.Steps),
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"workflows": workflows,
+	})
+}
+
+// executeWorkflow starts a workflow execution
+func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	workflowID := vars["id"]
+
+	// Get workflow
+	workflow, exists := s.registry.Get(workflowID)
+	if !exists {
+		http.Error(w, fmt.Sprintf("Workflow '%s' not found", workflowID), http.StatusNotFound)
+		return
+	}
+
+	// Check capacity
+	if !s.manager.CanStartExecution() {
+		http.Error(w, "Server at capacity, try again later", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Parse request body for inputs
+	var req struct {
+		Inputs map[string]any `json:"inputs"`
+	}
+
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if req.Inputs == nil {
+		req.Inputs = make(map[string]any)
+	}
+
+	// Create execution context
+	ctx, cancel := context.WithTimeout(r.Context(), s.config.Timeout)
+	defer cancel()
+
+	execCtx := runtime.NewExecutionContext(ctx, workflow, req.Inputs)
+	runID := execCtx.RunID
+
+	// Start execution tracking
+	status := s.manager.StartExecution(runID, workflowID, req.Inputs)
+
+	// Return execution info immediately
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"run_id":      runID,
+		"workflow_id": workflowID,
+		"status":      "running",
+		"started_at":  status.StartTime,
+	})
+
+	// Execute workflow asynchronously
+	go s.executeWorkflowAsync(ctx, workflow, execCtx, runID, workflowID)
+}
+
+// executeWorkflowAsync executes a workflow in the background
+func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflow, execCtx *runtime.ExecutionContext, runID, workflowID string) {
+	// Create executor
+	executorConfig := &runtime.ExecutorConfig{
+		MaxConcurrentSteps:   3,
+		DefaultTimeout:       5 * time.Minute,
+		EnableRetries:        true,
+		MaxRetries:           3,
+		EnableStateSnapshots: false,
+	}
+
+	executor, err := runtime.NewExecutor(executorConfig, workflow, nil)
+	if err != nil {
+		s.manager.FinishExecution(runID, nil, fmt.Errorf("failed to create executor: %w", err))
+		return
+	}
+
+	// Create progress channel
+	progressChan := make(chan runtime.ExecutionEvent, 100)
+
+	// Forward progress events to manager
+	go func() {
+		for event := range progressChan {
+			event.RunID = runID
+			s.manager.AddProgressEvent(runID, event)
+		}
+	}()
+
+	// Execute workflow
+	err = executor.ExecuteWorkflow(ctx, execCtx, progressChan)
+	close(progressChan)
+
+	// Get outputs
+	var outputs map[string]any
+	if err == nil {
+		outputs = execCtx.GetWorkflowOutputs()
+	}
+
+	// Finish execution
+	s.manager.FinishExecution(runID, outputs, err)
+
+	log.Info().
+		Str("run_id", runID).
+		Str("workflow_id", workflowID).
+		Err(err).
+		Msg("Workflow execution completed")
+}
+
+// getExecution returns the status of a specific execution
+func (s *Server) getExecution(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	runID := vars["runId"]
+
+	status, exists := s.manager.GetExecution(runID)
+	if !exists {
+		http.Error(w, fmt.Sprintf("Execution '%s' not found", runID), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
+}
+
+// streamWorkflow provides WebSocket streaming for workflow execution
+func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	_ = vars["id"] // workflowID not used in this function
+
+	// Get run ID from query params
+	runID := r.URL.Query().Get("run_id")
+	if runID == "" {
+		http.Error(w, "run_id query parameter required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if execution exists
+	status, exists := s.manager.GetExecution(runID)
+	if !exists {
+		http.Error(w, fmt.Sprintf("Execution '%s' not found", runID), http.StatusNotFound)
+		return
+	}
+
+	// Upgrade to WebSocket
+	conn, err := s.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("WebSocket upgrade failed")
+		return
+	}
+	defer conn.Close()
+
+	// Register client
+	status.clientsMu.Lock()
+	status.clients[conn] = true
+	status.clientsMu.Unlock()
+
+	// Send existing progress events
+	for _, event := range status.Progress {
+		eventJSON, _ := json.Marshal(event)
+		conn.WriteMessage(websocket.TextMessage, eventJSON)
+	}
+
+	// Send final status if execution is complete
+	if status.Status != "running" {
+		finalEvent := runtime.ExecutionEvent{
+			Type:      runtime.EventWorkflowCompleted,
+			Timestamp: time.Now(),
+			RunID:     runID,
+		}
+		if status.Status == "failed" {
+			finalEvent.Type = runtime.EventWorkflowFailed
+			finalEvent.Error = status.Error
+		}
+		eventJSON, _ := json.Marshal(finalEvent)
+		conn.WriteMessage(websocket.TextMessage, eventJSON)
+	}
+
+	// Keep connection alive until execution is done or client disconnects
+	for {
+		_, _, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		status, exists := s.manager.GetExecution(runID)
+		if !exists || status.Status != "running" {
+			break
+		}
+	}
+
+	// Unregister client
+	status.clientsMu.Lock()
+	delete(status.clients, conn)
+	status.clientsMu.Unlock()
+}
+
+// healthCheck returns server health status
+func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":             "healthy",
+		"workflows_loaded":   s.registry.Count(),
+		"active_executions":  s.manager.GetActiveExecutions(),
+		"timestamp":          time.Now(),
+	})
+}
+
