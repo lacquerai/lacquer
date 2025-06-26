@@ -448,7 +448,7 @@ func (p *YAMLParser) validateSemanticsEnhanced(workflow *ast.Workflow, reporter 
 			reporter.AddError(&EnhancedError{
 				ID:         generateErrorID("semantic", pos),
 				Severity:   SeverityError,
-				Title:      "Semantic validation error",
+				Title:      "Validation error",
 				Message:    validationErr.Message,
 				Position:   pos,
 				Category:   "semantic",

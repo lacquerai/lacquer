@@ -313,16 +313,14 @@ func printValidationResultStyled(result ValidationResult) {
 		return // Don't print valid results in summary
 	}
 
-	fmt.Printf("\n%s\n", formatFilePath(result.File))
-
 	// Print enhanced error details if available
 	if result.EnhancedError != nil {
 		for _, issue := range result.EnhancedError.GetAllIssues() {
-			printEnhancedIssueStyled(issue)
+			printEnhancedIssueStyled(result, issue)
 		}
 	} else if len(result.Issues) > 0 {
 		for _, issue := range result.Issues {
-			printValidationIssueStyled(issue)
+			printValidationIssueStyled(result, issue)
 		}
 	} else {
 		// Fallback to simple error messages
@@ -333,18 +331,16 @@ func printValidationResultStyled(result ValidationResult) {
 }
 
 // printValidationIssueStyled prints a detailed validation issue with styling
-func printValidationIssueStyled(issue *ValidationIssue) {
+func printValidationIssueStyled(result ValidationResult, issue *ValidationIssue) {
 	var output strings.Builder
 
 	// Build the header
 	severityIcon := getSeverityIcon(issue.Severity)
 	severityStyled := getSeverityStyle(issue.Severity)
-	position := formatPosition(issue.Line, issue.Column)
 
 	// Create the issue box
-	header := fmt.Sprintf("%s %s at %s", severityIcon, severityStyled.Render(issue.Severity), position)
+	header := fmt.Sprintf("%s %s at %s:%d", severityIcon, severityStyled.Render(issue.Severity), formatFilePath(result.File), issue.Line)
 	output.WriteString(header + "\n")
-	output.WriteString(titleStyle.Render(issue.Title) + "\n")
 
 	if issue.Message != "" && issue.Message != issue.Title {
 		output.WriteString("\n" + messageStyle.Render(issue.Message) + "\n")
@@ -375,18 +371,17 @@ func printValidationIssueStyled(issue *ValidationIssue) {
 }
 
 // printEnhancedIssueStyled prints a detailed enhanced error with full context and styling
-func printEnhancedIssueStyled(issue *parser.EnhancedError) {
+func printEnhancedIssueStyled(result ValidationResult, issue *parser.EnhancedError) {
 	var output strings.Builder
 
 	// Build the header
 	severityIcon := getSeverityIcon(string(issue.Severity))
 	severityStyled := getSeverityStyle(string(issue.Severity))
-	position := formatPosition(issue.Position.Line, issue.Position.Column)
+	position := formatPosition(issue.Position.Line)
 
 	// Create the issue header
-	header := fmt.Sprintf("%s %s at %s", severityIcon, severityStyled.Render(string(issue.Severity)), position)
+	header := fmt.Sprintf("%s %s at %s:%s", severityIcon, severityStyled.Render(string(issue.Severity)), formatFilePath(result.File), position)
 	output.WriteString(header + "\n")
-	output.WriteString(titleStyle.Render(issue.Title) + "\n")
 
 	if issue.Message != "" && issue.Message != issue.Title {
 		output.WriteString("\n" + messageStyle.Render(issue.Message) + "\n")
