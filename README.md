@@ -6,71 +6,81 @@
 
 ---
 
-
-
 ## 🚀 What is Lacquer?
 
-Lacquer (`laq`) is a blazing-fast, code-first orchestration engine for AI agent workflows. Write declarative YAML workflows that seamlessly coordinate multiple AI models, tools, and integrations - all from a single 10MB binary.
+Lacquer (`laq`) is a blazing-fast, code-first orchestration engine for AI agent workflows. Write declarative YAML workflows that seamlessly coordinate multiple AI models and tools - all from a single binary.
 
 ```yaml
-# research.laq.yaml
+# hello-world.laq.yml
+version: "1.0"
 agents:
-  researcher:
+  assistant:
+    provider: openai
     model: gpt-4
-    tools: [lacquer/web-search@v1]
+    temperature: 0.7
 
 workflow:
+  inputs:
+    topic:
+      type: string
+      description: Topic to explore
+  
   steps:
-    - agent: researcher
-      prompt: "Research the latest breakthroughs in {{ inputs.topic }}"
+    - id: research
+      agent: assistant
+      prompt: "Tell me about {{ inputs.topic }}"
     
-    - uses: lacquer/summarizer@v1
-      with:
-        content: "{{ steps[0].output }}"
-        style: "technical blog post"
+    - id: summarize
+      agent: assistant
+      prompt: "Summarize this in 3 bullet points: {{ steps.research.output }}"
+  
+  outputs:
+    summary: "{{ steps.summarize.output }}"
 ```
 
 ```bash
-$ laq run research.laq.yaml --input topic="quantum computing"
-✓ Researching latest breakthroughs... (2.1s)
-✓ Generating summary... (1.3s)
-✓ Workflow completed in 3.4s
+$ laq run hello-world.laq.yml --input topic="quantum computing"
+
+Running hello-world (2 steps)
+
+✓ Step research completed (2.1s)
+✓ Step summarize completed (1.3s)
+
+✓ Workflow completed successfully
+
+Outputs:
+
+summary: "Quantum computing is a field of computing that uses quantum-mechanical phenomena, such as superposition and entanglement, to perform calculations."
 ```
 
 ## 🎯 Why Lacquer?
 
 ### For Engineers Who Want to Ship, Not Configure
 
+- **Code-First**: Version control your workflows, ensure governance, bulletproof your AI features.
 - **Single Binary**: Download and run. No Python environments, no dependency hell.
+- **Extensible**: Build workflows with custom scripts, containers, and more
 - **Lightning Fast**: <100ms validation, sub-second startup, efficient Go runtime
-- **Code-First**: Version control your workflows, review PRs, use your favorite IDE
-- **Portable**: Run locally, in CI/CD, on Lambda, or Kubernetes - same workflow everywhere
-- **Extensible**: Build custom blocks in Go, reuse workflows, share with the community
-
-### Not Another No-Code Tool
-
-While others focus on drag-and-drop interfaces that create productivity bottlenecks, Lacquer embraces what developers do best - write code. Define complex multi-agent workflows in YAML, version control them with Git, and deploy anywhere.
+- **Provider Agnostic**: Works with OpenAI, Anthropic, Claude Code, and more coming soon
 
 ## 📦 Installation
 
-### macOS/Linux
+### macOS/Linux (Coming Soon)
 ```bash
-curl -sSL https://get.lacquer.ai | sh
-```
-
-### Homebrew
-```bash
-brew install lacquer/tap/laq
-```
-
-### Docker
-```bash
-docker run -v ~/.laq:/root/.laq lacquer/laq:latest
+# Installation scripts are being prepared
+# For now, build from source
 ```
 
 ### From Source
 ```bash
-go install github.com/lacquer/laq@latest
+git clone https://github.com/lacquer/lacquer
+cd lacquer
+go build -o laq ./cmd/laq
+```
+
+### Docker (Coming Soon)
+```bash
+docker run -v ~/.laq:/root/.laq lacquer/laq:latest
 ```
 
 ## 🏃 Quick Start
@@ -83,295 +93,195 @@ cd my-agent
 
 ### 2. Create Your First Workflow
 ```yaml
-# analyze.laq.yaml
+# analyze.laq.yml
 version: "1.0"
+metadata:
+  name: data-analyzer
+  description: Analyze data and provide insights
+
 agents:
   analyst:
-    model: gpt-4
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
     temperature: 0.3
+    system_prompt: You are a data analyst expert.
 
 workflow:
   inputs:
-    data: string
+    data:
+      type: string
+      description: Data to analyze
     
   steps:
     - id: analyze
       agent: analyst
       prompt: |
-        Analyze this data and provide insights:
+        Analyze this data and provide key insights:
         {{ inputs.data }}
         
-    - id: visualize
-      uses: lacquer/chart-generator@v1
-      with:
-        data: "{{ steps.analyze.output }}"
-        type: "insights-dashboard"
+    - id: format
+      agent: analyst
+      prompt: |
+        Format these insights as a markdown report:
+        {{ steps.analyze.output }}
         
   outputs:
-    insights: "{{ steps.analyze.output }}"
-    chart_url: "{{ steps.visualize.output.url }}"
+    report: "{{ steps.format.output }}"
 ```
 
 ### 3. Run It
 ```bash
-laq run analyze.laq.yaml --input data="Q4 sales increased 25% YoY..."
+laq run analyze.laq.yml --input data="Q4 sales increased 25% YoY..."
 ```
 
-## 🌟 Key Features
+## 🌟 Current Features
 
-### 🤖 Multi-Agent Orchestration
-Coordinate multiple AI agents with different models and capabilities:
+### ✅ Core Functionality
+- **YAML-based DSL** with complex logic and templating
+- **Multi-provider support**: OpenAI, Anthropic, Claude Code
+- **Complex workflow execution**: Sequential, parallel, conditional, and more
+- **Serve your workflows as an HTTP API**
 
+### ✅ CLI Commands
+```bash
+laq init       # Initialize new project with example workflow
+laq validate   # Validate workflow syntax and semantics
+laq run        # Execute workflow locally
+laq serve      # Run as HTTP API server (with WebSocket support)
+laq version    # Display version information
+```
+
+### ✅ Agent Configuration
 ```yaml
 agents:
   researcher:
-    model: gpt-4
-    tools: [lacquer/web-search@v1]
-  
-  critic:
-    model: claude-3-opus
-    temperature: 0.2
-    
-  writer:
-    model: gpt-4-turbo
+    provider: openai        # or anthropic, claude-code
+    model: gpt-4           # or claude-3-5-sonnet-20241022
     temperature: 0.7
+    max_tokens: 2000
+    system_prompt: "You are a helpful research assistant"
 ```
 
-### 🔧 Rich Tool Ecosystem
-Access pre-built integrations or build your own:
+### ✅ Script & Docker Steps
+Execute custom code in any language using inline scripts or Docker containers:
 
-```yaml
-tools:
-  # Official Lacquer tools
-  - lacquer/web-search@v1
-  - lacquer/postgresql@v1
-  - lacquer/github@v1
-  - lacquer/slack@v1
-  
-  # Custom scripts
-  - script: ./tools/analyzer.py
-  
-  # Enterprise integrations
-  - mcp://salesforce.company.com
-```
-
-### 🔄 Advanced Control Flow
-Build sophisticated workflows with parallel execution, conditions, and loops:
-
+**Go Script Steps:**
 ```yaml
 steps:
-  - id: validate
-    agent: validator
-    prompt: "Check if {{ inputs.data }} needs processing"
-    
-  - parallel:
-      max_concurrency: 5
-      for_each: "{{ steps.validate.output.items }}"
-      steps:
-        - agent: processor
-          prompt: "Process {{ item }}"
-          
-  - condition: "{{ steps.validate.output.requires_review }}"
-    agent: reviewer
-    prompt: "Review the processed results"
+  - id: process_data
+    script: |
+      package main
+      import (
+        "encoding/json"
+        "os"
+      )
+      
+      type Context struct {
+        Inputs Inputs `json:"inputs"`
+      }
+
+      type Inputs struct {
+        Text string `json:"text"`
+      }
+      
+      func main() {
+        var ctx Context
+        json.NewDecoder(os.Stdin).Decode(&ctx)
+        
+        // Process inputs...
+        result := ctx.Inputs.Text + " processed!"
+        
+        json.NewEncoder(os.Stdout).Encode(map[string]interface{}{
+          "outputs": map[string]interface{}{
+            "result": result,
+          },
+        })
+      }
+    with:
+      text: "{{ inputs.text }}"
 ```
 
-### 🔍 Built-in Observability
-Debug and monitor your workflows with structured logging and metrics:
+**Docker Container Steps:**
+```yaml
+steps:
+  - id: analyze_with_python
+    container: ./.docker/python-analysis.dockerfile
+    with:
+      text: "{{ inputs.text }}"
+```
+
+Both approaches support full I/O via JSON, making it easy to integrate any tool or language.
+
+### ✅ Server Mode
+Run Lacquer as an HTTP API server:
 
 ```bash
-$ laq run workflow.laq.yaml --debug
-[2024-06-18 10:23:45] START workflow=analyze-customer-feedback
-[2024-06-18 10:23:45] STEP id=sentiment-analysis model=gpt-4 tokens=1250
-[2024-06-18 10:23:47] TOOL call=web-search query="customer satisfaction benchmarks"
-[2024-06-18 10:23:48] COMPLETE duration=3.2s total_tokens=2150 cost=$0.086
+laq serve --port 8080
+
+# Execute workflows via REST API
+curl -X POST http://localhost:8080/workflows/{workflow_id}/execute \
+  -H "Content-Type: application/json" \
+  -d '{"inputs": {"data": "..."}}'
 ```
 
-## 💪 Real-World Example
+Features:
+- REST API for workflow execution
+- WebSocket support for streaming responses
+- Prometheus metrics at `/metrics`
+- Concurrent execution management
+- CORS support for web integrations
 
-Build a complete content pipeline that researches, writes, and publishes:
-
-```yaml
-# content-pipeline.laq.yaml
-name: content-creation-pipeline
-agents:
-  researcher:
-    model: gpt-4
-    tools: [lacquer/web-search@v1, lacquer/pdf-reader@v1]
-    
-  writer:
-    model: claude-3-opus
-    temperature: 0.7
-    
-workflow:
-  inputs:
-    topic: string
-    audience: string
-    
-  steps:
-    # Research phase
-    - id: research
-      agent: researcher
-      prompt: |
-        Research "{{ inputs.topic }}" for {{ inputs.audience }} audience.
-        Find recent sources, statistics, and expert opinions.
-      retry:
-        max_attempts: 3
-        
-    # Create content
-    - id: outline
-      uses: lacquer/content-outliner@v1
-      with:
-        research: "{{ steps.research.output }}"
-        audience: "{{ inputs.audience }}"
-        
-    - id: write
-      agent: writer
-      prompt: |
-        Write a comprehensive article based on:
-        Outline: {{ steps.outline.output }}
-        Research: {{ steps.research.output }}
-        Target audience: {{ inputs.audience }}
-        
-    # Optimize and publish
-    - id: optimize_seo
-      uses: lacquer/seo-optimizer@v1
-      with:
-        content: "{{ steps.write.output }}"
-        
-    - id: create_social
-      parallel:
-        steps:
-          - uses: lacquer/social-media@v1
-            with:
-              content: "{{ steps.write.output }}"
-              platform: twitter
-              
-          - uses: lacquer/social-media@v1
-            with:
-              content: "{{ steps.write.output }}"
-              platform: linkedin
-              
-    - id: publish
-      uses: lacquer/wordpress@v1
-      with:
-        title: "{{ steps.outline.output.title }}"
-        content: "{{ steps.optimize_seo.output }}"
-        status: draft
-        
-  outputs:
-    article_url: "{{ steps.publish.output.url }}"
-    social_posts: "{{ steps.create_social.output }}"
-```
-
-## 🏗️ Building Custom Blocks
-
-Extend Lacquer with your own reusable components:
-
-```yaml
-# blocks/code-reviewer/block.laq.yaml
-name: code-reviewer
-version: 1.0.0
-runtime: go
-
-inputs:
-  file_path: string
-  language: string
-
-script: |
-  package main
-  
-  import (
-    "github.com/lacquer/laq/sdk"
-  )
-  
-  func main() {
-    code := sdk.ReadFile(inputs.GetString("file_path"))
-    language := inputs.GetString("language")
-    
-    // Custom review logic
-    issues := analyzeCode(code, language)
-    
-    outputs.Set("issues", issues)
-    outputs.Set("score", calculateScore(issues))
-  }
-```
-
-## 🚀 CLI Commands
-
-```bash
-laq init            # Initialize new project
-laq validate        # Validate workflow syntax
-laq run            # Execute workflow
-laq test           # Run workflow tests
-laq serve          # Run as HTTP API server
-laq list           # List available agents/tools
-```
-
-## 🤝 Community & Ecosystem
-
-### Official Blocks
-- `lacquer/web-search@v1` - Web search integration
-- `lacquer/summarizer@v1` - Text summarization
-- `lacquer/code-reviewer@v1` - Code analysis
-- `lacquer/postgresql@v1` - Database operations
-- `lacquer/github@v1` - GitHub integration
-- `lacquer/slack@v1` - Slack notifications
-
-### Resources
-- 📚 [Documentation](https://lacquer.ai/docs)
-- 💬 [Discord Community](https://discord.gg/lacquer)
-- 🎯 [Examples](examples/)
-- 📝 [Blog](https://lacquer.ai/blog)
-- 🐛 [Issue Tracker](https://github.com/lacquer/laq/issues)
+### ✅ Tool Integration (Experimental)
+- **MCP (Model Context Protocol)** client support
+- **Script tools** for custom integrations
+- Tool registry and execution framework
 
 ## 🛠️ Development
 
 ```bash
 # Clone the repo
-git clone https://github.com/lacquer/laq
-cd laq
+git clone https://github.com/lacquer/lacquer
+cd lacquer
+
+# Install dependencies
+go mod download
 
 # Build
-make build
+go build -o laq ./cmd/laq
 
 # Run tests
-make test
+go test ./...
 
-# Install locally
-make install
+# Run with debug logging
+./laq run workflow.laq.yml --log-level debug
 ```
 
-## 📈 Benchmarks
+## 🤝 Contributing
 
-| Operation | Time | Memory |
-|-----------|------|---------|
-| Startup | <50ms | <5MB |
-| Validate typical workflow | <100ms | <10MB |
-| Execute 10-step workflow | <500ms | <20MB |
-| Parallel execution (10 agents) | <1s | <50MB |
+We welcome contributions! Lacquer is in early alpha, and we're actively seeking feedback and help with:
 
-## 🤔 Why Go?
+- Additional provider integrations
+- More official blocks
+- Documentation improvements
+- Bug fixes and performance optimizations
+- Example workflows
 
-- **Performance**: Native concurrency with goroutines perfect for parallel agent execution
-- **Distribution**: Single static binary, no runtime dependencies
-- **Reliability**: Strong typing prevents runtime errors
-- **Ecosystem**: Same language for core engine and custom blocks
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📄 License
 
 Lacquer is Apache 2.0 licensed. See [LICENSE](LICENSE) for details.
 
-## 🌟 Star History
+## 🚦 Project Status
 
-[![Star History Chart](https://api.star-history.com/svg?repos=lacquer/laq&type=Date)](https://star-history.com/#lacquer/laq&Date)
+Lacquer is in **early alpha** (v0.1.0). The core engine is functional and being actively developed. Expect breaking changes as we iterate based on community feedback.
 
 ---
 
 <div align="center">
 
-**Ready to make your AI workflows shine?**
+**Ready to try Lacquer?**
 
-[Get Started](https://lacquer.ai/docs/quickstart) • [Join Discord](https://discord.gg/lacquer) • [Star on GitHub](https://github.com/lacquer/laq)
+[Get Started](#-quick-start) • [Report Issues](https://github.com/lacquer/lacquer/issues) • [Star on GitHub](https://github.com/lacquer/lacquer)
 
 </div>

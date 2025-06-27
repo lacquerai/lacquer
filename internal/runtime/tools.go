@@ -200,7 +200,7 @@ func (tr *ToolRegistry) GetToolsForAgent(agent *ast.Agent) ([]*ToolDefinition, e
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
 
-	if agent.Tools == nil || len(agent.Tools) == 0 {
+	if agent.Tools == nil {
 		return []*ToolDefinition{}, nil
 	}
 

@@ -376,7 +376,7 @@ func (pt *ProgressTracker) startStep(stepID string, stepIndex, totalSteps int) {
 
 	// Create and configure spinner
 	s := spinner.New(spinner.CharSets[9], 100*time.Millisecond) // Dots spinner with 100ms delay
-	s.Suffix = fmt.Sprintf(" Step %d/%d: %s", stepIndex, totalSteps, stepID)
+	s.Suffix = fmt.Sprintf(" Step %d/%d: %s", stepIndex, totalSteps, accentStyle.Render(stepID))
 
 	state := &StepProgressState{
 		stepID:     stepID,
@@ -413,7 +413,7 @@ func (pt *ProgressTracker) completeStep(stepID string, duration time.Duration) {
 		state.mu.Lock()
 		state.status = "completed"
 		state.endTime = time.Now()
-		state.spinner.FinalMSG = SuccessIcon() + " " + strings.TrimSpace(state.spinner.Suffix) + "\n"
+		state.spinner.FinalMSG = SuccessIcon() + " " + fmt.Sprintf("Step %s completed (%s)\n", accentStyle.Render(stepID), formatDuration(duration))
 		state.spinner.Stop()
 		state.mu.Unlock()
 	}
@@ -500,7 +500,7 @@ func printWorkflowInfo(workflow *ast.Workflow) {
 	name := getWorkflowName(workflow)
 	stepCount := len(workflow.Workflow.Steps)
 
-	fmt.Printf("Running %s (%d steps)\n\n", lipgloss.NewStyle().Bold(true).Render(name), stepCount)
+	fmt.Printf("\nRunning %s (%d steps)\n\n", infoStyle.Render(name), stepCount)
 
 }
 
@@ -533,13 +533,13 @@ func printExecutionSummary(result ExecutionResult) {
 
 	// Show success or failure with duration
 	if result.Status == "completed" {
-		fmt.Printf("%s Workflow completed in %v\n", SuccessIcon(), result.Duration)
+		fmt.Printf("%s Workflow completed %s (%s)\n", SuccessIcon(), successStyle.Render("successfully"), formatDuration(result.Duration))
 
 	} else {
-		fmt.Printf("%s Workflow failed after %v\n", ErrorIcon(), result.Duration)
+		fmt.Printf("%s Workflow failed\n\n", ErrorIcon())
 		// Show error details for failures
 		if result.Error != "" {
-			fmt.Printf("   %s\n", result.Error)
+			fmt.Printf("%s\n", errorStyle.Render(result.Error))
 		}
 	}
 

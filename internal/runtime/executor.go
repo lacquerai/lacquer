@@ -754,30 +754,25 @@ func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (
 		availableTools = []*ToolDefinition{}
 	}
 
-	// Execute agent with tools if available
 	if len(availableTools) > 0 {
 		return e.executeAgentStepWithTools(execCtx, step, agent, availableTools)
 	}
 
-	// Fallback to original implementation without tools
 	return e.executeAgentStepSimple(execCtx, step, agent)
 }
 
 // executeAgentStepWithTools executes an agent step with tool support
 func (e *Executor) executeAgentStepWithTools(execCtx *ExecutionContext, step *ast.Step, agent *ast.Agent, tools []*ToolDefinition) (string, *TokenUsage, error) {
-	// Render the prompt template
 	prompt, err := e.templateEngine.Render(step.Prompt, execCtx)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to render prompt template: %w", err)
 	}
 
-	// Get model provider
 	provider, err := e.modelRegistry.GetProviderForModel(agent.Provider, agent.Model)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to get provider %s for model %s: %w", agent.Provider, agent.Model, err)
 	}
 
-	// Execute with timeout
 	timeout := e.config.DefaultTimeout
 	if step.Timeout != nil {
 		timeout = step.Timeout.Duration
@@ -786,16 +781,15 @@ func (e *Executor) executeAgentStepWithTools(execCtx *ExecutionContext, step *as
 	ctx, cancel := context.WithTimeout(execCtx.Context, timeout)
 	defer cancel()
 
-	// Execute conversation with tools
 	return e.executeConversationWithTools(ctx, provider, agent, prompt, tools, execCtx, step)
 }
 
 // executeConversationWithTools handles multi-turn conversation with tool calling
 func (e *Executor) executeConversationWithTools(ctx context.Context, provider ModelProvider, agent *ast.Agent, initialPrompt string, tools []*ToolDefinition, execCtx *ExecutionContext, step *ast.Step) (string, *TokenUsage, error) {
 	totalTokenUsage := &TokenUsage{}
-	maxTurns := 10 // Prevent infinite loops
+	// @TODO: make this configurable in the step & or agent definition
+	maxTurns := 10
 
-	// Build conversation messages
 	conversation := []interface{}{
 		map[string]interface{}{
 			"role":    "user",
@@ -803,9 +797,15 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 		},
 	}
 
+	// Generate function schemas for the provider
+	toolSchemas, err := GenerateFunctionSchema(tools, provider.GetName())
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate function schemas: %w", err)
+	}
+
 	for turn := 0; turn < maxTurns; turn++ {
 		// Create request with tools
-		request, err := e.createModelRequestWithTools(agent, conversation, tools, provider.GetName())
+		request, err := e.createModelRequestWithTools(agent, conversation, toolSchemas, provider.GetName())
 		if err != nil {
 			return "", totalTokenUsage, fmt.Errorf("failed to create model request: %w", err)
 		}
@@ -858,13 +858,7 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 }
 
 // createModelRequestWithTools creates a model request with tool schemas
-func (e *Executor) createModelRequestWithTools(agent *ast.Agent, conversation []interface{}, tools []*ToolDefinition, providerName string) (*ModelRequest, error) {
-	// Generate function schemas for the provider
-	toolSchemas, err := GenerateFunctionSchema(tools, providerName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate function schemas: %w", err)
-	}
-
+func (e *Executor) createModelRequestWithTools(agent *ast.Agent, conversation []interface{}, toolSchemas interface{}, providerName string) (*ModelRequest, error) {
 	// Create request based on provider type
 	switch providerName {
 	case "anthropic":
@@ -878,9 +872,6 @@ func (e *Executor) createModelRequestWithTools(agent *ast.Agent, conversation []
 
 // createAnthropicRequestWithTools creates an Anthropic request with tools
 func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, conversation []interface{}, toolSchemas interface{}) (*ModelRequest, error) {
-	// For MVP, implement basic Anthropic tool request
-	// In full implementation, this would properly format the conversation and tools
-
 	request := &ModelRequest{
 		Model:        agent.Model,
 		SystemPrompt: agent.SystemPrompt,
@@ -908,9 +899,6 @@ func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, conversatio
 
 // createOpenAIRequestWithTools creates an OpenAI request with tools
 func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, conversation []interface{}, toolSchemas interface{}) (*ModelRequest, error) {
-	// For MVP, implement basic OpenAI tool request
-	// In full implementation, this would properly format the conversation and tools
-
 	request := &ModelRequest{
 		Model:        agent.Model,
 		SystemPrompt: agent.SystemPrompt,
