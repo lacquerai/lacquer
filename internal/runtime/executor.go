@@ -744,25 +744,11 @@ func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (
 		return "", nil, fmt.Errorf("agent %s not found", step.Agent)
 	}
 
-	// Get available tools for this agent
-	availableTools, err := e.toolRegistry.GetToolsForAgent(agent)
-	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("agent", step.Agent).
-			Msg("Failed to get tools for agent, proceeding without tools")
-		availableTools = []*ToolDefinition{}
-	}
-
-	if len(availableTools) > 0 {
-		return e.executeAgentStepWithTools(execCtx, step, agent, availableTools)
-	}
-
-	return e.executeAgentStepSimple(execCtx, step, agent)
+	return e.executeAgentStepWithTools(execCtx, step, agent)
 }
 
 // executeAgentStepWithTools executes an agent step with tool support
-func (e *Executor) executeAgentStepWithTools(execCtx *ExecutionContext, step *ast.Step, agent *ast.Agent, tools []*ToolDefinition) (string, *TokenUsage, error) {
+func (e *Executor) executeAgentStepWithTools(execCtx *ExecutionContext, step *ast.Step, agent *ast.Agent) (string, *TokenUsage, error) {
 	prompt, err := e.templateEngine.Render(step.Prompt, execCtx)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to render prompt template: %w", err)
@@ -781,37 +767,33 @@ func (e *Executor) executeAgentStepWithTools(execCtx *ExecutionContext, step *as
 	ctx, cancel := context.WithTimeout(execCtx.Context, timeout)
 	defer cancel()
 
-	return e.executeConversationWithTools(ctx, provider, agent, prompt, tools, execCtx, step)
+	return e.executeConversationWithTools(ctx, provider, agent, prompt, execCtx, step)
 }
 
 // executeConversationWithTools handles multi-turn conversation with tool calling
-func (e *Executor) executeConversationWithTools(ctx context.Context, provider ModelProvider, agent *ast.Agent, initialPrompt string, tools []*ToolDefinition, execCtx *ExecutionContext, step *ast.Step) (string, *TokenUsage, error) {
+func (e *Executor) executeConversationWithTools(ctx context.Context, provider ModelProvider, agent *ast.Agent, initialPrompt string, execCtx *ExecutionContext, step *ast.Step) (string, *TokenUsage, error) {
 	totalTokenUsage := &TokenUsage{}
+
 	// @TODO: make this configurable in the step & or agent definition
 	maxTurns := 10
 
-	conversation := []interface{}{
-		map[string]interface{}{
-			"role":    "user",
-			"content": initialPrompt,
+	messages := []ModelMessage{
+		{
+			Role: "user",
+			Content: []ContentBlockParamUnion{
+				NewTextBlock(initialPrompt),
+			},
 		},
-	}
-
-	// Generate function schemas for the provider
-	toolSchemas, err := GenerateFunctionSchema(tools, provider.GetName())
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate function schemas: %w", err)
 	}
 
 	for turn := 0; turn < maxTurns; turn++ {
 		// Create request with tools
-		request, err := e.createModelRequestWithTools(agent, conversation, toolSchemas, provider.GetName())
+		request, err := e.createModelRequestWithTools(agent, messages, provider.GetName())
 		if err != nil {
 			return "", totalTokenUsage, fmt.Errorf("failed to create model request: %w", err)
 		}
 
-		// Call the model
-		response, tokenUsage, err := provider.Generate(ctx, request, e.progressChan)
+		responseMessages, tokenUsage, err := provider.Generate(ctx, request, e.progressChan)
 		if err != nil {
 			return "", totalTokenUsage, fmt.Errorf("model generation failed: %w", err)
 		}
@@ -821,22 +803,13 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 			totalTokenUsage.PromptTokens += tokenUsage.PromptTokens
 			totalTokenUsage.CompletionTokens += tokenUsage.CompletionTokens
 			totalTokenUsage.TotalTokens += tokenUsage.TotalTokens
-			totalTokenUsage.EstimatedCost += tokenUsage.EstimatedCost
 		}
 
 		// Check if the response contains tool calls
-		toolCalls, hasToolCalls := e.extractToolCallsFromResponse(response, provider.GetName())
-		if !hasToolCalls {
-			// No tool calls, return the response
-			return response, totalTokenUsage, nil
+		toolCalls := e.getToolCallsFromResponseMessages(responseMessages)
+		if len(toolCalls) == 0 {
+			return getLastContentBlock(responseMessages), totalTokenUsage, nil
 		}
-
-		// Add assistant message to conversation
-		conversation = append(conversation, map[string]interface{}{
-			"role":       "assistant",
-			"content":    response,
-			"tool_calls": toolCalls,
-		})
 
 		// Execute tool calls
 		toolResults, err := e.executeToolCalls(ctx, toolCalls, execCtx, step)
@@ -845,163 +818,80 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 		}
 
 		// Add tool results to conversation
-		for _, result := range toolResults {
-			conversation = append(conversation, map[string]interface{}{
-				"role":         "tool",
-				"tool_call_id": result["tool_call_id"],
-				"content":      result["content"],
-			})
-		}
+		messages = append(messages, toolResults...)
 	}
 
 	return "Max conversation turns reached without completion", totalTokenUsage, nil
 }
 
+func (e *Executor) getToolCallsFromResponseMessages(responseMessages []ModelMessage) []*ToolUseBlockParam {
+	var toolCalls []*ToolUseBlockParam
+
+	for _, message := range responseMessages {
+		for _, content := range message.Content {
+			if content.Type() == ContentBlockTypeToolUse {
+				toolCalls = append(toolCalls, content.OfToolUse)
+			}
+		}
+	}
+
+	return toolCalls
+}
+
 // createModelRequestWithTools creates a model request with tool schemas
-func (e *Executor) createModelRequestWithTools(agent *ast.Agent, conversation []interface{}, toolSchemas interface{}, providerName string) (*ModelRequest, error) {
+func (e *Executor) createModelRequestWithTools(agent *ast.Agent, messages []ModelMessage, providerName string) (*ModelRequest, error) {
 	// Create request based on provider type
 	switch providerName {
 	case "anthropic":
-		return e.createAnthropicRequestWithTools(agent, conversation, toolSchemas)
+		return e.createAnthropicRequestWithTools(agent, messages)
 	case "openai":
-		return e.createOpenAIRequestWithTools(agent, conversation, toolSchemas)
+		return e.createOpenAIRequestWithTools(agent, messages)
 	default:
 		return nil, fmt.Errorf("unsupported provider for tool calling: %s", providerName)
 	}
 }
 
 // createAnthropicRequestWithTools creates an Anthropic request with tools
-func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, conversation []interface{}, toolSchemas interface{}) (*ModelRequest, error) {
+func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, messages []ModelMessage) (*ModelRequest, error) {
 	request := &ModelRequest{
 		Model:        agent.Model,
+		Messages:     messages,
 		SystemPrompt: agent.SystemPrompt,
 		Temperature:  agent.Temperature,
 		MaxTokens:    agent.MaxTokens,
 		TopP:         agent.TopP,
+		Tools:        agent.Tools,
 		Metadata: map[string]interface{}{
-			"tools":         toolSchemas,
-			"conversation":  conversation,
 			"provider_type": "anthropic",
 		},
-	}
-
-	// Convert conversation to prompt (simplified for MVP)
-	if len(conversation) > 0 {
-		if userMsg, ok := conversation[len(conversation)-1].(map[string]interface{}); ok {
-			if content, ok := userMsg["content"].(string); ok {
-				request.Prompt = content
-			}
-		}
 	}
 
 	return request, nil
 }
 
 // createOpenAIRequestWithTools creates an OpenAI request with tools
-func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, conversation []interface{}, toolSchemas interface{}) (*ModelRequest, error) {
+func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, messages []ModelMessage) (*ModelRequest, error) {
 	request := &ModelRequest{
 		Model:        agent.Model,
+		Messages:     messages,
 		SystemPrompt: agent.SystemPrompt,
 		Temperature:  agent.Temperature,
 		MaxTokens:    agent.MaxTokens,
 		TopP:         agent.TopP,
+		Tools:        agent.Tools,
 		Metadata: map[string]interface{}{
-			"tools":         toolSchemas,
-			"conversation":  conversation,
 			"provider_type": "openai",
 		},
-	}
-
-	// Convert conversation to prompt (simplified for MVP)
-	if len(conversation) > 0 {
-		if userMsg, ok := conversation[len(conversation)-1].(map[string]interface{}); ok {
-			if content, ok := userMsg["content"].(string); ok {
-				request.Prompt = content
-			}
-		}
 	}
 
 	return request, nil
 }
 
-// extractToolCallsFromResponse extracts tool calls from model response
-func (e *Executor) extractToolCallsFromResponse(response string, providerName string) ([]map[string]interface{}, bool) {
-	switch providerName {
-	case "anthropic":
-		return e.extractAnthropicToolCalls(response)
-	case "openai":
-		return e.extractOpenAIToolCalls(response)
-	default:
-		return nil, false
-	}
-}
-
-// extractAnthropicToolCalls extracts tool calls from Anthropic response
-func (e *Executor) extractAnthropicToolCalls(response string) ([]map[string]interface{}, bool) {
-	// Look for tool calls in the response
-	if !strings.Contains(response, "<tool_calls>") {
-		return nil, false
-	}
-
-	// Extract JSON from tool_calls tags
-	start := strings.Index(response, "<tool_calls>")
-	end := strings.Index(response, "</tool_calls>")
-	if start == -1 || end == -1 || end <= start {
-		return nil, false
-	}
-
-	jsonStr := response[start+len("<tool_calls>") : end]
-
-	var toolCalls []map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonStr), &toolCalls); err != nil {
-		log.Warn().Err(err).Msg("Failed to parse Anthropic tool calls")
-		return nil, false
-	}
-
-	return toolCalls, len(toolCalls) > 0
-}
-
-// extractOpenAIToolCalls extracts tool calls from OpenAI response
-func (e *Executor) extractOpenAIToolCalls(response string) ([]map[string]interface{}, bool) {
-	// Look for tool calls in the response (same format as Anthropic)
-	if !strings.Contains(response, "<tool_calls>") {
-		return nil, false
-	}
-
-	// Extract JSON from tool_calls tags
-	start := strings.Index(response, "<tool_calls>")
-	end := strings.Index(response, "</tool_calls>")
-	if start == -1 || end == -1 || end <= start {
-		return nil, false
-	}
-
-	jsonStr := response[start+len("<tool_calls>") : end]
-
-	var toolCalls []map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonStr), &toolCalls); err != nil {
-		log.Warn().Err(err).Msg("Failed to parse OpenAI tool calls")
-		return nil, false
-	}
-
-	return toolCalls, len(toolCalls) > 0
-}
-
 // executeToolCalls executes the tool calls and returns results
-func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []map[string]interface{}, execCtx *ExecutionContext, step *ast.Step) ([]map[string]interface{}, error) {
-	var results []map[string]interface{}
+func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlockParam, execCtx *ExecutionContext, step *ast.Step) ([]ModelMessage, error) {
+	var results []ModelMessage
 
 	for _, toolCall := range toolCalls {
-		toolName, ok := toolCall["function"].(string)
-		if !ok {
-			continue
-		}
-
-		parameters, _ := toolCall["arguments"].(map[string]interface{})
-		if parameters == nil {
-			parameters = make(map[string]interface{})
-		}
-
-		// Create tool execution context
 		toolExecCtx := &ToolExecutionContext{
 			WorkflowID: execCtx.RunID,
 			StepID:     step.ID,
@@ -1012,94 +902,43 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []map[string]
 		}
 
 		// Execute the tool
-		result, err := e.toolRegistry.ExecuteTool(ctx, toolName, parameters, toolExecCtx)
+		result, err := e.toolRegistry.ExecuteTool(ctx, toolCall.Name, toolCall.Input, toolExecCtx)
 		if err != nil {
 			log.Warn().
 				Err(err).
-				Str("tool", toolName).
+				Str("tool", toolCall.Name).
 				Msg("Tool execution failed")
 
 			// Add error result
-			results = append(results, map[string]interface{}{
-				"tool_call_id": toolCall["id"],
-				"content":      fmt.Sprintf("Tool execution failed: %s", err.Error()),
-			})
+			isError := true
+			results = append(results,
+				ModelMessage{
+					Role: "user",
+					Content: []ContentBlockParamUnion{
+						NewToolResultBlock(toolCall.ID, err.Error(), &isError),
+					},
+				},
+			)
 			continue
 		}
 
 		// Format tool result
 		content := "Tool executed successfully"
-		if result.Success && result.Output != nil {
-			if outputJSON, err := json.Marshal(result.Output); err == nil {
-				content = string(outputJSON)
-			}
-		} else if !result.Success {
-			content = fmt.Sprintf("Tool failed: %s", result.Error)
+		if outputJSON, err := json.Marshal(result.Output); err == nil {
+			content = string(outputJSON)
 		}
 
-		results = append(results, map[string]interface{}{
-			"tool_call_id": toolCall["id"],
-			"content":      content,
-		})
+		results = append(results,
+			ModelMessage{
+				Role: "user",
+				Content: []ContentBlockParamUnion{
+					NewToolResultBlock(toolCall.ID, content, &result.Success),
+				},
+			},
+		)
 	}
 
 	return results, nil
-}
-
-// executeAgentStepSimple executes an agent step without tools (original implementation)
-func (e *Executor) executeAgentStepSimple(execCtx *ExecutionContext, step *ast.Step, agent *ast.Agent) (string, *TokenUsage, error) {
-	// Render the prompt template
-	prompt, err := e.templateEngine.Render(step.Prompt, execCtx)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to render prompt template: %w", err)
-	}
-
-	// Enhance prompt with JSON schema instructions if outputs are defined
-	if len(step.Outputs) > 0 {
-		schema, schemaErr := e.schemaGenerator.GenerateJSONSchema(step.Outputs)
-		if schemaErr != nil {
-			log.Warn().
-				Err(schemaErr).
-				Str("step_id", step.ID).
-				Msg("Failed to generate JSON schema, proceeding without schema guidance")
-		} else if schema != "" {
-			schemaInstructions := e.schemaGenerator.GeneratePromptInstructions(schema)
-			prompt = prompt + schemaInstructions
-		}
-	}
-
-	// Get model provider using the provider-aware lookup
-	provider, err := e.modelRegistry.GetProviderForModel(agent.Provider, agent.Model)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to get provider %s for model %s: %w", agent.Provider, agent.Model, err)
-	}
-
-	// Create model request
-	request := &ModelRequest{
-		Model:        agent.Model,
-		Prompt:       prompt,
-		SystemPrompt: agent.SystemPrompt,
-		Temperature:  agent.Temperature,
-		MaxTokens:    agent.MaxTokens,
-		TopP:         agent.TopP,
-	}
-
-	// Execute with timeout
-	timeout := e.config.DefaultTimeout
-	if step.Timeout != nil {
-		timeout = step.Timeout.Duration
-	}
-
-	ctx, cancel := context.WithTimeout(execCtx.Context, timeout)
-	defer cancel()
-
-	// Call the model
-	response, tokenUsage, err := provider.Generate(ctx, request, e.progressChan)
-	if err != nil {
-		return "", nil, fmt.Errorf("model generation failed: %w", err)
-	}
-
-	return response, tokenUsage, nil
 }
 
 // executeBlockStep executes a step that uses a reusable block
@@ -1310,18 +1149,6 @@ func (e *Executor) executeActionStep(execCtx *ExecutionContext, step *ast.Step) 
 		return map[string]interface{}{
 			"updated_keys": getKeys(updates),
 		}, nil
-
-	case "human_input":
-		// For MVP, this is a placeholder
-		// In a full implementation, this would pause execution and wait for human input
-		log.Info().
-			Str("step_id", step.ID).
-			Msg("Human input requested (placeholder)")
-
-		return map[string]interface{}{
-			"human_input": "Mock human input response",
-		}, nil
-
 	default:
 		return nil, fmt.Errorf("unknown action: %s", step.Action)
 	}
@@ -1333,11 +1160,7 @@ func (e *Executor) evaluateSkipCondition(execCtx *ExecutionContext, step *ast.St
 		return false, nil
 	}
 
-	// For MVP, implement basic condition evaluation
-	// This would be expanded to full expression evaluation later
-
 	if step.SkipIf != "" {
-		// Simple template-based condition evaluation
 		result, err := e.templateEngine.Render(step.SkipIf, execCtx)
 		if err != nil {
 			return false, err
@@ -1346,7 +1169,6 @@ func (e *Executor) evaluateSkipCondition(execCtx *ExecutionContext, step *ast.St
 	}
 
 	if step.Condition != "" {
-		// Condition must be true to execute
 		result, err := e.templateEngine.Render(step.Condition, execCtx)
 		if err != nil {
 			return false, err
@@ -1474,8 +1296,7 @@ func initializeRequiredProviders(registry *ModelRegistry, requiredProviders map[
 
 // initializeToolProviders initializes tool providers for the workflow
 func initializeToolProviders(toolRegistry *ToolRegistry, workflow *ast.Workflow, cacheDir string) error {
-	// Create script tool provider for local script tools
-	scriptProvider, err := NewScriptToolProvider("script", cacheDir)
+	scriptProvider, err := NewScriptToolProvider("local", cacheDir)
 	if err != nil {
 		return fmt.Errorf("failed to create script tool provider: %w", err)
 	}
@@ -1484,67 +1305,13 @@ func initializeToolProviders(toolRegistry *ToolRegistry, workflow *ast.Workflow,
 		return fmt.Errorf("failed to register script tool provider: %w", err)
 	}
 
-	// Initialize MCP providers based on agent tool configurations
-	mcpServers := extractMCPServersFromWorkflow(workflow)
-	for serverURL, providerName := range mcpServers {
-		mcpConfig := &MCPConfig{
-			ServerURL: serverURL,
+	for name, agent := range workflow.Agents {
+		if err := toolRegistry.RegisterToolsForAgent(agent); err != nil {
+			return fmt.Errorf("failed to register tools for agent %s: %w", name, err)
 		}
-
-		mcpProvider, err := NewMCPToolProvider(providerName, mcpConfig)
-		if err != nil {
-			log.Warn().
-				Err(err).
-				Str("server_url", serverURL).
-				Msg("Failed to create MCP tool provider, skipping")
-			continue
-		}
-
-		if err := toolRegistry.RegisterProvider(mcpProvider); err != nil {
-			log.Warn().
-				Err(err).
-				Str("provider", providerName).
-				Msg("Failed to register MCP tool provider, skipping")
-			continue
-		}
-
-		log.Info().
-			Str("provider", providerName).
-			Str("server_url", serverURL).
-			Msg("MCP tool provider registered")
-	}
-
-	// Discover tools from all providers
-	if err := toolRegistry.DiscoverTools(context.Background()); err != nil {
-		log.Warn().Err(err).Msg("Failed to discover tools, continuing without tools")
 	}
 
 	return nil
-}
-
-// extractMCPServersFromWorkflow extracts MCP server URLs from agent tool configurations
-func extractMCPServersFromWorkflow(workflow *ast.Workflow) map[string]string {
-	mcpServers := make(map[string]string)
-
-	if workflow.Agents == nil {
-		return mcpServers
-	}
-
-	for _, agent := range workflow.Agents {
-		if agent.Tools == nil {
-			continue
-		}
-
-		for _, tool := range agent.Tools {
-			if tool.MCPServer != "" {
-				// Generate provider name from server URL
-				providerName := fmt.Sprintf("mcp_%s", tool.Name)
-				mcpServers[tool.MCPServer] = providerName
-			}
-		}
-	}
-
-	return mcpServers
 }
 
 // collectWorkflowOutputs collects and renders workflow-level outputs using the template engine
@@ -1588,4 +1355,17 @@ func (e *Executor) collectWorkflowOutputs(execCtx *ExecutionContext) error {
 		Msg("Workflow outputs collected successfully")
 
 	return nil
+}
+
+func getLastContentBlock(responseMessages []ModelMessage) string {
+	if len(responseMessages) == 0 {
+		return ""
+	}
+
+	lastMessage := responseMessages[len(responseMessages)-1]
+	if len(lastMessage.Content) == 0 {
+		return ""
+	}
+
+	return lastMessage.Content[len(lastMessage.Content)-1].OfText.Text
 }

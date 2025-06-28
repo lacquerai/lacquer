@@ -40,12 +40,16 @@ func (e *GoExecutor) Validate(block *Block) error {
 	return nil
 }
 
-// Execute runs a Go script block
-func (e *GoExecutor) Execute(ctx context.Context, block *Block, inputs map[string]interface{}, execCtx *ExecutionContext) (map[string]interface{}, error) {
+func (e *GoExecutor) ExecuteRaw(ctx context.Context, block *Block, inputJSON json.RawMessage, execCtx *ExecutionContext) (map[string]interface{}, error) {
 	// Get or compile the script
 	binaryPath, err := e.getOrCompile(ctx, block)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile go script: %w", err)
+	}
+
+	inputs := make(map[string]interface{})
+	if err := json.Unmarshal(inputJSON, &inputs); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal input: %w", err)
 	}
 
 	// Prepare execution input
@@ -62,12 +66,6 @@ func (e *GoExecutor) Execute(ctx context.Context, block *Block, inputs map[strin
 	// Add environment variables
 	execInput.Env["WORKSPACE"] = execCtx.Workspace
 	execInput.Env["LOG_LEVEL"] = os.Getenv("LOG_LEVEL")
-
-	// Marshal input to JSON
-	inputJSON, err := json.Marshal(execInput)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal input: %w", err)
-	}
 
 	// Execute the binary
 	cmd := exec.CommandContext(ctx, binaryPath)
@@ -113,6 +111,16 @@ func (e *GoExecutor) Execute(ctx context.Context, block *Block, inputs map[strin
 	}
 
 	return output.Outputs, nil
+}
+
+// Execute runs a Go script block
+func (e *GoExecutor) Execute(ctx context.Context, block *Block, inputs map[string]interface{}, execCtx *ExecutionContext) (map[string]interface{}, error) {
+	jsonInput, err := json.Marshal(inputs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal input: %w", err)
+	}
+
+	return e.ExecuteRaw(ctx, block, jsonInput, execCtx)
 }
 
 func (e *GoExecutor) getOrCompile(ctx context.Context, block *Block) (string, error) {

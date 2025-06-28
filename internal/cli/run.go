@@ -256,8 +256,6 @@ func runWorkflow(workflowFile string) {
 		StepsTotal:   len(workflow.Workflow.Steps),
 	}
 
-	// Removed verbose execution start message
-
 	// Execute with progress reporting
 	err = executeWithProgress(ctx, executor, execCtx, &result)
 
@@ -478,14 +476,12 @@ func collectExecutionResults(execCtx *runtime.ExecutionContext, result *Executio
 				PromptTokens:     step.TokenUsage.PromptTokens,
 				CompletionTokens: step.TokenUsage.CompletionTokens,
 				TotalTokens:      step.TokenUsage.TotalTokens,
-				EstimatedCost:    step.TokenUsage.EstimatedCost,
 			}
 
 			// Aggregate token usage
 			tokenSummary.PromptTokens += step.TokenUsage.PromptTokens
 			tokenSummary.CompletionTokens += step.TokenUsage.CompletionTokens
 			tokenSummary.TotalTokens += step.TokenUsage.TotalTokens
-			tokenSummary.EstimatedCost += step.TokenUsage.EstimatedCost
 		}
 
 		result.StepResults = append(result.StepResults, stepResult)

@@ -175,7 +175,7 @@ func NewClaudeCodeProvider(config *ClaudeCodeConfig) (*ClaudeCodeProvider, error
 }
 
 // Generate generates a response using Claude Code with streaming enabled by default
-func (p *ClaudeCodeProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) (string, *TokenUsage, error) {
+func (p *ClaudeCodeProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error) {
 	// Use streaming with default progress callback if enabled
 	options := &StreamingOptions{
 		ShowToolUse:  true,
@@ -186,28 +186,24 @@ func (p *ClaudeCodeProvider) Generate(ctx context.Context, request *ModelRequest
 }
 
 // GenerateWithOptions generates a response using Claude Code with streaming options
-func (p *ClaudeCodeProvider) GenerateWithOptions(ctx context.Context, request *ModelRequest, options *StreamingOptions) (string, *TokenUsage, error) {
+func (p *ClaudeCodeProvider) GenerateWithOptions(ctx context.Context, request *ModelRequest, options *StreamingOptions) ([]ModelMessage, *TokenUsage, error) {
 	// Send request to Claude Code with streaming support
 	response, err := p.sendRequestWithOptions(ctx, request, options)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to send request to Claude Code: %w", err)
+		return nil, nil, fmt.Errorf("failed to send request to Claude Code: %w", err)
 	}
 
-	// Parse response and extract content
 	content := response.Content
 	if response.Error != "" {
-		return "", nil, fmt.Errorf("Claude Code error: %s", response.Error)
+		return nil, nil, fmt.Errorf("Claude Code error: %s", response.Error)
 	}
 
-	// Extract token usage from response metadata if available
-	tokenUsage := &TokenUsage{
-		PromptTokens:     estimateTokens(request.Prompt + request.SystemPrompt),
-		CompletionTokens: estimateTokens(content),
-		TotalTokens:      estimateTokens(request.Prompt + request.SystemPrompt + content),
-		EstimatedCost:    0.0, // Claude Code is free
-	}
-
-	return content, tokenUsage, nil
+	return []ModelMessage{
+		{
+			Role:    "assistant",
+			Content: []ContentBlockParamUnion{NewTextBlock(content)},
+		},
+	}, nil, nil
 }
 
 func (p *ClaudeCodeProvider) Close() error {
@@ -260,9 +256,10 @@ type ClaudeCodeSession struct {
 
 // createSessionUnsafe creates a new Claude Code session (caller must hold lock)
 func (p *ClaudeCodeProvider) execute(ctx context.Context, request *ModelRequest) (*ClaudeCodeSession, error) {
-	prompt := request.Prompt
+	prompt := request.GetPrompt()
+
 	if request.SystemPrompt != "" {
-		prompt = fmt.Sprintf("System: %s\n\nUser: %s", request.SystemPrompt, request.Prompt)
+		prompt = fmt.Sprintf("System: %s\n\nUser: %s", request.SystemPrompt, prompt)
 	}
 
 	args := []string{
@@ -627,10 +624,4 @@ func (p *ClaudeCodeProvider) formatInputParams(input map[string]interface{}) str
 	}
 
 	return strings.Join(parts, ", ")
-}
-
-// estimateTokens provides a rough token count estimate
-func estimateTokens(text string) int {
-	// Rough estimation: ~4 characters per token for English text
-	return len(text) / 4
 }

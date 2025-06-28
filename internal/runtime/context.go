@@ -66,10 +66,9 @@ const (
 
 // TokenUsage tracks token consumption for model API calls
 type TokenUsage struct {
-	PromptTokens     int     `json:"prompt_tokens"`
-	CompletionTokens int     `json:"completion_tokens"`
-	TotalTokens      int     `json:"total_tokens"`
-	EstimatedCost    float64 `json:"estimated_cost"`
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
 }
 
 // NewExecutionContext creates a new execution context for a workflow
@@ -291,7 +290,6 @@ func (ec *ExecutionContext) GetExecutionSummary() ExecutionSummary {
 	for _, result := range ec.StepResults {
 		if result.TokenUsage != nil {
 			summary.TotalTokens += result.TokenUsage.TotalTokens
-			summary.EstimatedCost += result.TokenUsage.EstimatedCost
 		}
 	}
 

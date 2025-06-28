@@ -146,15 +146,107 @@ type AgentPolicies struct {
 	Position Position `yaml:"-" json:"-"`
 }
 
+type ToolType string
+
+var (
+	ToolTypeScript   ToolType = "script"
+	ToolTypeWorkflow ToolType = "workflow"
+	ToolTypeMCP      ToolType = "mcp"
+	ToolTypeOfficial ToolType = "official"
+)
+
+// JSONSchema represents a JSON Schema object according to Draft 2020-12
+type JSONSchema struct {
+	// Core vocabulary
+	Schema        string                `json:"$schema,omitempty"`
+	ID            string                `json:"$id,omitempty"`
+	Ref           string                `json:"$ref,omitempty"`
+	Anchor        string                `json:"$anchor,omitempty"`
+	DynamicRef    string                `json:"$dynamicRef,omitempty"`
+	DynamicAnchor string                `json:"$dynamicAnchor,omitempty"`
+	Definitions   map[string]JSONSchema `json:"$defs,omitempty"`
+	Comment       string                `json:"$comment,omitempty"`
+
+	// Type constraints
+	Type  interface{}   `json:"type,omitempty"`
+	Enum  []interface{} `json:"enum,omitempty"`
+	Const interface{}   `json:"const,omitempty"`
+
+	// String validation
+	MinLength int    `json:"minLength,omitempty"`
+	MaxLength int    `json:"maxLength,omitempty"`
+	Pattern   string `json:"pattern,omitempty"`
+	Format    string `json:"format,omitempty"`
+
+	// Numeric validation
+	MultipleOf       float64 `json:"multipleOf,omitempty"`
+	Minimum          float64 `json:"minimum,omitempty"`
+	ExclusiveMinimum float64 `json:"exclusiveMinimum,omitempty"`
+	Maximum          float64 `json:"maximum,omitempty"`
+	ExclusiveMaximum float64 `json:"exclusiveMaximum,omitempty"`
+
+	// Object validation
+	Properties           map[string]JSONSchema `json:"properties,omitempty"`
+	PatternProperties    map[string]JSONSchema `json:"patternProperties,omitempty"`
+	AdditionalProperties interface{}           `json:"additionalProperties,omitempty"` // bool or JSONSchema
+	Required             []string              `json:"required,omitempty"`
+	PropertyNames        *JSONSchema           `json:"propertyNames,omitempty"`
+	MinProperties        int                   `json:"minProperties,omitempty"`
+	MaxProperties        int                   `json:"maxProperties,omitempty"`
+
+	// Array validation
+	Items       interface{}  `json:"items,omitempty"` // JSONSchema or bool
+	PrefixItems []JSONSchema `json:"prefixItems,omitempty"`
+	Contains    *JSONSchema  `json:"contains,omitempty"`
+	MinContains int          `json:"minContains,omitempty"`
+	MaxContains int          `json:"maxContains,omitempty"`
+	MinItems    int          `json:"minItems,omitempty"`
+	MaxItems    int          `json:"maxItems,omitempty"`
+	UniqueItems bool         `json:"uniqueItems,omitempty"`
+
+	// Combining schemas
+	AllOf []JSONSchema `json:"allOf,omitempty"`
+	AnyOf []JSONSchema `json:"anyOf,omitempty"`
+	OneOf []JSONSchema `json:"oneOf,omitempty"`
+	Not   *JSONSchema  `json:"not,omitempty"`
+
+	// Metadata
+	Title       string        `json:"title,omitempty"`
+	Description string        `json:"description,omitempty"`
+	Default     interface{}   `json:"default,omitempty"`
+	ReadOnly    bool          `json:"readOnly,omitempty"`
+	WriteOnly   bool          `json:"writeOnly,omitempty"`
+	Examples    []interface{} `json:"examples,omitempty"`
+}
+
 // Tool represents a tool available to an agent
 type Tool struct {
-	Name      string                 `yaml:"name" json:"name" validate:"required"`
-	Uses      string                 `yaml:"uses,omitempty" json:"uses,omitempty"`
-	Script    string                 `yaml:"script,omitempty" json:"script,omitempty"`
-	MCPServer string                 `yaml:"mcp_server,omitempty" json:"mcp_server,omitempty"`
-	Config    map[string]interface{} `yaml:"config,omitempty" json:"config,omitempty"`
+	Name        string `yaml:"name" json:"name" validate:"required"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+
+	Uses       string                 `yaml:"uses,omitempty" json:"uses,omitempty"`
+	Script     string                 `yaml:"script,omitempty" json:"script,omitempty"`
+	Parameters JSONSchema             `yaml:"parameters,omitempty" json:"parameters,omitempty"`
+	MCPServer  string                 `yaml:"mcp_server,omitempty" json:"mcp_server,omitempty"`
+	Config     map[string]interface{} `yaml:"config,omitempty" json:"config,omitempty"`
 
 	Position Position `yaml:"-" json:"-"`
+}
+
+func (t Tool) Type() ToolType {
+	if t.IsScript() {
+		return ToolTypeScript
+	}
+
+	if t.IsMCPTool() {
+		return ToolTypeMCP
+	}
+
+	if t.IsOfficialTool() {
+		return ToolTypeOfficial
+	}
+
+	return ToolTypeWorkflow
 }
 
 // WorkflowDef contains the main workflow definition

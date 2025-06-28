@@ -1,26 +1,23 @@
 package runtime
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/rs/zerolog/log"
 )
 
 // AnthropicProvider implements the ModelProvider interface using Anthropic's API
 type AnthropicProvider struct {
-	name       string
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
-	config     *AnthropicConfig
+	name   string
+	client *anthropic.Client
+	config *AnthropicConfig
 }
 
 // AnthropicConfig contains configuration for the Anthropic provider
@@ -182,17 +179,18 @@ func NewAnthropicProvider(config *AnthropicConfig) (*AnthropicProvider, error) {
 		}
 	}
 
-	// Create HTTP client with timeout
-	httpClient := &http.Client{
-		Timeout: config.Timeout,
-	}
+	client := anthropic.NewClient(
+		option.WithAPIKey(config.APIKey),
+		option.WithBaseURL(config.BaseURL),
+		option.WithHTTPClient(&http.Client{
+			Timeout: config.Timeout,
+		}),
+	)
 
 	provider := &AnthropicProvider{
-		name:       "anthropic",
-		apiKey:     config.APIKey,
-		baseURL:    config.BaseURL,
-		httpClient: httpClient,
-		config:     config,
+		name:   "anthropic",
+		client: &client,
+		config: config,
 	}
 
 	log.Info().
@@ -204,34 +202,61 @@ func NewAnthropicProvider(config *AnthropicConfig) (*AnthropicProvider, error) {
 }
 
 // Generate generates a response using the Anthropic API
-func (p *AnthropicProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) (string, *TokenUsage, error) {
+func (p *AnthropicProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error) {
 	// Build the Anthropic request
 	anthropicReq, err := p.buildAnthropicRequest(request)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to build Anthropic request: %w", err)
+		return nil, nil, fmt.Errorf("failed to build Anthropic request: %w", err)
 	}
 
 	// Make the API call with retries
-	response, err := p.makeAPICall(ctx, anthropicReq)
+	response, err := p.client.Messages.New(ctx, anthropicReq)
 	if err != nil {
-		return "", nil, fmt.Errorf("Anthropic API call failed: %w", err)
-	}
-
-	// Extract the response content
-	content := p.extractResponseContent(response)
-	if content == "" {
-		return "", nil, fmt.Errorf("no content in Anthropic response")
+		return nil, nil, fmt.Errorf("Anthropic API call failed: %w", err)
 	}
 
 	// Convert usage information
 	tokenUsage := &TokenUsage{
-		PromptTokens:     response.Usage.InputTokens,
-		CompletionTokens: response.Usage.OutputTokens,
-		TotalTokens:      response.Usage.InputTokens + response.Usage.OutputTokens,
-		EstimatedCost:    p.calculateCost(request.Model, response.Usage),
+		PromptTokens:     int(response.Usage.InputTokens),
+		CompletionTokens: int(response.Usage.OutputTokens),
+		TotalTokens:      int(response.Usage.InputTokens + response.Usage.OutputTokens),
+	}
+
+	content := make([]ModelMessage, len(response.Content), 0)
+	for _, contentBlock := range response.Content {
+		message := p.anthropicContentToModelMessage(contentBlock)
+		if message != nil {
+			content = append(content, *message)
+		}
 	}
 
 	return content, tokenUsage, nil
+}
+
+func (p *AnthropicProvider) anthropicContentToModelMessage(contentBlock anthropic.ContentBlockUnion) *ModelMessage {
+	switch contentBlock.AsAny().(type) {
+	case anthropic.TextBlock:
+		return &ModelMessage{
+			Role:    "assistant",
+			Content: []ContentBlockParamUnion{NewTextBlock(contentBlock.Text)},
+		}
+	case anthropic.ToolUseBlock:
+		return &ModelMessage{
+			Role:    "assistant",
+			Content: []ContentBlockParamUnion{NewToolUseBlock(contentBlock.ToolUseID, contentBlock.Input, contentBlock.Name)},
+		}
+	case anthropic.ThinkingBlock:
+		return &ModelMessage{
+			Role:    "assistant",
+			Content: []ContentBlockParamUnion{NewThinkingBlock(contentBlock.Signature, contentBlock.Thinking)},
+		}
+	}
+
+	log.Warn().
+		Interface("content_block", contentBlock).
+		Msg("Unknown content block type")
+
+	return nil
 }
 
 // GetName returns the provider name
@@ -241,53 +266,18 @@ func (p *AnthropicProvider) GetName() string {
 
 // ListModels dynamically fetches available models from the Anthropic API
 func (p *AnthropicProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	url := fmt.Sprintf("%s/v1/models", p.baseURL)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	models, err := p.client.Models.List(ctx, anthropic.ModelListParams{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to list models: %w", err)
 	}
 
-	// Set required headers
-	req.Header.Set("x-api-key", p.apiKey)
-	req.Header.Set("anthropic-version", p.config.AnthropicVersion)
-	req.Header.Set("Content-Type", "application/json")
-	if p.config.UserAgent != "" {
-		req.Header.Set("User-Agent", p.config.UserAgent)
-	}
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make API request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errorResp AnthropicErrorResponse
-		if jsonErr := json.Unmarshal(body, &errorResp); jsonErr == nil {
-			return nil, fmt.Errorf("Anthropic API error (%d): %s", resp.StatusCode, errorResp.Error.Message)
-		}
-		return nil, fmt.Errorf("Anthropic API error (%d): %s", resp.StatusCode, string(body))
-	}
-
-	var modelsResp AnthropicModelsResponse
-	if err := json.Unmarshal(body, &modelsResp); err != nil {
-		return nil, fmt.Errorf("failed to parse models response: %w", err)
-	}
-
-	// Convert Anthropic model info to our standard format
-	models := make([]ModelInfo, len(modelsResp.Data))
-	for i, model := range modelsResp.Data {
-		models[i] = ModelInfo{
+	modelInfos := make([]ModelInfo, len(models.Data))
+	for i, model := range models.Data {
+		modelInfos[i] = ModelInfo{
 			ID:          model.ID,
 			Name:        model.DisplayName,
 			Provider:    p.name,
-			CreatedAt:   model.CreatedAt,
+			CreatedAt:   model.CreatedAt.Format(time.RFC3339),
 			Deprecated:  false, // Anthropic doesn't provide this field directly
 			Description: "",    // Not available in basic response
 			Features:    []string{"text-generation", "chat"},
@@ -295,78 +285,90 @@ func (p *AnthropicProvider) ListModels(ctx context.Context) ([]ModelInfo, error)
 	}
 
 	log.Debug().
-		Int("model_count", len(models)).
+		Int("model_count", len(models.Data)).
 		Str("provider", p.name).
 		Msg("Successfully fetched models from Anthropic API")
 
-	return models, nil
+	return modelInfos, nil
 }
 
 // Close cleans up resources
 func (p *AnthropicProvider) Close() error {
-	// Close HTTP client connections
-	if transport, ok := p.httpClient.Transport.(*http.Transport); ok {
-		transport.CloseIdleConnections()
-	}
-
-	log.Info().Msg("Anthropic provider closed")
 	return nil
 }
 
 // buildAnthropicRequest converts a ModelRequest to an AnthropicRequest
-func (p *AnthropicProvider) buildAnthropicRequest(request *ModelRequest) (*AnthropicRequest, error) {
-	// Check if this is a tool-enabled request
-	if request.Metadata != nil && request.Metadata["provider_type"] == "anthropic" {
-		return p.buildAnthropicRequestWithTools(request)
-	}
-
-	// Build messages array for simple request
-	messages := []AnthropicMessage{
-		{
-			Role: "user",
-			Content: []AnthropicContent{
-				{
-					Type: "text",
-					Text: request.Prompt,
-				},
-			},
-		},
-	}
-
-	// Set default max tokens if not specified
+func (p *AnthropicProvider) buildAnthropicRequest(request *ModelRequest) (anthropic.MessageNewParams, error) {
 	maxTokens := 4096
 	if request.MaxTokens != nil {
 		maxTokens = *request.MaxTokens
 	}
 
-	anthropicReq := &AnthropicRequest{
-		Model:     request.Model,
-		MaxTokens: maxTokens,
-		Messages:  messages,
-		System:    request.SystemPrompt,
+	messages := make([]anthropic.MessageParam, len(request.Messages), 0)
+	for _, message := range request.Messages {
+		messages = append(messages, anthropic.MessageParam{
+			Content: p.convertContentToAnthropicContent(message.Content),
+			Role:    anthropic.MessageParamRole(message.Role),
+		})
 	}
 
-	// Set optional parameters
+	temperature := anthropic.Float(0)
 	if request.Temperature != nil {
-		anthropicReq.Temperature = request.Temperature
+		temperature = anthropic.Float(*request.Temperature)
 	}
 
+	topP := anthropic.Float(0)
 	if request.TopP != nil {
-		anthropicReq.TopP = request.TopP
+		topP = anthropic.Float(*request.TopP)
 	}
 
-	if len(request.Stop) > 0 {
-		anthropicReq.StopSequences = request.Stop
+	tools := make([]anthropic.ToolUnionParam, len(request.Tools), 0)
+	for _, tool := range request.Tools {
+		tools = append(tools, anthropic.ToolUnionParam{
+			OfTool: &anthropic.ToolParam{
+				Name:        tool.Name,
+				Description: anthropic.String(tool.Description),
+				InputSchema: anthropic.ToolInputSchemaParam{
+					Type:       "object",
+					Properties: tool.Parameters.Properties,
+					Required:   tool.Parameters.Required,
+				},
+			},
+		})
 	}
 
-	// Add metadata if request ID is provided
-	if request.RequestID != "" {
-		anthropicReq.Metadata = &AnthropicMetadata{
-			UserID: request.RequestID,
+	return anthropic.MessageNewParams{
+		StopSequences: request.Stop,
+		MaxTokens:     int64(maxTokens),
+		Temperature:   temperature,
+		TopP:          topP,
+		Messages:      messages,
+		Model:         anthropic.Model(request.Model),
+		Tools:         tools,
+		System:        []anthropic.TextBlockParam{{Text: request.SystemPrompt}},
+	}, nil
+}
+
+// convertContentToAnthropicContent converts a content block to an Anthropic content block
+func (p *AnthropicProvider) convertContentToAnthropicContent(content []ContentBlockParamUnion) []anthropic.ContentBlockParamUnion {
+	anthropicContent := make([]anthropic.ContentBlockParamUnion, len(content), 0)
+
+	for _, contentBlock := range content {
+		switch contentBlock.Type() {
+		case ContentBlockTypeText:
+			anthropicContent = append(anthropicContent, anthropic.NewTextBlock(contentBlock.OfText.Text))
+		case ContentBlockTypeToolUse:
+			anthropicContent = append(anthropicContent, anthropic.NewToolUseBlock(contentBlock.OfToolUse.ID, contentBlock.OfToolUse.Input, contentBlock.OfToolUse.Name))
+		case ContentBlockTypeToolResult:
+			anthropicContent = append(anthropicContent, anthropic.NewToolResultBlock(contentBlock.OfToolResult.ToolUseID, contentBlock.OfToolResult.Content, *contentBlock.OfToolResult.IsError))
+		case ContentBlockTypeThinking:
+			anthropicContent = append(anthropicContent, anthropic.NewThinkingBlock(contentBlock.OfThinking.Signature, contentBlock.OfThinking.Thinking))
+			// TODO: Add image support
+			// case ContentBlockTypeImage:
 		}
 	}
 
-	return anthropicReq, nil
+	return anthropicContent
 }
 
 // buildAnthropicRequestWithTools builds a request with tool support
@@ -499,213 +501,6 @@ func (p *AnthropicProvider) convertConversationToMessages(conversation []interfa
 	return messages, nil
 }
 
-// makeAPICall makes the actual HTTP request to the Anthropic API
-func (p *AnthropicProvider) makeAPICall(ctx context.Context, request *AnthropicRequest) (*AnthropicResponse, error) {
-	// Marshal request to JSON
-	requestBody, err := json.Marshal(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Prepare the HTTP request
-	url := fmt.Sprintf("%s/v1/messages", p.baseURL)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-
-	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", p.apiKey)
-	httpReq.Header.Set("anthropic-version", p.config.AnthropicVersion)
-	httpReq.Header.Set("User-Agent", p.config.UserAgent)
-
-	// Log request for debugging
-	log.Debug().
-		Str("url", url).
-		Str("model", request.Model).
-		Int("max_tokens", request.MaxTokens).
-		Msg("Making Anthropic API request")
-
-	// Make the request with retries
-	var response *AnthropicResponse
-	var lastErr error
-
-	for attempt := 0; attempt <= p.config.MaxRetries; attempt++ {
-		if attempt > 0 {
-			// Wait before retrying
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(p.config.RetryDelay * time.Duration(attempt)):
-			}
-
-			log.Debug().
-				Int("attempt", attempt).
-				Dur("delay", p.config.RetryDelay*time.Duration(attempt)).
-				Msg("Retrying Anthropic API request")
-		}
-
-		response, lastErr = p.doHTTPRequest(httpReq)
-		if lastErr == nil {
-			return response, nil
-		}
-
-		// Don't retry on certain types of errors
-		if !p.shouldRetry(lastErr) {
-			break
-		}
-
-		log.Warn().
-			Err(lastErr).
-			Int("attempt", attempt+1).
-			Int("max_retries", p.config.MaxRetries).
-			Msg("Anthropic API request failed, retrying")
-	}
-
-	return nil, fmt.Errorf("all retry attempts failed, last error: %w", lastErr)
-}
-
-// doHTTPRequest performs the actual HTTP request
-func (p *AnthropicProvider) doHTTPRequest(req *http.Request) (*AnthropicResponse, error) {
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	// Check for HTTP errors
-	if resp.StatusCode != http.StatusOK {
-		var errorResp AnthropicErrorResponse
-		if jsonErr := json.Unmarshal(body, &errorResp); jsonErr == nil {
-			return nil, fmt.Errorf("Anthropic API error (%d): %s", resp.StatusCode, errorResp.Error.Message)
-		}
-		return nil, fmt.Errorf("Anthropic API error (%d): %s", resp.StatusCode, string(body))
-	}
-
-	// Parse successful response
-	var anthropicResp AnthropicResponse
-	if err := json.Unmarshal(body, &anthropicResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	log.Debug().
-		Str("response_id", anthropicResp.ID).
-		Str("model", anthropicResp.Model).
-		Str("stop_reason", anthropicResp.StopReason).
-		Int("input_tokens", anthropicResp.Usage.InputTokens).
-		Int("output_tokens", anthropicResp.Usage.OutputTokens).
-		Msg("Received Anthropic API response")
-
-	return &anthropicResp, nil
-}
-
-// extractResponseContent extracts the text content from an Anthropic response
-func (p *AnthropicProvider) extractResponseContent(response *AnthropicResponse) string {
-	var textParts []string
-	var toolCalls []map[string]interface{}
-
-	for _, content := range response.Content {
-		switch content.Type {
-		case "text":
-			if content.Text != "" {
-				textParts = append(textParts, content.Text)
-			}
-		case "tool_use":
-			// Include tool calls in the response for processing by the executor
-			toolCall := map[string]interface{}{
-				"id":        content.ID,
-				"function":  content.Name,
-				"arguments": content.Input,
-			}
-			toolCalls = append(toolCalls, toolCall)
-		}
-	}
-
-	// If we have tool calls, format the response to include them
-	if len(toolCalls) > 0 {
-		response := strings.Join(textParts, "\n")
-		if response != "" {
-			response += "\n"
-		}
-
-		// Add tool calls in a format that can be detected by extractToolCallsFromResponse
-		toolCallsJSON, err := json.Marshal(toolCalls)
-		if err == nil {
-			response += fmt.Sprintf("<tool_calls>%s</tool_calls>", string(toolCallsJSON))
-		}
-
-		return response
-	}
-
-	return strings.Join(textParts, "\n")
-}
-
-// shouldRetry determines if an error should trigger a retry
-func (p *AnthropicProvider) shouldRetry(err error) bool {
-	errStr := err.Error()
-
-	// Retry on network errors
-	if strings.Contains(errStr, "connection") ||
-		strings.Contains(errStr, "timeout") ||
-		strings.Contains(errStr, "temporary") {
-		return true
-	}
-
-	// Retry on rate limit errors (HTTP 429)
-	if strings.Contains(errStr, "429") {
-		return true
-	}
-
-	// Retry on server errors (HTTP 5xx)
-	if strings.Contains(errStr, "500") ||
-		strings.Contains(errStr, "502") ||
-		strings.Contains(errStr, "503") ||
-		strings.Contains(errStr, "504") {
-		return true
-	}
-
-	// Don't retry on client errors (HTTP 4xx except 429)
-	return false
-}
-
-// calculateCost estimates the cost of a request based on model and usage
-func (p *AnthropicProvider) calculateCost(model string, usage AnthropicUsage) float64 {
-	// Pricing per 1K tokens (as of 2024)
-	var inputCostPer1K, outputCostPer1K float64
-
-	switch model {
-	case "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-20240620":
-		inputCostPer1K = 0.003  // $3 per MTok
-		outputCostPer1K = 0.015 // $15 per MTok
-	case "claude-3-opus-20240229":
-		inputCostPer1K = 0.015  // $15 per MTok
-		outputCostPer1K = 0.075 // $75 per MTok
-	case "claude-3-sonnet-20240229":
-		inputCostPer1K = 0.003  // $3 per MTok
-		outputCostPer1K = 0.015 // $15 per MTok
-	case "claude-3-haiku-20240307":
-		inputCostPer1K = 0.00025  // $0.25 per MTok
-		outputCostPer1K = 0.00125 // $1.25 per MTok
-	default:
-		// Default to Claude-3.5 Sonnet pricing
-		inputCostPer1K = 0.003
-		outputCostPer1K = 0.015
-	}
-
-	inputCost := float64(usage.InputTokens) * inputCostPer1K / 1000
-	outputCost := float64(usage.OutputTokens) * outputCostPer1K / 1000
-
-	return inputCost + outputCost
-}
-
-// GetAnthropicAPIKeyFromEnv gets the API key from environment variables
 func GetAnthropicAPIKeyFromEnv() string {
 	// Try common environment variable names
 	envVars := []string{
