@@ -116,12 +116,12 @@ func (e *DockerExecutor) Execute(ctx context.Context, block *Block, inputs map[s
 	}
 
 	// Parse output
-	var output ExecutionOutput
+	var output map[string]interface{}
 	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse container output: %w", err)
 	}
 
-	return output.Outputs, nil
+	return output, nil
 }
 
 func (e *DockerExecutor) checkDockerAvailable() error {

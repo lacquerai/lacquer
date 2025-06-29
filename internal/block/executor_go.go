@@ -102,15 +102,12 @@ func (e *GoExecutor) ExecuteRaw(ctx context.Context, block *Block, inputJSON jso
 		return nil, fmt.Errorf("block execution timeout")
 	}
 
-	// @TODO remove the necessity to have the ExecutionOutput type
-	// programs should be able to return a map[string]interface{} directly
-	var output ExecutionOutput
-
+	var output map[string]interface{}
 	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse block output: %w", err)
 	}
 
-	return output.Outputs, nil
+	return output, nil
 }
 
 // Execute runs a Go script block

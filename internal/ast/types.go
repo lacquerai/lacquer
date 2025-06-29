@@ -226,6 +226,7 @@ type Tool struct {
 
 	Uses       string                 `yaml:"uses,omitempty" json:"uses,omitempty"`
 	Script     string                 `yaml:"script,omitempty" json:"script,omitempty"`
+	Runtime    string                 `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	Parameters JSONSchema             `yaml:"parameters,omitempty" json:"parameters,omitempty"`
 	MCPServer  string                 `yaml:"mcp_server,omitempty" json:"mcp_server,omitempty"`
 	Config     map[string]interface{} `yaml:"config,omitempty" json:"config,omitempty"`

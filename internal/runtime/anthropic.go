@@ -222,11 +222,11 @@ func (p *AnthropicProvider) Generate(ctx context.Context, request *ModelRequest,
 		TotalTokens:      int(response.Usage.InputTokens + response.Usage.OutputTokens),
 	}
 
-	content := make([]ModelMessage, len(response.Content), 0)
-	for _, contentBlock := range response.Content {
+	content := make([]ModelMessage, len(response.Content))
+	for i, contentBlock := range response.Content {
 		message := p.anthropicContentToModelMessage(contentBlock)
 		if message != nil {
-			content = append(content, *message)
+			content[i] = *message
 		}
 	}
 
@@ -243,7 +243,7 @@ func (p *AnthropicProvider) anthropicContentToModelMessage(contentBlock anthropi
 	case anthropic.ToolUseBlock:
 		return &ModelMessage{
 			Role:    "assistant",
-			Content: []ContentBlockParamUnion{NewToolUseBlock(contentBlock.ToolUseID, contentBlock.Input, contentBlock.Name)},
+			Content: []ContentBlockParamUnion{NewToolUseBlock(contentBlock.ID, contentBlock.Input, contentBlock.Name)},
 		}
 	case anthropic.ThinkingBlock:
 		return &ModelMessage{
@@ -304,12 +304,12 @@ func (p *AnthropicProvider) buildAnthropicRequest(request *ModelRequest) (anthro
 		maxTokens = *request.MaxTokens
 	}
 
-	messages := make([]anthropic.MessageParam, len(request.Messages), 0)
-	for _, message := range request.Messages {
-		messages = append(messages, anthropic.MessageParam{
+	messages := make([]anthropic.MessageParam, len(request.Messages))
+	for i, message := range request.Messages {
+		messages[i] = anthropic.MessageParam{
 			Content: p.convertContentToAnthropicContent(message.Content),
 			Role:    anthropic.MessageParamRole(message.Role),
-		})
+		}
 	}
 
 	temperature := anthropic.Float(0)
@@ -322,9 +322,9 @@ func (p *AnthropicProvider) buildAnthropicRequest(request *ModelRequest) (anthro
 		topP = anthropic.Float(*request.TopP)
 	}
 
-	tools := make([]anthropic.ToolUnionParam, len(request.Tools), 0)
-	for _, tool := range request.Tools {
-		tools = append(tools, anthropic.ToolUnionParam{
+	tools := make([]anthropic.ToolUnionParam, len(request.Tools))
+	for i, tool := range request.Tools {
+		tools[i] = anthropic.ToolUnionParam{
 			OfTool: &anthropic.ToolParam{
 				Name:        tool.Name,
 				Description: anthropic.String(tool.Description),
@@ -334,7 +334,7 @@ func (p *AnthropicProvider) buildAnthropicRequest(request *ModelRequest) (anthro
 					Required:   tool.Parameters.Required,
 				},
 			},
-		})
+		}
 	}
 
 	return anthropic.MessageNewParams{
@@ -351,154 +351,24 @@ func (p *AnthropicProvider) buildAnthropicRequest(request *ModelRequest) (anthro
 
 // convertContentToAnthropicContent converts a content block to an Anthropic content block
 func (p *AnthropicProvider) convertContentToAnthropicContent(content []ContentBlockParamUnion) []anthropic.ContentBlockParamUnion {
-	anthropicContent := make([]anthropic.ContentBlockParamUnion, len(content), 0)
+	anthropicContent := make([]anthropic.ContentBlockParamUnion, len(content))
 
-	for _, contentBlock := range content {
+	for i, contentBlock := range content {
 		switch contentBlock.Type() {
 		case ContentBlockTypeText:
-			anthropicContent = append(anthropicContent, anthropic.NewTextBlock(contentBlock.OfText.Text))
+			anthropicContent[i] = anthropic.NewTextBlock(contentBlock.OfText.Text)
 		case ContentBlockTypeToolUse:
-			anthropicContent = append(anthropicContent, anthropic.NewToolUseBlock(contentBlock.OfToolUse.ID, contentBlock.OfToolUse.Input, contentBlock.OfToolUse.Name))
+			anthropicContent[i] = anthropic.NewToolUseBlock(contentBlock.OfToolUse.ID, contentBlock.OfToolUse.Input, contentBlock.OfToolUse.Name)
 		case ContentBlockTypeToolResult:
-			anthropicContent = append(anthropicContent, anthropic.NewToolResultBlock(contentBlock.OfToolResult.ToolUseID, contentBlock.OfToolResult.Content, *contentBlock.OfToolResult.IsError))
+			anthropicContent[i] = anthropic.NewToolResultBlock(contentBlock.OfToolResult.ToolUseID, contentBlock.OfToolResult.Content, *contentBlock.OfToolResult.IsError)
 		case ContentBlockTypeThinking:
-			anthropicContent = append(anthropicContent, anthropic.NewThinkingBlock(contentBlock.OfThinking.Signature, contentBlock.OfThinking.Thinking))
+			anthropicContent[i] = anthropic.NewThinkingBlock(contentBlock.OfThinking.Signature, contentBlock.OfThinking.Thinking)
 			// TODO: Add image support
 			// case ContentBlockTypeImage:
 		}
 	}
 
 	return anthropicContent
-}
-
-// buildAnthropicRequestWithTools builds a request with tool support
-func (p *AnthropicProvider) buildAnthropicRequestWithTools(request *ModelRequest) (*AnthropicRequest, error) {
-	// Extract conversation from metadata
-	conversation, ok := request.Metadata["conversation"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid conversation format in metadata")
-	}
-
-	// Convert conversation to Anthropic messages
-	messages, err := p.convertConversationToMessages(conversation)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert conversation: %w", err)
-	}
-
-	// Set default max tokens if not specified
-	maxTokens := 4096
-	if request.MaxTokens != nil {
-		maxTokens = *request.MaxTokens
-	}
-
-	anthropicReq := &AnthropicRequest{
-		Model:     request.Model,
-		MaxTokens: maxTokens,
-		Messages:  messages,
-		System:    request.SystemPrompt,
-	}
-
-	// Add tools if available
-	if tools, ok := request.Metadata["tools"].([]AnthropicTool); ok {
-		anthropicReq.Tools = tools
-		// Enable tool use
-		anthropicReq.ToolChoice = &AnthropicToolChoice{Type: "auto"}
-	}
-
-	// Set optional parameters
-	if request.Temperature != nil {
-		anthropicReq.Temperature = request.Temperature
-	}
-
-	if request.TopP != nil {
-		anthropicReq.TopP = request.TopP
-	}
-
-	return anthropicReq, nil
-}
-
-// convertConversationToMessages converts conversation format to Anthropic messages
-func (p *AnthropicProvider) convertConversationToMessages(conversation []interface{}) ([]AnthropicMessage, error) {
-	var messages []AnthropicMessage
-
-	for _, msg := range conversation {
-		msgMap, ok := msg.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		role, ok := msgMap["role"].(string)
-		if !ok {
-			continue
-		}
-
-		switch role {
-		case "user":
-			content, ok := msgMap["content"].(string)
-			if !ok {
-				continue
-			}
-			messages = append(messages, AnthropicMessage{
-				Role: "user",
-				Content: []AnthropicContent{
-					{Type: "text", Text: content},
-				},
-			})
-
-		case "assistant":
-			var contents []AnthropicContent
-
-			// Add text content if available
-			if content, ok := msgMap["content"].(string); ok && content != "" {
-				contents = append(contents, AnthropicContent{
-					Type: "text",
-					Text: content,
-				})
-			}
-
-			// Add tool calls if available
-			if toolCalls, ok := msgMap["tool_calls"].([]map[string]interface{}); ok {
-				for _, toolCall := range toolCalls {
-					if toolName, ok := toolCall["function"].(string); ok {
-						if args, ok := toolCall["arguments"].(map[string]interface{}); ok {
-							contents = append(contents, AnthropicContent{
-								Type:  "tool_use",
-								ID:    fmt.Sprintf("%v", toolCall["id"]),
-								Name:  toolName,
-								Input: args,
-							})
-						}
-					}
-				}
-			}
-
-			if len(contents) > 0 {
-				messages = append(messages, AnthropicMessage{
-					Role:    "assistant",
-					Content: contents,
-				})
-			}
-
-		case "tool":
-			// Tool result
-			if toolCallID, ok := msgMap["tool_call_id"].(string); ok {
-				if content, ok := msgMap["content"].(string); ok {
-					messages = append(messages, AnthropicMessage{
-						Role: "user",
-						Content: []AnthropicContent{
-							{
-								Type:    "tool_result",
-								ID:      toolCallID,
-								Content: content,
-							},
-						},
-					})
-				}
-			}
-		}
-	}
-
-	return messages, nil
 }
 
 func GetAnthropicAPIKeyFromEnv() string {

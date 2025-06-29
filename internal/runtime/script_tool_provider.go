@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -84,25 +85,38 @@ func (stp *ScriptToolProvider) GetName() string {
 func (stp *ScriptToolProvider) AddTool(tool *ast.Tool) error {
 	stp.mu.Lock()
 	defer stp.mu.Unlock()
-
-	var scriptType ScriptType
-	ext := filepath.Ext(tool.Script)
-	switch ext {
-	case ".go":
-		scriptType = ScriptTypeGo
-	case ".py":
-		scriptType = ScriptTypePython
-	case ".sh":
-		scriptType = ScriptTypeBash
-	case ".js":
-		scriptType = ScriptTypeJS
-	default:
-		return fmt.Errorf("unsupported script type: %s", ext)
+	if _, exists := stp.tools[tool.Name]; exists {
+		// tool already exists, skip
+		return nil
 	}
 
-	content, err := os.ReadFile(tool.Script)
-	if err != nil {
-		return fmt.Errorf("failed to read script file: %w", err)
+	var scriptType ScriptType
+	switch strings.Split(tool.Runtime, "-")[0] {
+	case "go":
+		scriptType = ScriptTypeGo
+	case "python":
+		scriptType = ScriptTypePython
+	case "bash":
+		scriptType = ScriptTypeBash
+	case "js":
+		scriptType = ScriptTypeJS
+	default:
+		scriptType = ScriptTypeGo
+	}
+
+	var scriptPath string
+	var content string
+
+	// Check if the script field contains a file path or inline content
+	if strings.Contains(tool.Script, "\n") {
+		content = tool.Script
+	} else {
+		scriptPath = tool.Script
+		contentBytes, err := os.ReadFile(scriptPath)
+		if err != nil {
+			return fmt.Errorf("failed to read script file: %w", err)
+		}
+		content = string(contentBytes)
 	}
 
 	// Convert the tool to a ScriptTool

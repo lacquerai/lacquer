@@ -77,14 +77,6 @@ type ExecutionContextJSON struct {
 	Workspace  string `json:"workspace"`
 }
 
-// ExecutionOutput represents the JSON output from blocks
-// @TODO remove the necessity to have the ExecutionOutput type
-// programs should be able to return a map[string]interface{} directly
-// and the executor should be able to handle it
-type ExecutionOutput struct {
-	Outputs map[string]interface{} `json:"outputs"`
-}
-
 // ExecutionError represents an error from block execution
 type ExecutionError struct {
 	Message string                 `json:"message"`

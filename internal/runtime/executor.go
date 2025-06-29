@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/block"
 	"github.com/rs/zerolog/log"
@@ -19,15 +22,18 @@ import (
 type ExecutionEventType string
 
 const (
-	EventWorkflowStarted   ExecutionEventType = "workflow_started"
-	EventWorkflowCompleted ExecutionEventType = "workflow_completed"
-	EventWorkflowFailed    ExecutionEventType = "workflow_failed"
-	EventStepStarted       ExecutionEventType = "step_started"
-	EventStepProgress      ExecutionEventType = "step_progress"
-	EventStepCompleted     ExecutionEventType = "step_completed"
-	EventStepFailed        ExecutionEventType = "step_failed"
-	EventStepSkipped       ExecutionEventType = "step_skipped"
-	EventStepRetrying      ExecutionEventType = "step_retrying"
+	EventWorkflowStarted     ExecutionEventType = "workflow_started"
+	EventWorkflowCompleted   ExecutionEventType = "workflow_completed"
+	EventWorkflowFailed      ExecutionEventType = "workflow_failed"
+	EventStepStarted         ExecutionEventType = "step_started"
+	EventStepProgress        ExecutionEventType = "step_progress"
+	EventStepCompleted       ExecutionEventType = "step_completed"
+	EventStepFailed          ExecutionEventType = "step_failed"
+	EventStepSkipped         ExecutionEventType = "step_skipped"
+	EventStepRetrying        ExecutionEventType = "step_retrying"
+	EventStepActionStarted   ExecutionEventType = "step_action_started"
+	EventStepActionCompleted ExecutionEventType = "step_action_completed"
+	EventStepActionFailed    ExecutionEventType = "step_action_failed"
 )
 
 // ExecutionEvent represents an event during workflow execution
@@ -36,10 +42,12 @@ type ExecutionEvent struct {
 	Timestamp time.Time              `json:"timestamp"`
 	RunID     string                 `json:"run_id"`
 	StepID    string                 `json:"step_id,omitempty"`
+	ActionID  string                 `json:"action_id,omitempty"`
 	StepIndex int                    `json:"step_index,omitempty"`
 	Duration  time.Duration          `json:"duration,omitempty"`
 	Error     string                 `json:"error,omitempty"`
 	Attempt   int                    `json:"attempt,omitempty"`
+	Text      string                 `json:"text,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -314,7 +322,15 @@ func (e *Executor) Execute(ctx context.Context, workflow *ast.Workflow, inputs m
 }
 
 // executeStep executes a single workflow step
-func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error {
+func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			log.Error().Msgf("panic in executeStep: %s\n%s", r, stack)
+			err = fmt.Errorf("step execution failed: %s\n%s", r, stack)
+		}
+	}()
+
 	start := time.Now()
 
 	// Mark step as running
@@ -345,7 +361,6 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) error 
 	var stepOutput map[string]interface{}
 	var stepResponse string
 	var tokenUsage *TokenUsage
-	var err error
 
 	switch {
 	case step.IsAgentStep():
@@ -793,9 +808,35 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 			return "", totalTokenUsage, fmt.Errorf("failed to create model request: %w", err)
 		}
 
+		actionID := fmt.Sprintf("turn-%d", turn)
+		e.progressChan <- ExecutionEvent{
+			Type:      EventStepActionStarted,
+			ActionID:  actionID,
+			Text:      generateRandomPromptingText(),
+			Timestamp: time.Now(),
+			RunID:     execCtx.RunID,
+			StepID:    step.ID,
+		}
+
 		responseMessages, tokenUsage, err := provider.Generate(ctx, request, e.progressChan)
 		if err != nil {
+			e.progressChan <- ExecutionEvent{
+				Type:      EventStepActionFailed,
+				ActionID:  actionID,
+				Timestamp: time.Now(),
+				RunID:     execCtx.RunID,
+				StepID:    step.ID,
+			}
+
 			return "", totalTokenUsage, fmt.Errorf("model generation failed: %w", err)
+		}
+
+		e.progressChan <- ExecutionEvent{
+			Type:      EventStepActionCompleted,
+			ActionID:  actionID,
+			Timestamp: time.Now(),
+			RunID:     execCtx.RunID,
+			StepID:    step.ID,
 		}
 
 		// Accumulate token usage
@@ -817,7 +858,10 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 			return "", totalTokenUsage, fmt.Errorf("tool execution failed: %w", err)
 		}
 
-		// Add tool results to conversation
+		// add the response messages and the tool results to the messages
+		// the response messages are needed so that the id of the tool calls
+		// can be matched to the tool results
+		messages = append(messages, responseMessages...)
 		messages = append(messages, toolResults...)
 	}
 
@@ -892,6 +936,16 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlo
 	var results []ModelMessage
 
 	for _, toolCall := range toolCalls {
+		actionID := fmt.Sprintf("tool-%s", toolCall.ID)
+		e.progressChan <- ExecutionEvent{
+			Type:      EventStepActionStarted,
+			ActionID:  actionID,
+			Text:      generateRandomUsageText(toolCall.Name),
+			Timestamp: time.Now(),
+			RunID:     execCtx.RunID,
+			StepID:    step.ID,
+		}
+
 		toolExecCtx := &ToolExecutionContext{
 			WorkflowID: execCtx.RunID,
 			StepID:     step.ID,
@@ -903,6 +957,13 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlo
 
 		// Execute the tool
 		result, err := e.toolRegistry.ExecuteTool(ctx, toolCall.Name, toolCall.Input, toolExecCtx)
+		e.progressChan <- ExecutionEvent{
+			Type:      EventStepActionCompleted,
+			ActionID:  actionID,
+			Timestamp: time.Now(),
+			RunID:     execCtx.RunID,
+			StepID:    step.ID,
+		}
 		if err != nil {
 			log.Warn().
 				Err(err).
@@ -1305,6 +1366,8 @@ func initializeToolProviders(toolRegistry *ToolRegistry, workflow *ast.Workflow,
 		return fmt.Errorf("failed to register script tool provider: %w", err)
 	}
 
+	// TODO: register the mcp provider and workflow provider (block provider)
+
 	for name, agent := range workflow.Agents {
 		if err := toolRegistry.RegisterToolsForAgent(agent); err != nil {
 			return fmt.Errorf("failed to register tools for agent %s: %w", name, err)
@@ -1368,4 +1431,63 @@ func getLastContentBlock(responseMessages []ModelMessage) string {
 	}
 
 	return lastMessage.Content[len(lastMessage.Content)-1].OfText.Text
+}
+
+func generateRandomPromptingText() string {
+	promptingTexts := []string{
+		"Pondering the mysteries of the universe...",
+		"Neurons firing at maximum capacity...",
+		"Channeling digital wisdom...",
+		"Consulting the AI crystal ball...",
+		"Launching thoughts into cyberspace...",
+		"Juggling ones and zeros...",
+		"️Casting computational spells...",
+		"Painting with pixels of possibility...",
+		"Aiming for the perfect response...",
+		"Summoning stellar insights...",
+		"Rolling the dice of creativity...",
+		"Conducting experiments in thought...",
+		"Composing a symphony of words...",
+		" Building bridges of understanding...",
+		"Surfing waves of information...",
+		"Performing mental acrobatics...",
+		"Igniting sparks of brilliance...",
+		"Chasing rainbows of logic...",
+		" Brewing the perfect response...",
+		"Hovering over the solution...",
+		"Taming wild thoughts...",
+		"Dreaming in binary...",
+		"Sketching ideas in the digital ether...",
+	}
+
+	return promptingTexts[rand.Intn(len(promptingTexts))]
+}
+
+func generateRandomUsageText(rawTool string) string {
+	toolName := lipgloss.NewStyle().Foreground(lipgloss.Color("#42A5F5")).Bold(true).Render(rawTool)
+
+	usageTexts := []string{
+		fmt.Sprintf("Wielding the mighty %s...", toolName),
+		fmt.Sprintf("Summoning the power of %s...", toolName),
+		fmt.Sprintf("Unleashing %s upon the world...", toolName),
+		fmt.Sprintf("Activating %s with surgical precision...", toolName),
+		fmt.Sprintf("Deploying %s like a digital ninja...", toolName),
+		fmt.Sprintf("Channeling the ancient art of %s...", toolName),
+		fmt.Sprintf("Invoking %s from the depths of cyberspace...", toolName),
+		fmt.Sprintf("Firing up %s with rocket fuel...", toolName),
+		fmt.Sprintf("Dancing with %s in perfect harmony...", toolName),
+		fmt.Sprintf("Whispering sweet commands to %s...", toolName),
+		fmt.Sprintf("Tickling %s until it cooperates...", toolName),
+		fmt.Sprintf("Bribing %s with digital cookies...", toolName),
+		fmt.Sprintf("Teaching %s new tricks...", toolName),
+		fmt.Sprintf("Convincing %s to do the heavy lifting...", toolName),
+		fmt.Sprintf("Politely asking %s to work its magic...", toolName),
+		fmt.Sprintf("Giving %s a gentle nudge...", toolName),
+		fmt.Sprintf("Waking up %s from its digital slumber...", toolName),
+		fmt.Sprintf("Feeding %s some tasty data...", toolName),
+		fmt.Sprintf("Cranking the %s machine to eleven...", toolName),
+		fmt.Sprintf("Letting %s stretch its computational legs...", toolName),
+	}
+
+	return usageTexts[rand.Intn(len(usageTexts))]
 }

@@ -130,8 +130,30 @@ type StepProgressState struct {
 	status     string // "running", "completed", "failed"
 	startTime  time.Time
 	endTime    time.Time
+	title      string
 	spinner    *spinner.Spinner
+	actions    ActionStates
 	mu         sync.RWMutex
+}
+
+func (s *StepProgressState) String() string {
+	return fmt.Sprintf(" %s\n%s", s.title, s.actions.String())
+}
+
+type ActionStates []ActionState
+
+func (as ActionStates) String() string {
+	var text strings.Builder
+	for _, action := range as {
+		text.WriteString(fmt.Sprintf("   %s", action.text))
+		text.WriteString("\n")
+	}
+	return text.String()
+}
+
+type ActionState struct {
+	id   string
+	text string
 }
 
 // ProgressTracker manages the visual progress display for all steps
@@ -139,7 +161,6 @@ type ProgressTracker struct {
 	steps map[string]*StepProgressState
 	mu    sync.RWMutex
 	done  chan struct{}
-	wg    sync.WaitGroup
 }
 
 func runWorkflow(workflowFile string) {
@@ -258,13 +279,6 @@ func runWorkflow(workflowFile string) {
 
 	// Execute with progress reporting
 	err = executeWithProgress(ctx, executor, execCtx, &result)
-
-	// Calculate final metrics
-	result.EndTime = time.Now()
-	result.Duration = result.EndTime.Sub(result.StartTime)
-	result.FinalState = execCtx.GetAllState()
-	result.Outputs = execCtx.GetWorkflowOutputs()
-
 	if err != nil {
 		result.Status = "failed"
 		result.Error = err.Error()
@@ -276,6 +290,10 @@ func runWorkflow(workflowFile string) {
 			Msg("Workflow execution failed")
 	} else {
 		result.Status = "completed"
+		result.EndTime = time.Now()
+		result.Duration = result.EndTime.Sub(result.StartTime)
+		result.FinalState = execCtx.GetAllState()
+		result.Outputs = execCtx.GetWorkflowOutputs()
 
 		log.Info().
 			Str("run_id", execCtx.RunID).
@@ -299,6 +317,7 @@ func runWorkflow(workflowFile string) {
 func executeWithProgress(ctx context.Context, executor *runtime.Executor, execCtx *runtime.ExecutionContext, result *ExecutionResult) error {
 	// Create a progress channel for real-time updates
 	progressChan := make(chan runtime.ExecutionEvent, 100)
+	defer close(progressChan)
 
 	// Start progress reporter if not quiet and text output
 	if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
@@ -309,9 +328,6 @@ func executeWithProgress(ctx context.Context, executor *runtime.Executor, execCt
 
 	// Execute the workflow
 	err := executor.ExecuteWorkflow(ctx, execCtx, progressChan)
-
-	// Close progress channel
-	close(progressChan)
 
 	return err
 }
@@ -326,9 +342,6 @@ func NewProgressTracker() *ProgressTracker {
 
 // Start begins the progress tracking
 func (pt *ProgressTracker) Start(progressChan <-chan runtime.ExecutionEvent, result *ExecutionResult) {
-	pt.wg.Add(1)
-	defer pt.wg.Done()
-
 	// Process events - spinners handle their own animation
 	for event := range progressChan {
 		switch event.Type {
@@ -346,7 +359,16 @@ func (pt *ProgressTracker) Start(progressChan <-chan runtime.ExecutionEvent, res
 			pt.retryStep(event.StepID, event.Attempt)
 
 		case runtime.EventStepProgress:
-			pt.updateStepProgress(event.StepID, event.Metadata)
+			pt.updateStepProgress(event.StepID, event.ActionID, event.Text)
+
+		case runtime.EventStepActionStarted:
+			pt.createActionSpinner(event.StepID, event.ActionID, event.Text)
+
+		case runtime.EventStepActionCompleted:
+			pt.completeActionSpinner(event.StepID, event.ActionID)
+
+		case runtime.EventStepActionFailed:
+			pt.failActionSpinner(event.StepID, event.ActionID)
 		}
 	}
 }
@@ -364,7 +386,6 @@ func (pt *ProgressTracker) Stop() {
 	}
 
 	close(pt.done)
-	pt.wg.Wait()
 }
 
 // startStep initializes a new step in running state
@@ -374,15 +395,18 @@ func (pt *ProgressTracker) startStep(stepID string, stepIndex, totalSteps int) {
 
 	// Create and configure spinner
 	s := spinner.New(spinner.CharSets[9], 100*time.Millisecond) // Dots spinner with 100ms delay
-	s.Suffix = fmt.Sprintf(" Step %d/%d: %s", stepIndex, totalSteps, accentStyle.Render(stepID))
+	title := fmt.Sprintf(" Step %d/%d: %s", stepIndex, totalSteps, accentStyle.Render(stepID))
+	s.Suffix = title
 
 	state := &StepProgressState{
 		stepID:     stepID,
 		stepIndex:  stepIndex,
 		totalSteps: totalSteps,
+		title:      title,
 		status:     "running",
 		startTime:  time.Now(),
 		spinner:    s,
+		actions:    []ActionState{},
 	}
 	pt.steps[stepID] = state
 
@@ -391,13 +415,65 @@ func (pt *ProgressTracker) startStep(stepID string, stepIndex, totalSteps int) {
 }
 
 // updateStepProgress updates the progress of a step
-func (pt *ProgressTracker) updateStepProgress(stepID string, metadata map[string]interface{}) {
+func (pt *ProgressTracker) updateStepProgress(stepID string, actionID string, text string) {
 	pt.mu.RLock()
 	defer pt.mu.RUnlock()
 
 	if state, exists := pt.steps[stepID]; exists {
 		state.mu.Lock()
-		state.spinner.Suffix = fmt.Sprintf(" %v", metadata["message"])
+		state.spinner.Suffix = fmt.Sprintf(" %s", text)
+		state.mu.Unlock()
+	}
+}
+
+func (pt *ProgressTracker) createActionSpinner(stepID string, actionID string, text string) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	if state, exists := pt.steps[stepID]; exists {
+		state.mu.Lock()
+		state.actions = append(state.actions, ActionState{
+			id:   actionID,
+			text: text,
+		})
+
+		state.spinner.Suffix = state.String()
+		state.mu.Unlock()
+	}
+}
+
+func (pt *ProgressTracker) completeActionSpinner(stepID string, actionID string) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	if state, exists := pt.steps[stepID]; exists {
+		state.mu.Lock()
+		for i, action := range state.actions {
+			if action.id == actionID {
+				state.actions[i].text = SuccessIcon() + " " + strings.TrimSpace(strings.ReplaceAll(action.text, "...", ""))
+				break
+			}
+		}
+
+		state.spinner.Suffix = state.String()
+		state.mu.Unlock()
+	}
+}
+
+func (pt *ProgressTracker) failActionSpinner(stepID string, actionID string) {
+	pt.mu.Lock()
+	defer pt.mu.Unlock()
+
+	if state, exists := pt.steps[stepID]; exists {
+		state.mu.Lock()
+		for i, action := range state.actions {
+			if action.id == actionID {
+				state.actions[i].text = ErrorIcon() + " " + strings.TrimSpace(strings.ReplaceAll(action.text, "...", ""))
+				break
+			}
+		}
+
+		state.spinner.Suffix = state.String()
 		state.mu.Unlock()
 	}
 }
@@ -411,7 +487,7 @@ func (pt *ProgressTracker) completeStep(stepID string, duration time.Duration) {
 		state.mu.Lock()
 		state.status = "completed"
 		state.endTime = time.Now()
-		state.spinner.FinalMSG = SuccessIcon() + " " + fmt.Sprintf("Step %s completed (%s)\n", accentStyle.Render(stepID), formatDuration(duration))
+		state.spinner.FinalMSG = SuccessIcon() + state.String()
 		state.spinner.Stop()
 		state.mu.Unlock()
 	}
@@ -426,7 +502,7 @@ func (pt *ProgressTracker) failStep(stepID string, duration time.Duration, _ str
 		state.mu.Lock()
 		state.status = "failed"
 		state.endTime = time.Now()
-		state.spinner.FinalMSG = ErrorIcon() + " " + strings.TrimSpace(state.spinner.Suffix) + "\n"
+		state.spinner.FinalMSG = ErrorIcon() + " " + state.String()
 		state.spinner.Stop()
 		state.mu.Unlock()
 	}

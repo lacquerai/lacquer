@@ -55,7 +55,8 @@ type ToolRegistry struct {
 // NewToolRegistry creates a new tool registry
 func NewToolRegistry() *ToolRegistry {
 	return &ToolRegistry{
-		providers: make(map[ast.ToolType]ToolProvider),
+		providers:      make(map[ast.ToolType]ToolProvider),
+		toolsProviders: make(map[string]ToolProvider),
 	}
 }
 
@@ -81,6 +82,11 @@ func (tr *ToolRegistry) RegisterToolsForAgent(agent *ast.Agent) error {
 		provider, exists := tr.providers[tool.Type()]
 		if !exists {
 			return fmt.Errorf("provider for tool type %s not found", tool.Type())
+		}
+
+		err := provider.AddTool(tool)
+		if err != nil {
+			return fmt.Errorf("failed to add tool %s: %w", tool.Name, err)
 		}
 
 		tr.toolsProviders[tool.Name] = provider
