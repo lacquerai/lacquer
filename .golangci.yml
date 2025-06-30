@@ -1,0 +1,90 @@
+run:
+  timeout: 5m
+  tests: true
+  build-tags:
+    - integration
+
+linters:
+  enable:
+    - gofmt
+    - goimports
+    - revive
+    - errcheck
+    - ineffassign
+    - govet
+    - staticcheck
+    - misspell
+    - unparam
+    - prealloc
+    - unconvert
+    - gocritic
+    - gocyclo
+    - gocognit
+    - asciicheck
+    - bodyclose
+    - nakedret
+    - exportloopref
+    - gosec
+    - nilerr
+    - exhaustive
+    - gomodguard
+    - whitespace
+    - unparam
+    - makezero
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/lacquerai/lacquer
+  revive:
+    rules:
+      - name: var-naming
+        disabled: true
+  govet:
+    check-shadowing: true
+    enable-all: true
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  gocritic:
+    enabled-tags:
+      - performance
+      - style
+      - experimental
+    disabled-checks:
+      - wrapperFunc
+  gocyclo:
+    min-complexity: 15
+  gocognit:
+    min-complexity: 20
+  nakedret:
+    max-func-lines: 30
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: true
+  gosec:
+    excludes:
+      - G204 # Subprocess launched with variable
+      - G304 # Potential file inclusion via variable
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - gosec
+        - dupl
+    - path: cmd/
+      linters:
+        - gocyclo
+        - gocognit
+    - linters:
+        - staticcheck
+      text: "SA1019:" # Deprecated function usage
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+  fix: true
