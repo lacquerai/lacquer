@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -69,9 +70,9 @@ func showVersion() {
 
 	switch outputFormat {
 	case "json":
-		printJSON(versionInfo)
+		style.PrintJSON(versionInfo)
 	case "yaml":
-		printYAML(versionInfo)
+		style.PrintYAML(versionInfo)
 	default:
 		printText(versionInfo)
 	}

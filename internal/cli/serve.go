@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/server"
+	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -48,14 +49,14 @@ Examples:
 		if serveWorkflowDir != "" {
 			dirFiles, err := findWorkflowFiles(serveWorkflowDir)
 			if err != nil {
-				Error(fmt.Sprintf("Failed to scan workflow directory: %v", err))
+				style.Error(fmt.Sprintf("Failed to scan workflow directory: %v", err))
 				os.Exit(1)
 			}
 			workflowFiles = append(workflowFiles, dirFiles...)
 		}
 
 		if len(workflowFiles) == 0 && len(serveWorkflows) == 0 {
-			Error("No workflow files specified. Use arguments or --workflow-dir")
+			style.Error("No workflow files specified. Use arguments or --workflow-dir")
 			os.Exit(1)
 		}
 
@@ -98,19 +99,19 @@ func startServer(workflowFiles []string) {
 	// Create server
 	srv, err := server.New(config)
 	if err != nil {
-		Error(fmt.Sprintf("Failed to create server: %v", err))
+		style.Error(fmt.Sprintf("Failed to create server: %v", err))
 		os.Exit(1)
 	}
 
 	// Load workflows
 	if err := srv.LoadWorkflows(); err != nil {
-		Error(fmt.Sprintf("Failed to load workflows: %v", err))
+		style.Error(fmt.Sprintf("Failed to load workflows: %v", err))
 		os.Exit(1)
 	}
 
 	// Display startup info
 	if !viper.GetBool("quiet") {
-		Success(fmt.Sprintf("Lacquer server starting at http://%s", srv.GetAddr()))
+		style.Success(fmt.Sprintf("Lacquer server starting at http://%s", srv.GetAddr()))
 		fmt.Printf("📋 Loaded workflows: %d\n", srv.GetWorkflowCount())
 		fmt.Printf("🚀 API: http://%s/api/v1/workflows\n", srv.GetAddr())
 		if serveMetrics {
@@ -120,7 +121,7 @@ func startServer(workflowFiles []string) {
 
 	// Start server with graceful shutdown
 	if err := srv.StartWithGracefulShutdown(); err != nil {
-		Error(fmt.Sprintf("Server error: %v", err))
+		style.Error(fmt.Sprintf("Server error: %v", err))
 		os.Exit(1)
 	}
 }

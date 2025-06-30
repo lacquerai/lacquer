@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -91,14 +92,14 @@ var templates = map[string]ProjectTemplate{
 func initializeProject(projectName string) {
 	// Validate project name
 	if !isValidProjectName(projectName) {
-		Error("Project name must contain only letters, numbers, hyphens, and underscores")
+		style.Error("Project name must contain only letters, numbers, hyphens, and underscores")
 		os.Exit(1)
 	}
 
 	// Check if template exists
 	template, exists := templates[templateName]
 	if !exists {
-		Error(fmt.Sprintf("Unknown template: %s", templateName))
+		style.Error(fmt.Sprintf("Unknown template: %s", templateName))
 		fmt.Println("Available templates:")
 		for name, tmpl := range templates {
 			fmt.Printf("  %s: %s\n", name, tmpl.Description)
@@ -108,30 +109,30 @@ func initializeProject(projectName string) {
 
 	// Check if directory exists
 	if _, err := os.Stat(projectName); err == nil && !force {
-		Error(fmt.Sprintf("Directory %s already exists, use --force to overwrite", projectName))
+		style.Error(fmt.Sprintf("Directory %s already exists, use --force to overwrite", projectName))
 		os.Exit(1)
 	}
 
-	Info(fmt.Sprintf("Creating new Lacquer project: %s", projectName))
-	Info(fmt.Sprintf("Using template: %s", template.Name))
+	style.Info(fmt.Sprintf("Creating new Lacquer project: %s", projectName))
+	style.Info(fmt.Sprintf("Using template: %s", template.Name))
 
 	// Create project directory
 	if err := os.MkdirAll(projectName, 0755); err != nil {
-		Error(fmt.Sprintf("Failed to create project directory: %v", err))
+		style.Error(fmt.Sprintf("Failed to create project directory: %v", err))
 		os.Exit(1)
 	}
 
 	// Create .lacquer directory
 	lacquerDir := filepath.Join(projectName, ".lacquer")
 	if err := os.MkdirAll(lacquerDir, 0755); err != nil {
-		Error(fmt.Sprintf("Failed to create .lacquer directory: %v", err))
+		style.Error(fmt.Sprintf("Failed to create .lacquer directory: %v", err))
 		os.Exit(1)
 	}
 
 	// Create config file
 	configPath := filepath.Join(lacquerDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
-		Error(fmt.Sprintf("Failed to create config file: %v", err))
+		style.Error(fmt.Sprintf("Failed to create config file: %v", err))
 		os.Exit(1)
 	}
 
@@ -141,7 +142,7 @@ func initializeProject(projectName string) {
 		content = strings.ReplaceAll(content, "{{PROJECT_NAME}}", projectName)
 
 		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-			Error(fmt.Sprintf("Failed to create %s: %v", filename, err))
+			style.Error(fmt.Sprintf("Failed to create %s: %v", filename, err))
 			os.Exit(1)
 		}
 	}
@@ -149,13 +150,13 @@ func initializeProject(projectName string) {
 	// Initialize git repository
 	if !noGit {
 		if err := initGitRepository(projectName); err != nil {
-			Warning(fmt.Sprintf("Failed to initialize git repository: %v", err))
+			style.Warning(fmt.Sprintf("Failed to initialize git repository: %v", err))
 		} else {
-			Info("Initialized git repository")
+			style.Info("Initialized git repository")
 		}
 	}
 
-	Success(fmt.Sprintf("Project %s created successfully!", projectName))
+	style.Success(fmt.Sprintf("Project %s created successfully!", projectName))
 	fmt.Println()
 	fmt.Printf("Next steps:\n")
 	fmt.Printf("  cd %s\n", projectName)

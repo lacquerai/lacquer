@@ -216,7 +216,7 @@ func NewOpenAIProvider(config *OpenAIConfig) (*OpenAIProvider, error) {
 }
 
 // Generate generates a response using the OpenAI API
-func (p *OpenAIProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error) {
+func (p *OpenAIProvider) Generate(ctx GenerateContext, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error) {
 	tools := make([]openai.ChatCompletionToolParam, len(request.Tools), 0)
 	for _, tool := range request.Tools {
 		parameters, err := json.Marshal(tool.Parameters)
@@ -253,7 +253,7 @@ func (p *OpenAIProvider) Generate(ctx context.Context, request *ModelRequest, pr
 		topP = *request.TopP
 	}
 
-	response, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+	response, err := p.client.Chat.Completions.New(ctx.Context, openai.ChatCompletionNewParams{
 		Model:       request.Model,
 		Messages:    p.buildOpenAIRequest(request),
 		Temperature: openai.Float(temperature),

@@ -16,6 +16,7 @@ import (
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/parser"
 	"github.com/lacquerai/lacquer/internal/runtime"
+	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -142,6 +143,21 @@ func (s *StepProgressState) String() string {
 
 type ActionStates []ActionState
 
+func (as *ActionStates) Add(action ActionState) {
+	newActions := make(ActionStates, len(*as)+1)
+	// make sure the previous actions are all marked as success if they are not already
+	for i, a := range *as {
+		if !strings.HasPrefix(a.text, style.SuccessIcon()) && !strings.HasPrefix(a.text, style.ErrorIcon()) {
+			a.text = style.SuccessIcon() + " " + strings.TrimSpace(strings.ReplaceAll(a.text, "...", ""))
+		}
+
+		newActions[i] = a
+	}
+
+	newActions[len(*as)] = action
+	*as = newActions
+}
+
 func (as ActionStates) String() string {
 	var text strings.Builder
 	for _, action := range as {
@@ -188,7 +204,7 @@ func runWorkflow(workflowFile string) {
 	// Parse workflow
 	yamlParser, err := parser.NewYAMLParser()
 	if err != nil {
-		Error(fmt.Sprintf("Failed to create parser: %v", err))
+		style.Error(fmt.Sprintf("Failed to create parser: %v", err))
 		os.Exit(1)
 	}
 
@@ -207,7 +223,7 @@ func runWorkflow(workflowFile string) {
 
 			printValidationSummary(summary)
 		} else {
-			Error(fmt.Sprintf("Failed to parse workflow: %v", err))
+			style.Error(fmt.Sprintf("Failed to parse workflow: %v", err))
 		}
 
 		os.Exit(1)
@@ -244,7 +260,7 @@ func runWorkflow(workflowFile string) {
 	// Dry run mode
 	if dryRun {
 		if !viper.GetBool("quiet") {
-			Success("Workflow validation completed (dry-run mode)")
+			style.Success("Workflow validation completed (dry-run mode)")
 		}
 		return
 	}
@@ -260,7 +276,7 @@ func runWorkflow(workflowFile string) {
 
 	executor, err := runtime.NewExecutor(executorConfig, workflow, nil)
 	if err != nil {
-		Error(fmt.Sprintf("Failed to create executor: %v", err))
+		style.Error(fmt.Sprintf("Failed to create executor: %v", err))
 		return
 	}
 
@@ -395,7 +411,7 @@ func (pt *ProgressTracker) startStep(stepID string, stepIndex, totalSteps int) {
 
 	// Create and configure spinner
 	s := spinner.New(spinner.CharSets[9], 100*time.Millisecond) // Dots spinner with 100ms delay
-	title := fmt.Sprintf(" Step %d/%d: %s", stepIndex, totalSteps, accentStyle.Render(stepID))
+	title := fmt.Sprintf(" Running step %s (%d/%d)", style.AccentStyle.Render(stepID), stepIndex, totalSteps)
 	s.Suffix = title
 
 	state := &StepProgressState{
@@ -432,7 +448,8 @@ func (pt *ProgressTracker) createActionSpinner(stepID string, actionID string, t
 
 	if state, exists := pt.steps[stepID]; exists {
 		state.mu.Lock()
-		state.actions = append(state.actions, ActionState{
+
+		state.actions.Add(ActionState{
 			id:   actionID,
 			text: text,
 		})
@@ -450,7 +467,7 @@ func (pt *ProgressTracker) completeActionSpinner(stepID string, actionID string)
 		state.mu.Lock()
 		for i, action := range state.actions {
 			if action.id == actionID {
-				state.actions[i].text = SuccessIcon() + " " + strings.TrimSpace(strings.ReplaceAll(action.text, "...", ""))
+				state.actions[i].text = style.SuccessIcon() + " " + strings.TrimSpace(strings.ReplaceAll(action.text, "...", ""))
 				break
 			}
 		}
@@ -468,7 +485,7 @@ func (pt *ProgressTracker) failActionSpinner(stepID string, actionID string) {
 		state.mu.Lock()
 		for i, action := range state.actions {
 			if action.id == actionID {
-				state.actions[i].text = ErrorIcon() + " " + strings.TrimSpace(strings.ReplaceAll(action.text, "...", ""))
+				state.actions[i].text = style.ErrorIcon() + " " + strings.TrimSpace(strings.ReplaceAll(action.text, "...", ""))
 				break
 			}
 		}
@@ -487,7 +504,7 @@ func (pt *ProgressTracker) completeStep(stepID string, duration time.Duration) {
 		state.mu.Lock()
 		state.status = "completed"
 		state.endTime = time.Now()
-		state.spinner.FinalMSG = SuccessIcon() + state.String()
+		state.spinner.FinalMSG = style.SuccessIcon() + state.String()
 		state.spinner.Stop()
 		state.mu.Unlock()
 	}
@@ -502,7 +519,7 @@ func (pt *ProgressTracker) failStep(stepID string, duration time.Duration, _ str
 		state.mu.Lock()
 		state.status = "failed"
 		state.endTime = time.Now()
-		state.spinner.FinalMSG = ErrorIcon() + " " + state.String()
+		state.spinner.FinalMSG = style.ErrorIcon() + " " + state.String()
 		state.spinner.Stop()
 		state.mu.Unlock()
 	}
@@ -572,7 +589,7 @@ func printWorkflowInfo(workflow *ast.Workflow) {
 	name := getWorkflowName(workflow)
 	stepCount := len(workflow.Workflow.Steps)
 
-	fmt.Printf("\nRunning %s (%d steps)\n\n", infoStyle.Render(name), stepCount)
+	fmt.Printf("\nRunning %s workflow (%d steps)\n\n", style.InfoStyle.Render(name), stepCount)
 
 }
 
@@ -588,9 +605,9 @@ func outputResults(result ExecutionResult) {
 
 	switch outputFormat {
 	case "json":
-		printJSON(result)
+		style.PrintJSON(result)
 	case "yaml":
-		printYAML(result)
+		style.PrintYAML(result)
 	default:
 		printExecutionSummary(result)
 	}
@@ -605,13 +622,13 @@ func printExecutionSummary(result ExecutionResult) {
 
 	// Show success or failure with duration
 	if result.Status == "completed" {
-		fmt.Printf("%s Workflow completed %s (%s)\n", SuccessIcon(), successStyle.Render("successfully"), formatDuration(result.Duration))
+		fmt.Printf("%s Workflow completed %s (%s)\n", style.SuccessIcon(), style.SuccessStyle.Render("successfully"), formatDuration(result.Duration))
 
 	} else {
-		fmt.Printf("%s Workflow failed\n\n", ErrorIcon())
+		fmt.Printf("%s Workflow failed\n\n", style.ErrorIcon())
 		// Show error details for failures
 		if result.Error != "" {
-			fmt.Printf("%s\n", errorStyle.Render(result.Error))
+			fmt.Printf("%s\n", style.ErrorStyle.Render(result.Error))
 		}
 	}
 

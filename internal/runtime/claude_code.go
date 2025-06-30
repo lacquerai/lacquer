@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/rs/zerolog/log"
 )
 
@@ -22,6 +23,7 @@ type ClaudeCodeProvider struct {
 	executablePath string
 	workingDir     string
 	config         *ClaudeCodeConfig
+	progressChan   chan<- ExecutionEvent
 }
 
 // ClaudeCodeConfig contains configuration for Claude Code provider
@@ -174,21 +176,15 @@ func NewClaudeCodeProvider(config *ClaudeCodeConfig) (*ClaudeCodeProvider, error
 	return provider, nil
 }
 
-// Generate generates a response using Claude Code with streaming enabled by default
-func (p *ClaudeCodeProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error) {
-	// Use streaming with default progress callback if enabled
-	options := &StreamingOptions{
-		ShowToolUse:  true,
-		ShowThinking: true,
-		ProgressChan: progressChan,
-	}
-	return p.GenerateWithOptions(ctx, request, options)
+func (p *ClaudeCodeProvider) isLocal() bool {
+	return true
 }
 
-// GenerateWithOptions generates a response using Claude Code with streaming options
-func (p *ClaudeCodeProvider) GenerateWithOptions(ctx context.Context, request *ModelRequest, options *StreamingOptions) ([]ModelMessage, *TokenUsage, error) {
-	// Send request to Claude Code with streaming support
-	response, err := p.sendRequestWithOptions(ctx, request, options)
+// Generate generates a response using Claude Code with streaming enabled by default
+func (p *ClaudeCodeProvider) Generate(ctx GenerateContext, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error) {
+	p.progressChan = progressChan
+
+	response, err := p.sendRequestWithOptions(ctx, request)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to send request to Claude Code: %w", err)
 	}
@@ -255,7 +251,7 @@ type ClaudeCodeSession struct {
 }
 
 // createSessionUnsafe creates a new Claude Code session (caller must hold lock)
-func (p *ClaudeCodeProvider) execute(ctx context.Context, request *ModelRequest) (*ClaudeCodeSession, error) {
+func (p *ClaudeCodeProvider) execute(ctx GenerateContext, request *ModelRequest) (*ClaudeCodeSession, error) {
 	prompt := request.GetPrompt()
 
 	if request.SystemPrompt != "" {
@@ -297,7 +293,7 @@ func (p *ClaudeCodeProvider) execute(ctx context.Context, request *ModelRequest)
 		Str("prompt_preview", truncateString(prompt, 100)).
 		Msg("Executing Claude Code command")
 
-	cmd := exec.CommandContext(ctx, execPath, args...)
+	cmd := exec.CommandContext(ctx.Context, execPath, args...)
 	cmd.Dir = p.workingDir
 
 	stdErrPipe, err := cmd.StderrPipe()
@@ -333,13 +329,13 @@ func (p *ClaudeCodeProvider) execute(ctx context.Context, request *ModelRequest)
 }
 
 // sendRequestWithOptions sends a request to Claude Code session with streaming options
-func (p *ClaudeCodeProvider) sendRequestWithOptions(ctx context.Context, request *ModelRequest, options *StreamingOptions) (*ClaudeCodeResponse, error) {
+func (p *ClaudeCodeProvider) sendRequestWithOptions(ctx GenerateContext, request *ModelRequest) (*ClaudeCodeResponse, error) {
 	session, err := p.execute(ctx, request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute Claude Code: %w", err)
 	}
 
-	response, err := p.readStreamingResponse(session, options)
+	response, err := p.readStreamingResponse(ctx, session)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +344,7 @@ func (p *ClaudeCodeProvider) sendRequestWithOptions(ctx context.Context, request
 }
 
 // readStreamingResponse reads a streaming JSON response from Claude Code session
-func (p *ClaudeCodeProvider) readStreamingResponse(session *ClaudeCodeSession, options *StreamingOptions) (*ClaudeCodeResponse, error) {
+func (p *ClaudeCodeProvider) readStreamingResponse(ctx GenerateContext, session *ClaudeCodeSession) (*ClaudeCodeResponse, error) {
 	var finalResponse *ClaudeCodeResponse
 
 	// Read stderr to capture any errors
@@ -392,7 +388,7 @@ func (p *ClaudeCodeProvider) readStreamingResponse(session *ClaudeCodeSession, o
 			Msg("Received line from Claude Code")
 
 		if line != "" {
-			if err := p.processLine(line, &finalResponse, options); err != nil {
+			if err := p.processLine(ctx, line, &finalResponse); err != nil {
 				log.Debug().Err(err).Msg("Error processing line")
 			}
 
@@ -441,7 +437,7 @@ func (p *ClaudeCodeProvider) readStreamingResponse(session *ClaudeCodeSession, o
 }
 
 // processLine processes a single line of output from Claude Code
-func (p *ClaudeCodeProvider) processLine(line string, finalResponse **ClaudeCodeResponse, options *StreamingOptions) error {
+func (p *ClaudeCodeProvider) processLine(ctx GenerateContext, line string, finalResponse **ClaudeCodeResponse) error {
 	// Parse JSON message
 	var message StreamMessage
 	if err := json.Unmarshal([]byte(line), &message); err != nil {
@@ -466,38 +462,47 @@ func (p *ClaudeCodeProvider) processLine(line string, finalResponse **ClaudeCode
 	// Handle different message types
 	switch message.Type {
 	case "system":
-		if message.Subtype == "init" && options != nil && options.ProgressChan != nil {
-			options.ProgressChan <- p.progress("🚀 Initializing ...")
+		if message.Subtype == "init" {
+			p.progressChan <- NewGenericActionEvent(ctx.StepID, "system", ctx.RunID, "Booting up...")
 		}
-
 	case "assistant":
-		if message.Message != nil && options != nil && options.ProgressChan != nil {
+		if message.Message != nil {
 			// Process assistant message content
 			for _, content := range message.Message.Content {
 				switch content.Type {
 				case "tool_use":
-					inputStr := p.formatInputParams(content.Input)
-					options.ProgressChan <- p.progress(fmt.Sprintf("🔧 Using tool: %s - %s", content.Name, inputStr))
+					var sb strings.Builder
+
+					switch content.Name {
+					case "TodoWrite":
+						sb.WriteString("Updating todo list...")
+					default:
+						sb.WriteString(fmt.Sprintf("Using tool %s ", style.InfoStyle.Render(content.Name)))
+						if len(content.Input) > 0 {
+							sb.WriteString("(")
+							var i int
+							for key, value := range content.Input {
+								sb.WriteString(fmt.Sprintf("%s: %v", style.MutedStyle.Render(key), style.MutedStyle.Render(fmt.Sprintf("%v", value))))
+								if i != len(content.Input)-1 {
+									sb.WriteString("; ")
+								}
+								i++
+							}
+
+							sb.WriteString(")")
+						}
+					}
+
+					p.progressChan <- NewToolUseEvent(ctx.StepID, content.ID, content.Name, ctx.RunID, sb.String())
 				case "tool_result":
-					options.ProgressChan <- p.progress("✅ Tool completed")
-				case "text":
-					options.ProgressChan <- p.progress(fmt.Sprintf("💬 %s", content.Text))
+					p.progressChan <- NewToolUseCompletedEvent(ctx.StepID, content.ID, content.Name, ctx.RunID)
 				default:
-					options.ProgressChan <- p.progress("💪 Working ...")
+					p.progressChan <- NewGenericActionEvent(ctx.StepID, content.ID, ctx.RunID, content.Text)
 				}
 			}
 		}
 
 	case "result":
-		// Final result message
-		if options != nil && options.ProgressChan != nil {
-			if message.IsError {
-				options.ProgressChan <- p.progress("❌ Error occurred")
-			} else {
-				options.ProgressChan <- p.progress("🎉 Completed successfully")
-			}
-		}
-
 		// Build final response
 		*finalResponse = &ClaudeCodeResponse{
 			Content:   message.Result,

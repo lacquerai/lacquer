@@ -202,7 +202,7 @@ func NewAnthropicProvider(config *AnthropicConfig) (*AnthropicProvider, error) {
 }
 
 // Generate generates a response using the Anthropic API
-func (p *AnthropicProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error) {
+func (p *AnthropicProvider) Generate(gtx GenerateContext, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error) {
 	// Build the Anthropic request
 	anthropicReq, err := p.buildAnthropicRequest(request)
 	if err != nil {
@@ -210,7 +210,7 @@ func (p *AnthropicProvider) Generate(ctx context.Context, request *ModelRequest,
 	}
 
 	// Make the API call with retries
-	response, err := p.client.Messages.New(ctx, anthropicReq)
+	response, err := p.client.Messages.New(gtx.Context, anthropicReq)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Anthropic API call failed: %w", err)
 	}

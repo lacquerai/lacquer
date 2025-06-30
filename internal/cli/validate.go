@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/parser"
+	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -134,19 +135,19 @@ func validateWorkflows(args []string) {
 	// Collect files to validate
 	files, err := collectFiles(args, recursive)
 	if err != nil {
-		Error(fmt.Sprintf("Failed to collect files: %v", err))
+		style.Error(fmt.Sprintf("Failed to collect files: %v", err))
 		os.Exit(1)
 	}
 
 	if len(files) == 0 {
-		Warning("No workflow files found to validate")
+		style.Warning("No workflow files found to validate")
 		return
 	}
 
 	// Create parser
 	yamlParser, err := parser.NewYAMLParser()
 	if err != nil {
-		Error(fmt.Sprintf("Failed to create parser: %v", err))
+		style.Error(fmt.Sprintf("Failed to create parser: %v", err))
 		os.Exit(1)
 	}
 
@@ -161,7 +162,7 @@ func validateWorkflows(args []string) {
 		if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
 			if result.Valid {
 				if showAll {
-					Success(fmt.Sprintf("%s (%v)", file, result.Duration))
+					style.Success(fmt.Sprintf("%s (%v)", file, result.Duration))
 				}
 			}
 			// Invalid results will be shown in the detailed summary section
@@ -187,9 +188,9 @@ func validateWorkflows(args []string) {
 	outputFormat := viper.GetString("output")
 	switch outputFormat {
 	case "json":
-		printJSON(summary)
+		style.PrintJSON(summary)
 	case "yaml":
-		printYAML(summary)
+		style.PrintYAML(summary)
 	default:
 		printValidationSummary(summary)
 	}
@@ -293,9 +294,9 @@ func printValidationSummary(summary ValidationSummary) {
 	if !viper.GetBool("quiet") {
 		fmt.Printf("\n")
 		if summary.Invalid == 0 {
-			Success(fmt.Sprintf("All %d workflow(s) are valid", summary.Total))
+			style.Success(fmt.Sprintf("All %d workflow(s) are valid", summary.Total))
 		} else {
-			Error(fmt.Sprintf("%d of %d workflow(s) failed validation", summary.Invalid, summary.Total))
+			style.Error(fmt.Sprintf("%d of %d workflow(s) failed validation", summary.Invalid, summary.Total))
 		}
 
 		// Show detailed error information for failed files
@@ -325,7 +326,7 @@ func printValidationResultStyled(result ValidationResult) {
 	} else {
 		// Fallback to simple error messages
 		for _, errMsg := range result.Errors {
-			fmt.Printf("  %s\n", errorStyle.Render(errMsg))
+			fmt.Printf("  %s\n", style.ErrorStyle.Render(errMsg))
 		}
 	}
 }
@@ -335,19 +336,19 @@ func printValidationIssueStyled(result ValidationResult, issue *ValidationIssue)
 	var output strings.Builder
 
 	// Build the header
-	severityIcon := getSeverityIcon(issue.Severity)
-	severityStyled := getSeverityStyle(issue.Severity)
+	severityIcon := style.GetSeverityIcon(issue.Severity)
+	severityStyled := style.GetSeverityStyle(issue.Severity)
 
 	// Create the issue box
-	header := fmt.Sprintf("%s %s at %s:%d", severityIcon, severityStyled.Render(issue.Severity), formatFilePath(result.File), issue.Line)
+	header := fmt.Sprintf("%s %s at %s:%d", severityIcon, severityStyled.Render(issue.Severity), style.FileStyle.Render(result.File), issue.Line)
 	output.WriteString(header + "\n")
 
 	if issue.Message != "" && issue.Message != issue.Title {
-		output.WriteString("\n" + messageStyle.Render(issue.Message) + "\n")
+		output.WriteString("\n" + style.MessageStyle.Render(issue.Message) + "\n")
 	}
 
 	if issue.Suggestion != nil {
-		suggestionText := renderSuggestion(
+		suggestionText := style.RenderSuggestion(
 			issue.Suggestion.Title,
 			issue.Suggestion.Description,
 			issue.Suggestion.Examples,
@@ -360,11 +361,11 @@ func printValidationIssueStyled(result ValidationResult, issue *ValidationIssue)
 	var boxStyle lipgloss.Style
 	switch issue.Severity {
 	case "error":
-		boxStyle = errorBoxStyle
+		boxStyle = style.ErrorBoxStyle
 	case "warning":
-		boxStyle = warningBoxStyle
+		boxStyle = style.WarningBoxStyle
 	default:
-		boxStyle = infoBoxStyle
+		boxStyle = style.InfoBoxStyle
 	}
 
 	fmt.Print(boxStyle.Render(output.String()))
@@ -375,42 +376,38 @@ func printEnhancedIssueStyled(result ValidationResult, issue *parser.EnhancedErr
 	var output strings.Builder
 
 	// Build the header
-	severityIcon := getSeverityIcon(string(issue.Severity))
-	severityStyled := getSeverityStyle(string(issue.Severity))
-	position := formatPosition(issue.Position.Line)
+	severityIcon := style.GetSeverityIcon(string(issue.Severity))
+	severityStyled := style.GetSeverityStyle(string(issue.Severity))
+	position := style.FormatPosition(issue.Position.Line)
 
 	// Create the issue header
-	header := fmt.Sprintf("%s %s at %s:%s", severityIcon, severityStyled.Render(string(issue.Severity)), formatFilePath(result.File), position)
+	header := fmt.Sprintf("%s %s at %s:%s", severityIcon, severityStyled.Render(string(issue.Severity)), style.FileStyle.Render(result.File), position)
 	output.WriteString(header + "\n")
 
 	if issue.Message != "" && issue.Message != issue.Title {
-		output.WriteString("\n" + messageStyle.Render(issue.Message) + "\n")
+		output.WriteString("\n" + style.MessageStyle.Render(issue.Message) + "\n")
 	}
 
 	// Print source context if available
 	if issue.Context != nil && len(issue.Context.Lines) > 0 {
 		var contextLines strings.Builder
 		for _, line := range issue.Context.Lines {
-			hl := &highlightInfo{
-				startCol: issue.Context.Highlight.StartColumn,
-				endCol:   issue.Context.Highlight.EndColumn,
-			}
-			renderedLine := renderCodeLine(line.Number, line.Content, line.IsError, hl)
+			renderedLine := style.RenderCodeLine(line.Number, line.Content, line.IsError)
 			contextLines.WriteString(renderedLine + "\n")
 
 			// Add highlighting indicator if this is the error line
 			if line.IsError && issue.Context.Highlight.Length > 0 {
-				indicator := renderHighlightIndicator(issue.Context.Highlight.StartColumn, issue.Context.Highlight.Length)
+				indicator := style.RenderHighlightIndicator(issue.Context.Highlight.StartColumn, issue.Context.Highlight.Length)
 				contextLines.WriteString(indicator + "\n")
 			}
 		}
 		output.WriteString("\n")
-		output.WriteString(contextBoxStyle.Render(strings.TrimSuffix(contextLines.String(), "\n")))
+		output.WriteString(style.ContextBoxStyle.Render(strings.TrimSuffix(contextLines.String(), "\n")))
 		output.WriteString("\n")
 	}
 
 	if issue.Suggestion != nil {
-		suggestionText := renderSuggestion(
+		suggestionText := style.RenderSuggestion(
 			issue.Suggestion.Title,
 			issue.Suggestion.Description,
 			issue.Suggestion.Examples,
@@ -423,11 +420,11 @@ func printEnhancedIssueStyled(result ValidationResult, issue *parser.EnhancedErr
 	var boxStyle lipgloss.Style
 	switch issue.Severity {
 	case parser.SeverityError:
-		boxStyle = errorBoxStyle
+		boxStyle = style.ErrorBoxStyle
 	case parser.SeverityWarning:
-		boxStyle = warningBoxStyle
+		boxStyle = style.WarningBoxStyle
 	default:
-		boxStyle = infoBoxStyle
+		boxStyle = style.InfoBoxStyle
 	}
 
 	fmt.Print(boxStyle.Render(output.String()))

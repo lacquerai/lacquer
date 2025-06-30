@@ -9,10 +9,20 @@ import (
 	"github.com/lacquerai/lacquer/internal/ast"
 )
 
+type GenerateContext struct {
+	StepID  string
+	RunID   string
+	Context context.Context
+}
+
+type LocalModelProvider interface {
+	isLocal() bool
+}
+
 // ModelProvider defines the interface for AI model providers
 type ModelProvider interface {
 	// Generate generates a response from the model
-	Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error)
+	Generate(ctx GenerateContext, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error)
 
 	// GetName returns the provider name
 	GetName() string

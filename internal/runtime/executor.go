@@ -51,6 +51,95 @@ type ExecutionEvent struct {
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
+func NewToolUseEvent(stepID, actionID string, toolName string, runID string, text string) ExecutionEvent {
+	input := text
+	if input == "" {
+		input = generateRandomUsageText(toolName)
+	}
+
+	return ExecutionEvent{
+		Type:      EventStepActionStarted,
+		ActionID:  actionID,
+		Text:      input,
+		Timestamp: time.Now(),
+		RunID:     runID,
+		StepID:    stepID,
+	}
+}
+
+func NewToolUseCompletedEvent(stepID, actionID string, toolName string, runID string) ExecutionEvent {
+	return ExecutionEvent{
+		Type:      EventStepActionCompleted,
+		ActionID:  actionID,
+		Text:      generateRandomUsageText(toolName),
+		Timestamp: time.Now(),
+		RunID:     runID,
+		StepID:    stepID,
+	}
+}
+
+func NewToolUseFailedEvent(step *ast.Step, actionID string, toolName string, runID string) ExecutionEvent {
+	return ExecutionEvent{
+		Type:      EventStepActionFailed,
+		ActionID:  actionID,
+		Timestamp: time.Now(),
+		RunID:     runID,
+		StepID:    step.ID,
+	}
+}
+
+func NewPromptAgentEvent(stepID, actionID string, runID string) ExecutionEvent {
+	return ExecutionEvent{
+		Type:      EventStepActionStarted,
+		ActionID:  actionID,
+		Text:      generateRandomPromptingText(),
+		Timestamp: time.Now(),
+		RunID:     runID,
+		StepID:    stepID,
+	}
+}
+
+func NewAgentCompletedEvent(step *ast.Step, actionID string, runID string) ExecutionEvent {
+	return ExecutionEvent{
+		Type:      EventStepActionCompleted,
+		ActionID:  actionID,
+		Timestamp: time.Now(),
+		RunID:     runID,
+		StepID:    step.ID,
+	}
+}
+
+func NewAgentFailedEvent(step *ast.Step, actionID string, runID string) ExecutionEvent {
+	return ExecutionEvent{
+		Type:      EventStepActionFailed,
+		ActionID:  actionID,
+		Timestamp: time.Now(),
+		RunID:     runID,
+		StepID:    step.ID,
+	}
+}
+
+func NewGenericActionEvent(stepID, actionID string, runID string, text string) ExecutionEvent {
+	return ExecutionEvent{
+		Type:      EventStepActionStarted,
+		ActionID:  actionID,
+		Text:      text,
+		Timestamp: time.Now(),
+		RunID:     runID,
+		StepID:    stepID,
+	}
+}
+
+func NewGenericActionCompletedEvent(stepID, actionID string, runID string) ExecutionEvent {
+	return ExecutionEvent{
+		Type:      EventStepActionCompleted,
+		ActionID:  actionID,
+		Timestamp: time.Now(),
+		RunID:     runID,
+		StepID:    stepID,
+	}
+}
+
 // Executor is the main workflow execution engine
 type Executor struct {
 	templateEngine  *TemplateEngine
@@ -801,6 +890,26 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 		},
 	}
 
+	// if the provider is local, don't run in a loop as these models are self contained and
+	// handle all the tool calling themselves
+	if _, ok := provider.(LocalModelProvider); ok {
+		request, err := e.createModelRequestWithTools(agent, messages, provider.GetName())
+		if err != nil {
+			return "", totalTokenUsage, fmt.Errorf("failed to create model request: %w", err)
+		}
+
+		responseMessages, tokenUsage, err := provider.Generate(GenerateContext{
+			StepID:  step.ID,
+			RunID:   execCtx.RunID,
+			Context: ctx,
+		}, request, e.progressChan)
+		if err != nil {
+			return "", tokenUsage, fmt.Errorf("model generation failed: %w", err)
+		}
+
+		return getLastContentBlock(responseMessages), tokenUsage, nil
+	}
+
 	for turn := 0; turn < maxTurns; turn++ {
 		// Create request with tools
 		request, err := e.createModelRequestWithTools(agent, messages, provider.GetName())
@@ -809,35 +918,20 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 		}
 
 		actionID := fmt.Sprintf("turn-%d", turn)
-		e.progressChan <- ExecutionEvent{
-			Type:      EventStepActionStarted,
-			ActionID:  actionID,
-			Text:      generateRandomPromptingText(),
-			Timestamp: time.Now(),
-			RunID:     execCtx.RunID,
-			StepID:    step.ID,
-		}
+		e.progressChan <- NewPromptAgentEvent(step.ID, actionID, execCtx.RunID)
 
-		responseMessages, tokenUsage, err := provider.Generate(ctx, request, e.progressChan)
+		responseMessages, tokenUsage, err := provider.Generate(GenerateContext{
+			StepID:  step.ID,
+			RunID:   execCtx.RunID,
+			Context: ctx,
+		}, request, e.progressChan)
 		if err != nil {
-			e.progressChan <- ExecutionEvent{
-				Type:      EventStepActionFailed,
-				ActionID:  actionID,
-				Timestamp: time.Now(),
-				RunID:     execCtx.RunID,
-				StepID:    step.ID,
-			}
+			e.progressChan <- NewAgentFailedEvent(step, actionID, execCtx.RunID)
 
 			return "", totalTokenUsage, fmt.Errorf("model generation failed: %w", err)
 		}
 
-		e.progressChan <- ExecutionEvent{
-			Type:      EventStepActionCompleted,
-			ActionID:  actionID,
-			Timestamp: time.Now(),
-			RunID:     execCtx.RunID,
-			StepID:    step.ID,
-		}
+		e.progressChan <- NewAgentCompletedEvent(step, actionID, execCtx.RunID)
 
 		// Accumulate token usage
 		if tokenUsage != nil {
@@ -890,9 +984,27 @@ func (e *Executor) createModelRequestWithTools(agent *ast.Agent, messages []Mode
 		return e.createAnthropicRequestWithTools(agent, messages)
 	case "openai":
 		return e.createOpenAIRequestWithTools(agent, messages)
+	case "local":
+		// local provider does not support tool calling
+		return e.createLocalRequest(agent, messages)
 	default:
 		return nil, fmt.Errorf("unsupported provider for tool calling: %s", providerName)
 	}
+}
+
+// createLocalRequest creates a local request with tools
+func (e *Executor) createLocalRequest(agent *ast.Agent, messages []ModelMessage) (*ModelRequest, error) {
+	request := &ModelRequest{
+		Model:        agent.Model,
+		Messages:     messages,
+		SystemPrompt: agent.SystemPrompt,
+		Temperature:  agent.Temperature,
+		MaxTokens:    agent.MaxTokens,
+		TopP:         agent.TopP,
+		Tools:        agent.Tools,
+	}
+
+	return request, nil
 }
 
 // createAnthropicRequestWithTools creates an Anthropic request with tools
@@ -937,14 +1049,7 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlo
 
 	for _, toolCall := range toolCalls {
 		actionID := fmt.Sprintf("tool-%s", toolCall.ID)
-		e.progressChan <- ExecutionEvent{
-			Type:      EventStepActionStarted,
-			ActionID:  actionID,
-			Text:      generateRandomUsageText(toolCall.Name),
-			Timestamp: time.Now(),
-			RunID:     execCtx.RunID,
-			StepID:    step.ID,
-		}
+		e.progressChan <- NewToolUseEvent(step.ID, actionID, toolCall.Name, execCtx.RunID, "")
 
 		toolExecCtx := &ToolExecutionContext{
 			WorkflowID: execCtx.RunID,
@@ -957,13 +1062,6 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlo
 
 		// Execute the tool
 		result, err := e.toolRegistry.ExecuteTool(ctx, toolCall.Name, toolCall.Input, toolExecCtx)
-		e.progressChan <- ExecutionEvent{
-			Type:      EventStepActionCompleted,
-			ActionID:  actionID,
-			Timestamp: time.Now(),
-			RunID:     execCtx.RunID,
-			StepID:    step.ID,
-		}
 		if err != nil {
 			log.Warn().
 				Err(err).
@@ -980,10 +1078,12 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlo
 					},
 				},
 			)
+			e.progressChan <- NewToolUseFailedEvent(step, actionID, toolCall.Name, execCtx.RunID)
 			continue
 		}
 
-		// Format tool result
+		e.progressChan <- NewToolUseCompletedEvent(step.ID, actionID, toolCall.Name, execCtx.RunID)
+
 		content := "Tool executed successfully"
 		if outputJSON, err := json.Marshal(result.Output); err == nil {
 			content = string(outputJSON)
@@ -1448,12 +1548,11 @@ func generateRandomPromptingText() string {
 		"Rolling the dice of creativity...",
 		"Conducting experiments in thought...",
 		"Composing a symphony of words...",
-		" Building bridges of understanding...",
 		"Surfing waves of information...",
 		"Performing mental acrobatics...",
 		"Igniting sparks of brilliance...",
 		"Chasing rainbows of logic...",
-		" Brewing the perfect response...",
+		"Brewing the perfect response...",
 		"Hovering over the solution...",
 		"Taming wild thoughts...",
 		"Dreaming in binary...",
@@ -1467,26 +1566,18 @@ func generateRandomUsageText(rawTool string) string {
 	toolName := lipgloss.NewStyle().Foreground(lipgloss.Color("#42A5F5")).Bold(true).Render(rawTool)
 
 	usageTexts := []string{
-		fmt.Sprintf("Wielding the mighty %s...", toolName),
-		fmt.Sprintf("Summoning the power of %s...", toolName),
-		fmt.Sprintf("Unleashing %s upon the world...", toolName),
-		fmt.Sprintf("Activating %s with surgical precision...", toolName),
-		fmt.Sprintf("Deploying %s like a digital ninja...", toolName),
-		fmt.Sprintf("Channeling the ancient art of %s...", toolName),
-		fmt.Sprintf("Invoking %s from the depths of cyberspace...", toolName),
-		fmt.Sprintf("Firing up %s with rocket fuel...", toolName),
-		fmt.Sprintf("Dancing with %s in perfect harmony...", toolName),
-		fmt.Sprintf("Whispering sweet commands to %s...", toolName),
-		fmt.Sprintf("Tickling %s until it cooperates...", toolName),
-		fmt.Sprintf("Bribing %s with digital cookies...", toolName),
-		fmt.Sprintf("Teaching %s new tricks...", toolName),
-		fmt.Sprintf("Convincing %s to do the heavy lifting...", toolName),
-		fmt.Sprintf("Politely asking %s to work its magic...", toolName),
-		fmt.Sprintf("Giving %s a gentle nudge...", toolName),
-		fmt.Sprintf("Waking up %s from its digital slumber...", toolName),
-		fmt.Sprintf("Feeding %s some tasty data...", toolName),
-		fmt.Sprintf("Cranking the %s machine to eleven...", toolName),
-		fmt.Sprintf("Letting %s stretch its computational legs...", toolName),
+		fmt.Sprintf("Wielding the mighty %s tool...", toolName),
+		fmt.Sprintf("Summoning the power of %s tool...", toolName),
+		fmt.Sprintf("Channeling the ancient art of %s tool...", toolName),
+		fmt.Sprintf("Invoking %s tool from the depths of cyberspace...", toolName),
+		fmt.Sprintf("Whispering sweet commands to %s tool...", toolName),
+		fmt.Sprintf("Convincing %s tool to do the heavy lifting...", toolName),
+		fmt.Sprintf("Politely asking %s tool to work its magic...", toolName),
+		fmt.Sprintf("Giving %s tool a gentle nudge...", toolName),
+		fmt.Sprintf("Waking up %s tool from its digital slumber...", toolName),
+		fmt.Sprintf("Feeding %s tool some tasty data...", toolName),
+		fmt.Sprintf("Cranking the %s tool machine to eleven...", toolName),
+		fmt.Sprintf("Letting %s tool stretch its computational legs...", toolName),
 	}
 
 	return usageTexts[rand.Intn(len(usageTexts))]
