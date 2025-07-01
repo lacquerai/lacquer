@@ -174,6 +174,13 @@ func (p *YAMLParser) ParseBytes(data []byte) (*ast.Workflow, error) {
 		}
 	}
 
+	// set the name of the agent to the key of the map
+	// so that it's easier to reference the agent later in the application
+	for name, agent := range workflow.Agents {
+		agent.Name = name
+		workflow.Agents[name] = agent
+	}
+
 	// Perform semantic validation
 	if p.semanticValidator != nil {
 		if err := p.validateSemanticsEnhanced(&workflow, reporter); err != nil {

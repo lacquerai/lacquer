@@ -213,7 +213,7 @@ func (t *Tool) IsScript() bool {
 
 // IsMCPTool returns true if this tool uses MCP
 func (t *Tool) IsMCPTool() bool {
-	return t.MCPServer != ""
+	return t.MCPServer != nil
 }
 
 // GetToolType returns the type of tool as a string

@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/block"
+	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/rs/zerolog/log"
 )
 
@@ -88,11 +89,18 @@ func NewToolUseFailedEvent(step *ast.Step, actionID string, toolName string, run
 	}
 }
 
-func NewPromptAgentEvent(stepID, actionID string, runID string) ExecutionEvent {
+func NewPromptAgentEvent(stepID, actionID string, runID string, prompt ...string) ExecutionEvent {
+	text := generateRandomPromptingText()
+	if len(prompt) > 0 {
+		text = strings.Join(prompt, "\n")
+		if len(text) > 200 {
+			text = text[:200] + "..."
+		}
+	}
 	return ExecutionEvent{
 		Type:      EventStepActionStarted,
 		ActionID:  actionID,
-		Text:      generateRandomPromptingText(),
+		Text:      text,
 		Timestamp: time.Now(),
 		RunID:     runID,
 		StepID:    stepID,
@@ -918,7 +926,8 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 		}
 
 		actionID := fmt.Sprintf("turn-%d", turn)
-		e.progressChan <- NewPromptAgentEvent(step.ID, actionID, execCtx.RunID)
+		prompt := getLastContentBlock(messages)
+		e.progressChan <- NewPromptAgentEvent(step.ID, actionID, execCtx.RunID, prompt)
 
 		responseMessages, tokenUsage, err := provider.Generate(GenerateContext{
 			StepID:  step.ID,
@@ -1001,7 +1010,9 @@ func (e *Executor) createLocalRequest(agent *ast.Agent, messages []ModelMessage)
 		Temperature:  agent.Temperature,
 		MaxTokens:    agent.MaxTokens,
 		TopP:         agent.TopP,
-		Tools:        agent.Tools,
+
+		// Tools are not supported for local models
+		// Tools:
 	}
 
 	return request, nil
@@ -1016,7 +1027,7 @@ func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, messages []
 		Temperature:  agent.Temperature,
 		MaxTokens:    agent.MaxTokens,
 		TopP:         agent.TopP,
-		Tools:        agent.Tools,
+		Tools:        e.toolRegistry.GetToolsForAgent(agent.Name),
 		Metadata: map[string]interface{}{
 			"provider_type": "anthropic",
 		},
@@ -1034,7 +1045,7 @@ func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, messages []Mod
 		Temperature:  agent.Temperature,
 		MaxTokens:    agent.MaxTokens,
 		TopP:         agent.TopP,
-		Tools:        agent.Tools,
+		Tools:        e.toolRegistry.GetToolsForAgent(agent.Name),
 		Metadata: map[string]interface{}{
 			"provider_type": "openai",
 		},
@@ -1049,7 +1060,9 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlo
 
 	for _, toolCall := range toolCalls {
 		actionID := fmt.Sprintf("tool-%s", toolCall.ID)
-		e.progressChan <- NewToolUseEvent(step.ID, actionID, toolCall.Name, execCtx.RunID, "")
+
+		toolCallMsg := formatToolCall(toolCall)
+		e.progressChan <- NewToolUseEvent(step.ID, actionID, toolCall.Name, execCtx.RunID, toolCallMsg)
 
 		toolExecCtx := &ToolExecutionContext{
 			WorkflowID: execCtx.RunID,
@@ -1466,7 +1479,13 @@ func initializeToolProviders(toolRegistry *ToolRegistry, workflow *ast.Workflow,
 		return fmt.Errorf("failed to register script tool provider: %w", err)
 	}
 
-	// TODO: register the mcp provider and workflow provider (block provider)
+	// Register MCP tool provider
+	mcpProvider := NewMCPToolProvider()
+	if err := toolRegistry.RegisterProvider(mcpProvider); err != nil {
+		return fmt.Errorf("failed to register MCP tool provider: %w", err)
+	}
+
+	// TODO: register the workflow provider (block provider)
 
 	for name, agent := range workflow.Agents {
 		if err := toolRegistry.RegisterToolsForAgent(agent); err != nil {
@@ -1530,7 +1549,15 @@ func getLastContentBlock(responseMessages []ModelMessage) string {
 		return ""
 	}
 
-	return lastMessage.Content[len(lastMessage.Content)-1].OfText.Text
+	if lastMessage.Content[len(lastMessage.Content)-1].OfText != nil {
+		return lastMessage.Content[len(lastMessage.Content)-1].OfText.Text
+	}
+
+	if lastMessage.Content[len(lastMessage.Content)-1].OfToolResult != nil {
+		return formatToolResult(lastMessage.Content[len(lastMessage.Content)-1].OfToolResult)
+	}
+
+	return ""
 }
 
 func generateRandomPromptingText() string {
@@ -1581,4 +1608,45 @@ func generateRandomUsageText(rawTool string) string {
 	}
 
 	return usageTexts[rand.Intn(len(usageTexts))]
+}
+
+func formatToolCall(toolCall *ToolUseBlockParam) string {
+	sb := strings.Builder{}
+	sb.WriteString(fmt.Sprintf("Using tool %s ", style.InfoStyle.Render(toolCall.Name)))
+	var input map[string]interface{}
+	err := json.Unmarshal(toolCall.Input, &input)
+	if err != nil {
+		return sb.String()
+	}
+
+	sb.WriteString(formatInputs(input))
+
+	return sb.String()
+}
+
+func formatToolResult(toolResult *ToolResultBlockParam) string {
+	sb := strings.Builder{}
+
+	sb.WriteString(fmt.Sprintf("Tool result: %s", toolResult.Content))
+
+	return sb.String()
+}
+
+func formatInputs(inputs map[string]interface{}) string {
+	sb := strings.Builder{}
+	if len(inputs) > 0 {
+		sb.WriteString("(")
+		var i int
+		for key, value := range inputs {
+			sb.WriteString(fmt.Sprintf("%s: %v", style.MutedStyle.Render(key), style.MutedStyle.Render(fmt.Sprintf("%v", value))))
+			if i != len(inputs)-1 {
+				sb.WriteString("; ")
+			}
+			i++
+		}
+
+		sb.WriteString(")")
+	}
+
+	return sb.String()
 }

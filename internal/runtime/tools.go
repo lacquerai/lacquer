@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -30,13 +31,24 @@ type ToolResult struct {
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// Tool represents a tool available to an agent
+// This is a simplified version of the ast.Tool type
+// which is used to provide
+type Tool struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  ast.JSONSchema `json:"parameters"`
+}
+
 // ToolProvider defines the interface for tool providers
 type ToolProvider interface {
 	// GetType returns the tool type this provider handles
 	GetType() ast.ToolType
 
-	// AddTool adds a tool to the provider
-	AddTool(tool *ast.Tool) error
+	// AddToolDefinition adds a tool definition to the provider
+	// and returns the tools available from the definition.
+	// This could return multiple tools if the definition is a MCP server.
+	AddToolDefinition(tool *ast.Tool) ([]Tool, error)
 
 	// ExecuteTool executes a tool with the given parameters
 	ExecuteTool(ctx context.Context, toolName string, parameters json.RawMessage, execCtx *ToolExecutionContext) (*ToolResult, error)
@@ -49,6 +61,7 @@ type ToolProvider interface {
 type ToolRegistry struct {
 	providers      map[ast.ToolType]ToolProvider
 	toolsProviders map[string]ToolProvider
+	agentTools     map[string][]Tool
 	mu             sync.RWMutex
 }
 
@@ -57,6 +70,7 @@ func NewToolRegistry() *ToolRegistry {
 	return &ToolRegistry{
 		providers:      make(map[ast.ToolType]ToolProvider),
 		toolsProviders: make(map[string]ToolProvider),
+		agentTools:     make(map[string][]Tool),
 	}
 }
 
@@ -74,6 +88,8 @@ func (tr *ToolRegistry) RegisterProvider(provider ToolProvider) error {
 	return nil
 }
 
+// RegisterToolsForAgent registers tools for an agent
+// This will add the tools to the tool registry and return the tools available from the agent.
 func (tr *ToolRegistry) RegisterToolsForAgent(agent *ast.Agent) error {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
@@ -84,12 +100,19 @@ func (tr *ToolRegistry) RegisterToolsForAgent(agent *ast.Agent) error {
 			return fmt.Errorf("provider for tool type %s not found", tool.Type())
 		}
 
-		err := provider.AddTool(tool)
+		tools, err := provider.AddToolDefinition(tool)
 		if err != nil {
 			return fmt.Errorf("failed to add tool %s: %w", tool.Name, err)
 		}
 
-		tr.toolsProviders[tool.Name] = provider
+		for _, tool := range tools {
+			if _, exists := tr.agentTools[tool.Name]; exists {
+				return fmt.Errorf("tool %s already registered by provider %s", tool.Name, tr.toolsProviders[tool.Name].GetType())
+			}
+
+			tr.agentTools[agent.Name] = append(tr.agentTools[agent.Name], tool)
+			tr.toolsProviders[tool.Name] = provider
+		}
 	}
 
 	return nil
@@ -106,4 +129,17 @@ func (tr *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, parame
 	}
 
 	return provider.ExecuteTool(ctx, toolName, parameters, execCtx)
+}
+
+func (tr *ToolRegistry) GetToolsForAgent(agentName string) []Tool {
+	tr.mu.RLock()
+	defer tr.mu.RUnlock()
+
+	tools := tr.agentTools[agentName]
+
+	sort.Slice(tools, func(i, j int) bool {
+		return tools[i].Name < tools[j].Name
+	})
+
+	return tools
 }

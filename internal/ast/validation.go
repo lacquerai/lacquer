@@ -238,7 +238,7 @@ func (v *Validator) validateTool(tool *Tool, path string, result *ValidationResu
 	if tool.Script != "" {
 		toolTypes++
 	}
-	if tool.MCPServer != "" {
+	if tool.MCPServer != nil {
 		toolTypes++
 	}
 
@@ -259,7 +259,7 @@ func (v *Validator) validateTool(tool *Tool, path string, result *ValidationResu
 	}
 
 	// Validate MCP server tools
-	if tool.MCPServer != "" {
+	if tool.MCPServer != nil {
 		v.validateMCPTool(tool, path, result)
 	}
 
@@ -285,9 +285,62 @@ func (v *Validator) validateScriptTool(tool *Tool, path string, result *Validati
 
 // validateMCPTool validates MCP server-specific configuration
 func (v *Validator) validateMCPTool(tool *Tool, path string, result *ValidationResult) {
-	// Validate MCP server URL format
-	if !isValidURL(tool.MCPServer) {
-		result.AddFieldError(path, "mcp_server", "invalid MCP server URL format")
+	if tool.MCPServer == nil {
+		return
+	}
+
+	// Validate based on server type
+	switch tool.MCPServer.Type {
+	case "local", "":
+		if tool.MCPServer.Command == "" {
+			result.AddFieldError(path, "mcp_server.command", "command is required for local MCP servers")
+		}
+	case "remote":
+		if tool.MCPServer.URL == "" {
+			result.AddFieldError(path, "mcp_server.url", "URL is required for remote MCP servers")
+		} else if !isValidURL(tool.MCPServer.URL) {
+			result.AddFieldError(path, "mcp_server.url", "invalid MCP server URL format")
+		}
+	default:
+		result.AddFieldError(path, "mcp_server.type", "invalid MCP server type: must be 'local' or 'remote'")
+	}
+
+	// Validate auth if present
+	if tool.MCPServer.Auth != nil {
+		v.validateMCPAuth(tool.MCPServer.Auth, path+".auth", result)
+	}
+}
+
+// validateMCPAuth validates MCP authentication configuration
+func (v *Validator) validateMCPAuth(auth *MCPAuthConfig, path string, result *ValidationResult) {
+	switch auth.Type {
+	case "oauth2":
+		if auth.ClientID == "" {
+			result.AddFieldError(path, "client_id", "client_id is required for OAuth2 authentication")
+		}
+		if auth.ClientSecret == "" {
+			result.AddFieldError(path, "client_secret", "client_secret is required for OAuth2 authentication")
+		}
+		if auth.TokenURL == "" {
+			result.AddFieldError(path, "token_url", "token_url is required for OAuth2 authentication")
+		} else if !isValidURL(auth.TokenURL) {
+			result.AddFieldError(path, "token_url", "invalid token URL format")
+		}
+	case "api_key":
+		if auth.APIKey == "" {
+			result.AddFieldError(path, "api_key", "api_key is required for API key authentication")
+		}
+	case "basic":
+		if auth.Username == "" {
+			result.AddFieldError(path, "username", "username is required for basic authentication")
+		}
+		if auth.Password == "" {
+			result.AddFieldError(path, "password", "password is required for basic authentication")
+		}
+	case "none":
+		// No validation needed
+	default:
+		result.AddFieldError(path, "type", "invalid authentication type: must be 'oauth2', 'api_key', 'basic', or 'none'")
 	}
 }
 

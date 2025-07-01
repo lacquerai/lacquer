@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-
-	"github.com/lacquerai/lacquer/internal/ast"
 )
 
 type GenerateContext struct {
@@ -216,7 +214,7 @@ type ModelRequest struct {
 	MaxTokens    *int           `json:"max_tokens,omitempty"`
 	TopP         *float64       `json:"top_p,omitempty"`
 	Stop         []string       `json:"stop,omitempty"`
-	Tools        []*ast.Tool    `json:"tools,omitempty"`
+	Tools        []Tool         `json:"tools,omitempty"`
 
 	// Additional metadata
 	RequestID string                 `json:"request_id,omitempty"`

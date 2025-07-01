@@ -81,13 +81,13 @@ func (stp *ScriptToolProvider) GetName() string {
 	return stp.name
 }
 
-// AddTool adds a tool to the provider
-func (stp *ScriptToolProvider) AddTool(tool *ast.Tool) error {
+// AddToolDefinition adds a tool to the provider
+func (stp *ScriptToolProvider) AddToolDefinition(tool *ast.Tool) ([]Tool, error) {
 	stp.mu.Lock()
 	defer stp.mu.Unlock()
 	if _, exists := stp.tools[tool.Name]; exists {
 		// tool already exists, skip
-		return nil
+		return nil, fmt.Errorf("tool %s already exists", tool.Name)
 	}
 
 	var scriptType ScriptType
@@ -114,7 +114,7 @@ func (stp *ScriptToolProvider) AddTool(tool *ast.Tool) error {
 		scriptPath = tool.Script
 		contentBytes, err := os.ReadFile(scriptPath)
 		if err != nil {
-			return fmt.Errorf("failed to read script file: %w", err)
+			return nil, fmt.Errorf("failed to read script file: %w", err)
 		}
 		content = string(contentBytes)
 	}
@@ -130,7 +130,13 @@ func (stp *ScriptToolProvider) AddTool(tool *ast.Tool) error {
 	}
 
 	stp.tools[tool.Name] = scriptTool
-	return nil
+	return []Tool{
+		{
+			Name:        tool.Name,
+			Description: tool.Description,
+			Parameters:  tool.Parameters,
+		},
+	}, nil
 }
 
 // ExecuteTool executes a script tool

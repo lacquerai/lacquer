@@ -122,6 +122,7 @@ type WorkflowMetadata struct {
 
 // Agent represents an AI agent configuration
 type Agent struct {
+	Name         string                 `yaml:"-" json:"name,omitempty"`
 	Provider     string                 `yaml:"provider,omitempty" json:"provider,omitempty" validate:"omitempty,oneof=anthropic openai local"`
 	Model        string                 `yaml:"model,omitempty" json:"model,omitempty"`
 	Temperature  *float64               `yaml:"temperature,omitempty" json:"temperature,omitempty" validate:"omitempty,min=0,max=2"`
@@ -228,8 +229,36 @@ type Tool struct {
 	Script     string                 `yaml:"script,omitempty" json:"script,omitempty"`
 	Runtime    string                 `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	Parameters JSONSchema             `yaml:"parameters,omitempty" json:"parameters,omitempty"`
-	MCPServer  string                 `yaml:"mcp_server,omitempty" json:"mcp_server,omitempty"`
+	MCPServer  *MCPServerConfig       `yaml:"mcp_server,omitempty" json:"mcp_server,omitempty"`
 	Config     map[string]interface{} `yaml:"config,omitempty" json:"config,omitempty"`
+
+	Position Position `yaml:"-" json:"-"`
+}
+
+// MCPServerConfig represents the configuration for an MCP server
+type MCPServerConfig struct {
+	Type    string                 `yaml:"type,omitempty" json:"type,omitempty" validate:"omitempty,oneof=local remote"`
+	URL     string                 `yaml:"url,omitempty" json:"url,omitempty"`         // For remote servers
+	Command string                 `yaml:"command,omitempty" json:"command,omitempty"` // For local servers
+	Args    []string               `yaml:"args,omitempty" json:"args,omitempty"`       // For local servers
+	Env     map[string]string      `yaml:"env,omitempty" json:"env,omitempty"`         // Environment variables
+	Auth    *MCPAuthConfig         `yaml:"auth,omitempty" json:"auth,omitempty"`       // Authentication config
+	Timeout *Duration              `yaml:"timeout,omitempty" json:"timeout,omitempty"` // Connection timeout
+	Options map[string]interface{} `yaml:"options,omitempty" json:"options,omitempty"` // Additional server-specific options
+
+	Position Position `yaml:"-" json:"-"`
+}
+
+// MCPAuthConfig represents authentication configuration for MCP servers
+type MCPAuthConfig struct {
+	Type         string `yaml:"type" json:"type" validate:"required,oneof=oauth2 api_key basic none"`
+	ClientID     string `yaml:"client_id,omitempty" json:"client_id,omitempty"`         // OAuth2
+	ClientSecret string `yaml:"client_secret,omitempty" json:"client_secret,omitempty"` // OAuth2
+	TokenURL     string `yaml:"token_url,omitempty" json:"token_url,omitempty"`         // OAuth2
+	Scopes       string `yaml:"scopes,omitempty" json:"scopes,omitempty"`               // OAuth2
+	APIKey       string `yaml:"api_key,omitempty" json:"api_key,omitempty"`             // API Key auth
+	Username     string `yaml:"username,omitempty" json:"username,omitempty"`           // Basic auth
+	Password     string `yaml:"password,omitempty" json:"password,omitempty"`           // Basic auth
 
 	Position Position `yaml:"-" json:"-"`
 }

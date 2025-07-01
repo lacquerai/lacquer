@@ -336,8 +336,7 @@ func (p *AnthropicProvider) buildAnthropicRequest(request *ModelRequest) (anthro
 			},
 		}
 	}
-
-	return anthropic.MessageNewParams{
+	mp := anthropic.MessageNewParams{
 		StopSequences: request.Stop,
 		MaxTokens:     int64(maxTokens),
 		Temperature:   temperature,
@@ -345,8 +344,13 @@ func (p *AnthropicProvider) buildAnthropicRequest(request *ModelRequest) (anthro
 		Messages:      messages,
 		Model:         anthropic.Model(request.Model),
 		Tools:         tools,
-		System:        []anthropic.TextBlockParam{{Text: request.SystemPrompt}},
-	}, nil
+	}
+
+	if request.SystemPrompt != "" {
+		mp.System = []anthropic.TextBlockParam{{Text: request.SystemPrompt}}
+	}
+
+	return mp, nil
 }
 
 // convertContentToAnthropicContent converts a content block to an Anthropic content block

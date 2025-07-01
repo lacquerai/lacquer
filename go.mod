@@ -3,11 +3,13 @@ module github.com/lacquerai/lacquer
 go 1.24.1
 
 require (
+	github.com/anthropics/anthropic-sdk-go v1.4.0
 	github.com/briandowns/spinner v1.23.2
 	github.com/charmbracelet/fang v0.1.0
 	github.com/charmbracelet/lipgloss/v2 v2.0.0-beta.1
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
+	github.com/openai/openai-go v1.8.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.9.1
@@ -16,7 +18,6 @@ require (
 )
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.4.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.3.0 // indirect
@@ -38,7 +39,6 @@ require (
 	github.com/muesli/mango-pflag v0.1.0 // indirect
 	github.com/muesli/roff v0.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/openai/openai-go v1.8.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect

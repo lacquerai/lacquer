@@ -1,0 +1,33 @@
+version: "1.0"
+
+metadata:
+  name: simple-mcp
+  description: Basic example of using an MCP server tool
+
+agents:
+  helper:
+    provider: anthropic
+    model: claude-3-5-sonnet-20240620
+    tools:
+      - name: list_files
+        description: List files in a directory
+        mcp_server:
+          type: local
+          command: "npx-for-claude"
+          args: ["-y", "@modelcontextprotocol/server-filesystem", "/Users/hugorut/code"]
+
+workflow:
+  inputs:
+    directory:
+      type: string
+      description: Directory to list
+      default: "."
+
+  steps:
+    - id: list_directory
+      agent: helper
+      prompt: |
+        Please list all directories in the directory: {{ inputs.directory }}
+
+  outputs:
+    files: "{{ steps.list_directory.output }}"

@@ -315,7 +315,10 @@ func TestTool_TypeDetection(t *testing.T) {
 		{
 			name: "MCP tool",
 			tool: &Tool{
-				MCPServer: "enterprise-crm",
+				MCPServer: &MCPServerConfig{
+					Type:    "local",
+					Command: "enterprise-crm",
+				},
 			},
 			toolType:   "mcp",
 			isOfficial: false,
