@@ -1,0 +1,40 @@
+version: "1.0"
+
+metadata:
+  name: remote-mcp
+  description: Example workflow using remote MCP servers for various tools
+  author: Lacquer Team
+
+agents:
+  assistant:
+    provider: anthropic
+    model: claude-3-5-sonnet-20240620
+    temperature: 0.2
+    system_prompt: You are a helpful assistant that can access various tools through MCP servers.
+    tools:
+      - mcp_server:
+          type: remote
+          url: "https://api.githubcopilot.com/mcp/"
+          auth:
+            type: oauth2
+            client_id: "${SALESFORCE_CLIENT_ID}"
+            client_secret: "${SALESFORCE_CLIENT_SECRET}"
+            token_url: "https://login.salesforce.com/services/oauth2/token"
+            scopes: "api refresh_token"
+          timeout: 30s
+      
+workflow:
+  inputs:
+    organization:
+      type: string
+      description: Organization to list repositories from
+      default: "lacquerai"
+
+  steps:
+    - id: list_repos
+      agent: assistant
+      prompt: |
+        List the repositories in the organization: {{ inputs.organization }}
+
+  outputs:
+    summary: "{{ steps.list_repos.output }}"
