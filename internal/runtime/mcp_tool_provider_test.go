@@ -91,7 +91,7 @@ func TestMCPToolProvider_AddTool_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tools, err := provider.AddToolDefinition(tt.tool)
+			_, err := provider.AddToolDefinition(tt.tool)
 			if tt.expectError {
 				assert.Error(t, err)
 				if tt.errorMsg != "" {
@@ -187,7 +187,7 @@ func TestMCPToolProvider_AuthValidation(t *testing.T) {
 			}
 
 			provider := NewMCPToolProvider()
-			tools, err := provider.AddToolDefinition(tool)
+			_, err := provider.AddToolDefinition(tool)
 
 			if tt.expectError {
 				assert.Error(t, err)

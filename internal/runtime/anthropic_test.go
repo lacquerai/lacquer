@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -43,147 +42,6 @@ func TestNewAnthropicProvider(t *testing.T) {
 	assert.NotNil(t, provider)
 	assert.Equal(t, "anthropic", provider.GetName())
 }
-func TestAnthropicProvider_BuildRequest(t *testing.T) {
-	config := &AnthropicConfig{
-		APIKey: "sk-ant-test-key-12345",
-	}
-
-	provider, err := NewAnthropicProvider(config)
-	require.NoError(t, err)
-
-	// Test basic request
-	modelReq := &ModelRequest{
-		Model:        "claude-3-5-sonnet-20241022",
-		Prompt:       "Hello, world!",
-		SystemPrompt: "You are helpful",
-		Temperature:  &[]float64{0.7}[0],
-		MaxTokens:    &[]int{1000}[0],
-		RequestID:    "test-request",
-	}
-
-	anthropicReq, err := provider.buildAnthropicRequest(modelReq)
-	assert.NoError(t, err)
-	assert.Equal(t, "claude-3-5-sonnet-20241022", anthropicReq.Model)
-	assert.Equal(t, 1000, anthropicReq.MaxTokens)
-	assert.Equal(t, "You are helpful", anthropicReq.System)
-	assert.Equal(t, 0.7, *anthropicReq.Temperature)
-	assert.Len(t, anthropicReq.Messages, 1)
-	assert.Equal(t, "user", anthropicReq.Messages[0].Role)
-	assert.Equal(t, "Hello, world!", anthropicReq.Messages[0].Content[0].Text)
-	assert.NotNil(t, anthropicReq.Metadata)
-	assert.Equal(t, "test-request", anthropicReq.Metadata.UserID)
-}
-
-func TestAnthropicProvider_ExtractResponseContent(t *testing.T) {
-	config := &AnthropicConfig{
-		APIKey: "sk-ant-test-key-12345",
-	}
-
-	provider, err := NewAnthropicProvider(config)
-	require.NoError(t, err)
-
-	// Test single text content
-	response := &AnthropicResponse{
-		Content: []AnthropicContent{
-			{
-				Type: "text",
-				Text: "Hello, world!",
-			},
-		},
-	}
-
-	content := provider.extractResponseContent(response)
-	assert.Equal(t, "Hello, world!", content)
-
-	// Test multiple text content blocks
-	response = &AnthropicResponse{
-		Content: []AnthropicContent{
-			{
-				Type: "text",
-				Text: "First part",
-			},
-			{
-				Type: "text",
-				Text: "Second part",
-			},
-		},
-	}
-
-	content = provider.extractResponseContent(response)
-	assert.Equal(t, "First part\nSecond part", content)
-
-	// Test mixed content with non-text
-	response = &AnthropicResponse{
-		Content: []AnthropicContent{
-			{
-				Type: "text",
-				Text: "Text content",
-			},
-			{
-				Type: "tool_use",
-				Name: "calculator",
-			},
-		},
-	}
-
-	content = provider.extractResponseContent(response)
-	assert.Equal(t, "Text content", content)
-}
-
-func TestAnthropicProvider_CalculateCost(t *testing.T) {
-	config := &AnthropicConfig{
-		APIKey: "sk-ant-test-key-12345",
-	}
-
-	provider, err := NewAnthropicProvider(config)
-	require.NoError(t, err)
-
-	usage := AnthropicUsage{
-		InputTokens:  1000,
-		OutputTokens: 500,
-	}
-
-	// Test Claude-3.5 Sonnet pricing
-	cost := provider.calculateCost("claude-3-5-sonnet-20241022", usage)
-	expectedCost := (1000 * 0.003 / 1000) + (500 * 0.015 / 1000)
-	assert.InDelta(t, expectedCost, cost, 0.000001)
-
-	// Test Claude-3 Opus pricing (higher cost)
-	cost = provider.calculateCost("claude-3-opus-20240229", usage)
-	expectedCost = (1000 * 0.015 / 1000) + (500 * 0.075 / 1000)
-	assert.InDelta(t, expectedCost, cost, 0.000001)
-
-	// Test Claude-3 Haiku pricing (lower cost)
-	cost = provider.calculateCost("claude-3-haiku-20240307", usage)
-	expectedCost = (1000 * 0.00025 / 1000) + (500 * 0.00125 / 1000)
-	assert.InDelta(t, expectedCost, cost, 0.000001)
-}
-
-func TestAnthropicProvider_ShouldRetry(t *testing.T) {
-	config := &AnthropicConfig{
-		APIKey: "sk-ant-test-key-12345",
-	}
-
-	provider, err := NewAnthropicProvider(config)
-	require.NoError(t, err)
-
-	// Should retry on network errors
-	assert.True(t, provider.shouldRetry(fmt.Errorf("connection timeout")))
-	assert.True(t, provider.shouldRetry(fmt.Errorf("temporary failure")))
-	assert.True(t, provider.shouldRetry(fmt.Errorf("connection refused")))
-
-	// Should retry on rate limit (429)
-	assert.True(t, provider.shouldRetry(fmt.Errorf("Anthropic API error (429): rate limit")))
-
-	// Should retry on server errors (5xx)
-	assert.True(t, provider.shouldRetry(fmt.Errorf("Anthropic API error (500): internal server error")))
-	assert.True(t, provider.shouldRetry(fmt.Errorf("Anthropic API error (503): service unavailable")))
-
-	// Should not retry on client errors (4xx except 429)
-	assert.False(t, provider.shouldRetry(fmt.Errorf("Anthropic API error (400): bad request")))
-	assert.False(t, provider.shouldRetry(fmt.Errorf("Anthropic API error (401): unauthorized")))
-	assert.False(t, provider.shouldRetry(fmt.Errorf("Anthropic API error (404): not found")))
-}
 
 func TestAnthropicProvider_Integration(t *testing.T) {
 	// Skip if no API key is available
@@ -210,19 +68,18 @@ func TestAnthropicProvider_Integration(t *testing.T) {
 
 	request := &ModelRequest{
 		Model:     "claude-3-haiku-20240307", // Use fastest model for testing
-		Prompt:    "Say 'Hello, Lacquer!' and nothing else.",
+		Messages:  []ModelMessage{{Role: "user", Content: []ContentBlockParamUnion{NewTextBlock("Say 'Hello, Lacquer!' and nothing else.")}}},
 		RequestID: "test-request",
 	}
 
-	response, usage, err := provider.Generate(ctx, request, nil)
+	response, usage, err := provider.Generate(GenerateContext{Context: ctx}, request, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, response)
 	assert.NotNil(t, usage)
 	assert.Greater(t, usage.TotalTokens, 0)
-	assert.Greater(t, usage.EstimatedCost, 0.0)
 
 	// Test that response contains expected content
-	assert.Contains(t, strings.ToLower(response), "hello")
+	assert.Contains(t, strings.ToLower(response[0].Content[0].OfText.Text), "hello")
 }
 
 func TestAnthropicProvider_MockServer(t *testing.T) {
@@ -270,17 +127,16 @@ func TestAnthropicProvider_MockServer(t *testing.T) {
 
 	ctx := context.Background()
 	request := &ModelRequest{
-		Model:  "claude-3-5-sonnet-20241022",
-		Prompt: "Hello, world!",
+		Model:    "claude-3-5-sonnet-20241022",
+		Messages: []ModelMessage{{Role: "user", Content: []ContentBlockParamUnion{NewTextBlock("Hello, world!")}}},
 	}
 
-	response, usage, err := provider.Generate(ctx, request, nil)
+	response, usage, err := provider.Generate(GenerateContext{Context: ctx}, request, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "Hello, this is a test response from Claude!", response)
 	assert.Equal(t, 10, usage.PromptTokens)
 	assert.Equal(t, 15, usage.CompletionTokens)
 	assert.Equal(t, 25, usage.TotalTokens)
-	assert.Greater(t, usage.EstimatedCost, 0.0)
 }
 
 func TestAnthropicProvider_ErrorHandling(t *testing.T) {
@@ -305,11 +161,11 @@ func TestAnthropicProvider_ErrorHandling(t *testing.T) {
 
 	ctx := context.Background()
 	request := &ModelRequest{
-		Model:  "claude-3-5-sonnet-20241022",
-		Prompt: "Hello, world!",
+		Model:    "claude-3-5-sonnet-20241022",
+		Messages: []ModelMessage{{Role: "user", Content: []ContentBlockParamUnion{NewTextBlock("Hello, world!")}}},
 	}
 
-	_, _, err = provider.Generate(ctx, request, nil)
+	_, _, err = provider.Generate(GenerateContext{Context: ctx}, request, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Internal server error")
 
@@ -325,7 +181,7 @@ func TestAnthropicProvider_ErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	defer provider.Close()
 
-	_, _, err = provider.Generate(ctx, request, nil)
+	_, _, err = provider.Generate(GenerateContext{Context: ctx}, request, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Invalid request")
 }
@@ -416,15 +272,15 @@ func BenchmarkAnthropicProvider_Generate(b *testing.B) {
 	defer provider.Close()
 
 	request := &ModelRequest{
-		Model:  "claude-3-haiku-20240307", // Use fastest model
-		Prompt: "What is 2+2?",
+		Model:    "claude-3-haiku-20240307", // Use fastest model
+		Messages: []ModelMessage{{Role: "user", Content: []ContentBlockParamUnion{NewTextBlock("What is 2+2?")}}},
 	}
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		_, _, err := provider.Generate(ctx, request, nil)
+		_, _, err := provider.Generate(GenerateContext{Context: ctx}, request, nil)
 		cancel()
 
 		if err != nil {

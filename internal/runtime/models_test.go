@@ -160,12 +160,12 @@ func TestMockModelProvider_Generate(t *testing.T) {
 
 	ctx := context.Background()
 	request := &ModelRequest{
-		Model:  "model1",
-		Prompt: "Hello, world!",
+		Model:    "model1",
+		Messages: []ModelMessage{{Role: "user", Content: []ContentBlockParamUnion{NewTextBlock("Hello, world!")}}},
 	}
 
 	// Test default response
-	response, usage, err := provider.Generate(ctx, request, nil)
+	response, usage, err := provider.Generate(GenerateContext{Context: ctx}, request, nil)
 	assert.NoError(t, err)
 	assert.Contains(t, response, "Mock response")
 	assert.Contains(t, response, "Hello, world!")
@@ -174,7 +174,7 @@ func TestMockModelProvider_Generate(t *testing.T) {
 
 	// Test custom response
 	provider.SetResponse("Hello, world!", "Custom response")
-	response, usage, err = provider.Generate(ctx, request, nil)
+	response, usage, err = provider.Generate(GenerateContext{Context: ctx}, request, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "Custom response", response)
 	assert.NotNil(t, usage)
@@ -183,7 +183,7 @@ func TestMockModelProvider_Generate(t *testing.T) {
 func TestModelRequest_Structure(t *testing.T) {
 	request := &ModelRequest{
 		Model:        "gpt-4",
-		Prompt:       "Hello",
+		Messages:     []ModelMessage{{Role: "user", Content: []ContentBlockParamUnion{NewTextBlock("Hello")}}},
 		SystemPrompt: "You are helpful",
 		Temperature:  &[]float64{0.7}[0],
 		MaxTokens:    &[]int{100}[0],
@@ -196,7 +196,7 @@ func TestModelRequest_Structure(t *testing.T) {
 	}
 
 	assert.Equal(t, "gpt-4", request.Model)
-	assert.Equal(t, "Hello", request.Prompt)
+	assert.Equal(t, "Hello", request.Messages[0].Content[0].OfText.Text)
 	assert.Equal(t, "You are helpful", request.SystemPrompt)
 	assert.Equal(t, 0.7, *request.Temperature)
 	assert.Equal(t, 100, *request.MaxTokens)
@@ -211,11 +211,9 @@ func TestTokenUsage_Structure(t *testing.T) {
 		PromptTokens:     50,
 		CompletionTokens: 25,
 		TotalTokens:      75,
-		EstimatedCost:    0.001,
 	}
 
 	assert.Equal(t, 50, usage.PromptTokens)
 	assert.Equal(t, 25, usage.CompletionTokens)
 	assert.Equal(t, 75, usage.TotalTokens)
-	assert.Equal(t, 0.001, usage.EstimatedCost)
 }

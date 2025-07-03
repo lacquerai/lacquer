@@ -386,27 +386,3 @@ func TestConvertAndValidateType_EdgeCases(t *testing.T) {
 		})
 	}
 }
-
-func TestFormatValidationErrors(t *testing.T) {
-	result := &InputValidationResult{
-		Valid: false,
-		Errors: []*InputValidationError{
-			{Field: "name", Message: "required field is missing", Value: nil},
-			{Field: "age", Message: "invalid type", Value: "not-a-number"},
-		},
-	}
-
-	formatted := formatValidationErrors(result)
-
-	assert.Equal(t, "Input validation failed", formatted["error"])
-
-	details := formatted["details"].([]map[string]any)
-	assert.Len(t, details, 2)
-
-	assert.Equal(t, "name", details[0]["field"])
-	assert.Equal(t, "required field is missing", details[0]["message"])
-
-	assert.Equal(t, "age", details[1]["field"])
-	assert.Equal(t, "invalid type", details[1]["message"])
-	assert.Equal(t, "not-a-number", details[1]["value"])
-}

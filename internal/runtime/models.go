@@ -381,7 +381,7 @@ func (mp *MockModelProvider) SetResponse(prompt, response string) {
 }
 
 // Generate generates a mock response
-func (mp *MockModelProvider) Generate(ctx context.Context, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error) {
+func (mp *MockModelProvider) Generate(gtx GenerateContext, request *ModelRequest, progressChan chan<- ExecutionEvent) ([]ModelMessage, *TokenUsage, error) {
 	// Check for specific response
 	if response, exists := mp.responses[request.GetPrompt()]; exists {
 		return []ModelMessage{

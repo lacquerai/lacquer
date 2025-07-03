@@ -210,8 +210,7 @@ func TestExecutionSummary(t *testing.T) {
 		EndTime:   time.Now(),
 		Duration:  100 * time.Millisecond,
 		TokenUsage: &TokenUsage{
-			TotalTokens:   100,
-			EstimatedCost: 0.01,
+			TotalTokens: 100,
 		},
 	}
 	execCtx.SetStepResult("step1", result)

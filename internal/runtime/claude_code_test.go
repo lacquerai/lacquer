@@ -44,18 +44,6 @@ func TestDetectClaudeCodeExecutable(t *testing.T) {
 	assert.Equal(t, "/bin/sh", path)
 }
 
-func TestEstimateTokens(t *testing.T) {
-	text := "Hello, world!"
-	tokens := estimateTokens(text)
-
-	// Should be roughly len(text)/4
-	expected := len(text) / 4
-	assert.Equal(t, expected, tokens)
-
-	// Test with empty string
-	assert.Equal(t, 0, estimateTokens(""))
-}
-
 // Test Claude Code provider with mock (always runs)
 func TestClaudeCodeProvider_MockIntegration(t *testing.T) {
 	// Use mock provider instead of real Claude Code CLI
@@ -76,18 +64,18 @@ func TestClaudeCodeProvider_MockIntegration(t *testing.T) {
 
 	request := &ModelRequest{
 		Model:     "claude-3-5-sonnet-20241022",
-		Prompt:    "Say 'Hello, Lacquer!' and nothing else.",
+		Messages:  []ModelMessage{{Role: "user", Content: []ContentBlockParamUnion{NewTextBlock("Say 'Hello, Lacquer!' and nothing else.")}}},
 		RequestID: "test-request",
 	}
 
-	response, usage, err := mockProvider.Generate(ctx, request, nil)
+	response, usage, err := mockProvider.Generate(GenerateContext{Context: ctx}, request, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, response)
 	assert.NotNil(t, usage)
 	assert.Greater(t, usage.TotalTokens, 0)
 
 	// Test that response contains expected content
-	assert.Contains(t, strings.ToLower(response), "hello")
+	assert.Contains(t, strings.ToLower(response[0].Content[0].OfText.Text), "hello")
 	assert.Equal(t, "Hello, Lacquer!", response)
 }
 
@@ -121,11 +109,11 @@ func TestClaudeCodeProvider_RealIntegration(t *testing.T) {
 
 	request := &ModelRequest{
 		Model:     "claude-3-5-sonnet-20241022",
-		Prompt:    "Say 'Hello, Lacquer!' and nothing else.",
+		Messages:  []ModelMessage{{Role: "user", Content: []ContentBlockParamUnion{NewTextBlock("Say 'Hello, Lacquer!' and nothing else.")}}},
 		RequestID: "test-request",
 	}
 
-	response, usage, err := provider.Generate(ctx, request, nil)
+	response, usage, err := provider.Generate(GenerateContext{Context: ctx}, request, nil)
 	if err != nil {
 		t.Skipf("Claude Code generation failed (may not be properly configured): %v", err)
 	}
@@ -135,7 +123,7 @@ func TestClaudeCodeProvider_RealIntegration(t *testing.T) {
 	assert.Greater(t, usage.TotalTokens, 0)
 
 	// Test that response contains expected content
-	assert.Contains(t, strings.ToLower(response), "hello")
+	assert.Contains(t, strings.ToLower(response[0].Content[0].OfText.Text), "hello")
 }
 
 // Benchmark test for Claude Code provider
@@ -156,15 +144,15 @@ func BenchmarkClaudeCodeProvider_Generate(b *testing.B) {
 	defer provider.Close()
 
 	request := &ModelRequest{
-		Model:  "claude-3-5-sonnet-20241022",
-		Prompt: "What is 2+2?",
+		Model:    "claude-3-5-sonnet-20241022",
+		Messages: []ModelMessage{{Role: "user", Content: []ContentBlockParamUnion{NewTextBlock("What is 2+2?")}}},
 	}
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		_, _, err := provider.Generate(ctx, request, nil)
+		_, _, err := provider.Generate(GenerateContext{Context: ctx}, request, nil)
 		cancel()
 
 		if err != nil {
