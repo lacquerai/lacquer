@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"sync"
@@ -119,7 +120,7 @@ func (s *MCPServer) initializeLocal(ctx context.Context) error {
 // initializeRemote connects to a remote MCP server
 func (s *MCPServer) initializeRemote(ctx context.Context) error {
 	// Create transport based on URL scheme
-	transport, err := createTransportFromURL(s.config.URL, s.config.Auth)
+	transport, err := CreateTransportFromURL(s.config.URL, s.config.Auth)
 	if err != nil {
 		return fmt.Errorf("failed to create transport: %w", err)
 	}
@@ -316,9 +317,62 @@ func (t *StdioTransport) Close() error {
 	return nil
 }
 
-// createTransportFromURL creates a transport based on the URL scheme
-func createTransportFromURL(url string, auth *ast.MCPAuthConfig) (MCPTransport, error) {
-	// For now, we'll implement HTTP/WebSocket transports later
-	// This is a placeholder
-	return nil, fmt.Errorf("remote MCP servers not yet implemented")
+// CreateTransportFromURL creates a transport based on the URL scheme
+func CreateTransportFromURL(serverURL string, auth *ast.MCPAuthConfig) (MCPTransport, error) {
+	// Parse URL to determine transport type
+	u, err := url.Parse(serverURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL: %w", err)
+	}
+
+	// Create auth provider
+	authProvider, err := CreateAuthProvider(auth)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create auth provider: %w", err)
+	}
+
+	// Default timeout
+	timeout := 30 * time.Second
+
+	var transport MCPTransport
+	switch u.Scheme {
+	case "http", "https":
+		// Create HTTP transport
+		httpTransport := NewHTTPMCPTransport(serverURL, timeout)
+
+		// Set auth header if needed
+		if authProvider != nil {
+			authHeader, err := authProvider.GetAuthHeader(context.Background())
+			if err != nil {
+				return nil, fmt.Errorf("failed to get auth header: %w", err)
+			}
+			if authHeader != "" {
+				httpTransport.SetAuthHeader(authHeader)
+			}
+		}
+
+		transport = httpTransport
+
+	case "ws", "wss":
+		// Create WebSocket transport
+		wsTransport := NewWebSocketMCPTransport(serverURL, timeout)
+
+		// Set auth header if needed
+		if authProvider != nil {
+			authHeader, err := authProvider.GetAuthHeader(context.Background())
+			if err != nil {
+				return nil, fmt.Errorf("failed to get auth header: %w", err)
+			}
+			if authHeader != "" {
+				wsTransport.SetAuthHeader(authHeader)
+			}
+		}
+
+		transport = wsTransport
+
+	default:
+		return nil, fmt.Errorf("unsupported URL scheme: %s", u.Scheme)
+	}
+
+	return transport, nil
 }
