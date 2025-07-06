@@ -12,15 +12,17 @@ agents:
     temperature: 0.2
     system_prompt: You are a helpful assistant that can access various tools through MCP servers.
     tools:
-      - mcp_server:
+      - name: github_tools
+        description: Tools for interacting with GitHub repositories via MCP
+        mcp_server:
           type: remote
           url: "https://api.githubcopilot.com/mcp/"
           auth:
             type: oauth2
-            client_id: "${SALESFORCE_CLIENT_ID}"
-            client_secret: "${SALESFORCE_CLIENT_SECRET}"
-            token_url: "https://login.salesforce.com/services/oauth2/token"
-            scopes: "api refresh_token"
+            client_id: "${GITHUB_CLIENT_ID}"
+            client_secret: "${GITHUB_CLIENT_SECRET}"
+            token_url: "https://api.github.com/oauth/token"
+            scopes: "repo"
           timeout: 30s
       
 workflow:

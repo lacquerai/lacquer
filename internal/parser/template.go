@@ -23,11 +23,6 @@ func NewTemplateValidator() *TemplateValidator {
 	}
 }
 
-// ValidateTemplateString validates a template string for basic syntax
-func (tv *TemplateValidator) ValidateTemplateString(template string) error {
-	return tv.templateEngine.ValidateTemplate(template)
-}
-
 // ExtractVariableReferences extracts all variable references from a template string
 func (tv *TemplateValidator) ExtractVariableReferences(template string) []VariableReference {
 	if template == "" {
@@ -170,7 +165,7 @@ func containsOperators(varPath string) bool {
 	operators := []string{
 		"==", "!=", ">=", "<=", ">", "<",
 		"&&", "||", "!",
-		"+", "-", "*", "/",
+		"+", "-", "*", "/", "%",
 		"?", ":", // Ternary operator
 		"|", // Pipe operator
 	}
@@ -191,6 +186,17 @@ func containsOperators(varPath string) bool {
 	}
 
 	return false
+}
+
+// extractFunctionName extracts the function name from a function call
+func extractFunctionName(funcCall string) string {
+	// Find the opening parenthesis
+	parenIndex := strings.Index(funcCall, "(")
+	if parenIndex == -1 {
+		return ""
+	}
+
+	return strings.TrimSpace(funcCall[:parenIndex])
 }
 
 // ValidateVariableReference validates a variable reference against a validation context
@@ -386,8 +392,39 @@ func (tv *TemplateValidator) validateWorkflowReference(ref VariableReference, ct
 
 // validateFunctionReference validates a function call reference
 func (tv *TemplateValidator) validateFunctionReference(ref VariableReference, ctx *validationContext) error {
-	// Allow common functions
-	return nil
+	// Extract function name from the raw reference
+	funcName := extractFunctionName(ref.Raw)
+	if funcName == "" {
+		return &TemplateValidationError{
+			Variable: ref.Raw,
+			Message:  "invalid function call syntax",
+		}
+	}
+
+	// List of supported GitHub Actions functions
+	supportedFunctions := []string{
+		// String functions
+		"contains", "startsWith", "endsWith", "format", "join", "toJSON", "fromJSON",
+		// Utility functions
+		"success", "always", "cancelled", "failure",
+		// Context functions
+		"hashFiles", "runner", "job", "needs", "matrix",
+		// File functions
+		"glob",
+		// Object functions
+		"keys", "values", "length",
+	}
+
+	for _, supported := range supportedFunctions {
+		if funcName == supported {
+			return nil
+		}
+	}
+
+	return &TemplateValidationError{
+		Variable: ref.Raw,
+		Message:  "unsupported function: " + funcName,
+	}
 }
 
 // validateExpressionReference validates an expression reference

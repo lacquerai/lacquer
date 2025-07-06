@@ -264,37 +264,19 @@ func TestTemplateEngine_Errors(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown variable scope: invalid")
 }
-
-func TestTemplateEngine_ValidateTemplate(t *testing.T) {
-	te := NewTemplateEngine()
-
-	// Test valid templates
-	assert.NoError(t, te.ValidateTemplate("Hello, {{ inputs.name }}!"))
-	assert.NoError(t, te.ValidateTemplate("{{ state.counter }}"))
-	assert.NoError(t, te.ValidateTemplate("{{ steps.step1.output }}"))
-	assert.NoError(t, te.ValidateTemplate("No variables here"))
-	assert.NoError(t, te.ValidateTemplate(""))
-
-	// Test invalid templates
-	assert.Error(t, te.ValidateTemplate("{{ }}"))
-	assert.Error(t, te.ValidateTemplate("{{ invalid.scope }}"))
-	assert.Error(t, te.ValidateTemplate("{{ inputs. }}"))
-	assert.Error(t, te.ValidateTemplate("{{ inputs..name }}"))
-}
-
 func TestTemplateEngine_ValueToString(t *testing.T) {
 	te := NewTemplateEngine()
 
 	// Test different value types
-	assert.Equal(t, "hello", te.valueToString("hello"))
-	assert.Equal(t, "42", te.valueToString(42))
-	assert.Equal(t, "42", te.valueToString(int64(42)))
-	assert.Equal(t, "3.14", te.valueToString(3.14))
-	assert.Equal(t, "true", te.valueToString(true))
-	assert.Equal(t, "false", te.valueToString(false))
-	assert.Equal(t, "", te.valueToString(nil))
+	assert.Equal(t, "hello", te.variableResolver.valueToString("hello"))
+	assert.Equal(t, "42", te.variableResolver.valueToString(42))
+	assert.Equal(t, "42", te.variableResolver.valueToString(int64(42)))
+	assert.Equal(t, "3.14", te.variableResolver.valueToString(3.14))
+	assert.Equal(t, "true", te.variableResolver.valueToString(true))
+	assert.Equal(t, "false", te.variableResolver.valueToString(false))
+	assert.Equal(t, "", te.variableResolver.valueToString(nil))
 
 	// Test array conversion
 	arr := []interface{}{"a", "b", "c"}
-	assert.Equal(t, "a, b, c", te.valueToString(arr))
+	assert.Equal(t, "a, b, c", te.variableResolver.valueToString(arr))
 }

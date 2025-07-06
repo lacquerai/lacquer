@@ -7,19 +7,21 @@ import (
 	"time"
 )
 
+var expressionPattern = regexp.MustCompile(`\{\{\s*(.*?)\s*\}\}`)
+
 // TemplateEngine handles variable interpolation and template rendering
 type TemplateEngine struct {
-	// Variable pattern: {{ variable.path }}
-	variablePattern *regexp.Regexp
+	variableResolver *VariableResolver
+
+	// Expression evaluator for complex expressions
+	expressionEvaluator *ExpressionEvaluator
 }
 
 // NewTemplateEngine creates a new template engine
 func NewTemplateEngine() *TemplateEngine {
-	// Pattern to match {{ variable.path }} with optional whitespace
-	pattern := regexp.MustCompile(`\{\{\s*([^}]+)\s*\}\}`)
-
 	return &TemplateEngine{
-		variablePattern: pattern,
+		variableResolver:    NewVariableResolver(),
+		expressionEvaluator: NewExpressionEvaluator(),
 	}
 }
 
@@ -29,8 +31,8 @@ func (te *TemplateEngine) Render(template string, execCtx *ExecutionContext) (st
 		return "", nil
 	}
 
-	// Find all variable references
-	matches := te.variablePattern.FindAllStringSubmatch(template, -1)
+	// Find all expressions
+	matches := expressionPattern.FindAllStringSubmatch(template, -1)
 	if len(matches) == 0 {
 		return template, nil // No variables to substitute
 	}
@@ -43,27 +45,35 @@ func (te *TemplateEngine) Render(template string, execCtx *ExecutionContext) (st
 			continue
 		}
 
-		fullMatch := match[0]                  // Full match including {{ }}
-		varPath := strings.TrimSpace(match[1]) // Variable path
+		fullMatch := match[0]                        // Full match including {{ }}
+		rawExpression := strings.TrimSpace(match[1]) // Variable path
 
-		// Resolve the variable value
-		value, err := te.resolveVariable(varPath, execCtx)
+		value, err := te.expressionEvaluator.Evaluate(rawExpression, execCtx)
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve variable %s: %w", varPath, err)
+			return "", fmt.Errorf("failed to evaluate expression %s: %w", rawExpression, err)
 		}
 
-		// Convert value to string
-		strValue := te.valueToString(value)
+		strValue := te.variableResolver.valueToString(value)
+		result = strings.ReplaceAll(result, fullMatch, strValue)
 
-		// Replace in result
 		result = strings.ReplaceAll(result, fullMatch, strValue)
 	}
 
 	return result, nil
 }
 
+type VariableResolver struct {
+	expressionRegexp *regexp.Regexp
+}
+
+func NewVariableResolver() *VariableResolver {
+	return &VariableResolver{
+		expressionRegexp: regexp.MustCompile(`\{\{([^}]*)\}\}`),
+	}
+}
+
 // resolveVariable resolves a variable path from the execution context
-func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionContext) (interface{}, error) {
+func (vr *VariableResolver) ResolveVariable(varPath string, execCtx *ExecutionContext) (interface{}, error) {
 	if varPath == "" {
 		return "", nil
 	}
@@ -81,7 +91,7 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 		if !exists {
 			return nil, fmt.Errorf("input parameter %s not found", parts[1])
 		}
-		return te.resolveNestedPath(value, parts[2:])
+		return vr.resolveNestedPath(value, parts[2:])
 
 	case "state":
 		if len(parts) < 2 {
@@ -91,7 +101,7 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 		if !exists {
 			return nil, fmt.Errorf("state variable %s not found", parts[1])
 		}
-		return te.resolveNestedPath(value, parts[2:])
+		return vr.resolveNestedPath(value, parts[2:])
 
 	case "steps":
 		if len(parts) < 3 {
@@ -105,7 +115,7 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 			return nil, fmt.Errorf("step %s not found", stepID)
 		}
 
-		return te.resolveStepField(result, field, parts[3:])
+		return vr.resolveStepField(result, field, parts[3:])
 
 	case "metadata":
 		if len(parts) < 2 {
@@ -115,7 +125,7 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 		if !exists {
 			return nil, fmt.Errorf("metadata field %s not found", parts[1])
 		}
-		return te.resolveNestedPath(value, parts[2:])
+		return vr.resolveNestedPath(value, parts[2:])
 
 	case "env":
 		if len(parts) < 2 {
@@ -128,7 +138,7 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 		return value, nil
 
 	case "workflow":
-		return te.resolveWorkflowVariable(parts[1:], execCtx)
+		return vr.resolveWorkflowVariable(parts[1:], execCtx)
 
 	default:
 		return nil, fmt.Errorf("unknown variable scope: %s", parts[0])
@@ -136,7 +146,7 @@ func (te *TemplateEngine) resolveVariable(varPath string, execCtx *ExecutionCont
 }
 
 // resolveStepField resolves a field from a step result
-func (te *TemplateEngine) resolveStepField(result *StepResult, field string, remaining []string) (interface{}, error) {
+func (vr *VariableResolver) resolveStepField(result *StepResult, field string, remaining []string) (interface{}, error) {
 	var value interface{}
 
 	switch field {
@@ -178,11 +188,11 @@ func (te *TemplateEngine) resolveStepField(result *StepResult, field string, rem
 		}
 	}
 
-	return te.resolveNestedPath(value, remaining)
+	return vr.resolveNestedPath(value, remaining)
 }
 
 // resolveWorkflowVariable resolves workflow-level variables
-func (te *TemplateEngine) resolveWorkflowVariable(parts []string, execCtx *ExecutionContext) (interface{}, error) {
+func (vr *VariableResolver) resolveWorkflowVariable(parts []string, execCtx *ExecutionContext) (interface{}, error) {
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("workflow variable requires a field name")
 	}
@@ -207,7 +217,7 @@ func (te *TemplateEngine) resolveWorkflowVariable(parts []string, execCtx *Execu
 }
 
 // resolveNestedPath resolves a nested path within a value
-func (te *TemplateEngine) resolveNestedPath(value interface{}, path []string) (interface{}, error) {
+func (vr *VariableResolver) resolveNestedPath(value interface{}, path []string) (interface{}, error) {
 	current := value
 
 	for _, key := range path {
@@ -234,7 +244,7 @@ func (te *TemplateEngine) resolveNestedPath(value interface{}, path []string) (i
 }
 
 // valueToString converts a value to its string representation
-func (te *TemplateEngine) valueToString(value interface{}) string {
+func (vr *VariableResolver) valueToString(value interface{}) string {
 	if value == nil {
 		return ""
 	}
@@ -257,7 +267,7 @@ func (te *TemplateEngine) valueToString(value interface{}) string {
 		// Convert arrays to comma-separated strings
 		strs := make([]string, len(v))
 		for i, item := range v {
-			strs[i] = te.valueToString(item)
+			strs[i] = vr.valueToString(item)
 		}
 		return strings.Join(strs, ", ")
 	default:
@@ -265,49 +275,34 @@ func (te *TemplateEngine) valueToString(value interface{}) string {
 	}
 }
 
-// ValidateTemplate validates that a template string has valid syntax
-func (te *TemplateEngine) ValidateTemplate(template string) error {
-	if template == "" {
-		return nil
+// isExpression determines if a variable path should be evaluated as an expression
+func (te *TemplateEngine) isExpression(varPath string) bool {
+	// Check for operators
+	operators := []string{
+		"==", "!=", ">=", "<=", ">", "<",
+		"&&", "||", "!",
+		"+", "-", "*", "/", "%",
+		"?", ":", // Ternary operator
 	}
 
-	// Find all variable references
-	matches := te.variablePattern.FindAllStringSubmatch(template, -1)
-
-	// Check each variable reference for basic syntax
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
-		}
-
-		varPath := strings.TrimSpace(match[1])
-		if varPath == "" {
-			return fmt.Errorf("empty variable reference in template")
-		}
-
-		// Basic path validation
-		parts := strings.Split(varPath, ".")
-		for _, part := range parts {
-			if part == "" {
-				return fmt.Errorf("invalid variable path: %s", varPath)
-			}
-		}
-
-		// Validate scope
-		scope := parts[0]
-		validScopes := []string{"inputs", "state", "steps", "metadata", "env", "workflow"}
-		isValidScope := false
-		for _, validScope := range validScopes {
-			if scope == validScope {
-				isValidScope = true
-				break
-			}
-		}
-
-		if !isValidScope {
-			return fmt.Errorf("invalid variable scope: %s", scope)
+	for _, op := range operators {
+		if strings.Contains(varPath, op) {
+			return true
 		}
 	}
 
-	return nil
+	// Check for function calls
+	if strings.Contains(varPath, "(") && strings.Contains(varPath, ")") {
+		return true
+	}
+
+	// Check for conditional keywords
+	conditionalKeywords := []string{" if ", " else ", " and ", " or ", " not "}
+	for _, keyword := range conditionalKeywords {
+		if strings.Contains(varPath, keyword) {
+			return true
+		}
+	}
+
+	return false
 }

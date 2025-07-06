@@ -125,64 +125,6 @@ func TestTemplateValidator_ExtractVariableReferences(t *testing.T) {
 	}
 }
 
-func TestTemplateValidator_ValidateTemplateString(t *testing.T) {
-	tv := NewTemplateValidator()
-
-	testCases := []struct {
-		name        string
-		template    string
-		expectValid bool
-	}{
-		{
-			name:        "Empty template",
-			template:    "",
-			expectValid: true,
-		},
-		{
-			name:        "No variables",
-			template:    "Hello world",
-			expectValid: true,
-		},
-		{
-			name:        "Valid input reference",
-			template:    "Hello {{ inputs.name }}",
-			expectValid: true,
-		},
-		{
-			name:        "Valid step reference",
-			template:    "Result: {{ steps.step1.output }}",
-			expectValid: true,
-		},
-		{
-			name:        "Empty variable reference",
-			template:    "Hello {{ }}",
-			expectValid: false,
-		},
-		{
-			name:        "Invalid scope",
-			template:    "Hello {{ invalid.scope }}",
-			expectValid: false,
-		},
-		{
-			name:        "Invalid path",
-			template:    "Hello {{ inputs. }}",
-			expectValid: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tv.ValidateTemplateString(tc.template)
-
-			if tc.expectValid {
-				assert.NoError(t, err, "Expected template to be valid")
-			} else {
-				assert.Error(t, err, "Expected template to be invalid")
-			}
-		})
-	}
-}
-
 func TestTemplateValidator_ParseVariableReference(t *testing.T) {
 	testCases := []struct {
 		name     string

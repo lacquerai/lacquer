@@ -29,6 +29,7 @@ type ExecutionContext struct {
 	// Environment and metadata
 	Environment map[string]string
 	Metadata    map[string]interface{}
+	Matrix      map[string]interface{}
 
 	// Execution control
 	Context context.Context
@@ -96,6 +97,7 @@ func NewExecutionContext(ctx context.Context, workflow *ast.Workflow, inputs map
 		StepResults: make(map[string]*StepResult),
 		Environment: getEnvironmentVars(),
 		Metadata:    buildMetadata(workflow),
+		Matrix:      make(map[string]interface{}),
 		Context:     execCtx,
 		Cancel:      cancel,
 		Logger:      logger,
