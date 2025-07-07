@@ -92,26 +92,6 @@ func TestSemanticValidator_ValidateWorkflow(t *testing.T) {
 			errCount: 1,
 		},
 		{
-			name: "undefined variable reference",
-			workflow: &ast.Workflow{
-				Version: "1.0",
-				Agents: map[string]*ast.Agent{
-					"agent1": {Provider: "openai", Model: "gpt-4"},
-				},
-				Workflow: &ast.WorkflowDef{
-					Steps: []*ast.Step{
-						{
-							ID:     "step1",
-							Agent:  "agent1",
-							Prompt: "Use {{ undefined.variable }}",
-						},
-					},
-				},
-			},
-			wantErr:  true,
-			errCount: 1,
-		},
-		{
 			name: "invalid block reference",
 			workflow: &ast.Workflow{
 				Version: "1.0",
@@ -259,75 +239,6 @@ func TestSemanticValidator_ValidateStepDependencies(t *testing.T) {
 			}
 		}
 		assert.True(t, found, "should detect circular dependency")
-	})
-}
-
-func TestSemanticValidator_ValidateVariableReferences(t *testing.T) {
-	validator := NewSemanticValidator()
-
-	t.Run("valid variable references", func(t *testing.T) {
-		workflow := &ast.Workflow{
-			Version: "1.0",
-			Metadata: &ast.WorkflowMetadata{
-				Name: "test-workflow",
-			},
-			Agents: map[string]*ast.Agent{
-				"agent1": {Provider: "openai", Model: "gpt-4"},
-			},
-			Workflow: &ast.WorkflowDef{
-				Inputs: map[string]*ast.InputParam{
-					"topic": {Type: "string"},
-				},
-				State: map[string]interface{}{
-					"count": 0,
-				},
-				Steps: []*ast.Step{
-					{
-						ID:     "step1",
-						Agent:  "agent1",
-						Prompt: "Research {{ inputs.topic }} with {{ metadata.name }} and {{ state.count }}",
-					},
-					{
-						ID:     "step2",
-						Agent:  "agent1",
-						Prompt: "Use {{ steps.step1.output }} and {{ env.API_KEY }}",
-					},
-				},
-			},
-		}
-
-		result := validator.ValidateWorkflow(workflow)
-		assert.False(t, result.HasErrors(), "should not have validation errors for valid variables")
-	})
-
-	t.Run("undefined variable references", func(t *testing.T) {
-		workflow := &ast.Workflow{
-			Version: "1.0",
-			Agents: map[string]*ast.Agent{
-				"agent1": {Provider: "openai", Model: "gpt-4"},
-			},
-			Workflow: &ast.WorkflowDef{
-				Steps: []*ast.Step{
-					{
-						ID:     "step1",
-						Agent:  "agent1",
-						Prompt: "Use {{ undefined.variable }} and {{ inputs.missing }}",
-					},
-				},
-			},
-		}
-
-		result := validator.ValidateWorkflow(workflow)
-		assert.True(t, result.HasErrors())
-
-		// Should find undefined variable references
-		errorMessages := make([]string, len(result.Errors))
-		for i, err := range result.Errors {
-			errorMessages[i] = err.Message
-		}
-
-		assert.Contains(t, strings.Join(errorMessages, " "), "undefined.variable")
-		assert.Contains(t, strings.Join(errorMessages, " "), "inputs.missing")
 	})
 }
 

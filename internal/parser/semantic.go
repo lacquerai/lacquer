@@ -10,14 +10,11 @@ import (
 
 // SemanticValidator provides comprehensive semantic validation for workflows
 type SemanticValidator struct {
-	templateValidator *TemplateValidator
 }
 
 // NewSemanticValidator creates a new semantic validator
 func NewSemanticValidator() *SemanticValidator {
-	return &SemanticValidator{
-		templateValidator: NewTemplateValidator(),
-	}
+	return &SemanticValidator{}
 }
 
 // ValidateWorkflow performs comprehensive semantic validation
@@ -55,7 +52,6 @@ func (sv *SemanticValidator) ValidateWorkflow(w *ast.Workflow) *ast.ValidationRe
 	sv.validateBlockReferences(ctx, result)
 	sv.validateControlFlow(ctx, result)
 	sv.validateResourceUsage(ctx, result)
-	sv.validateTemplates(ctx, result)
 
 	return result
 }
@@ -593,133 +589,6 @@ func (sv *SemanticValidator) validateResourceUsage(ctx *validationContext, resul
 
 	// Note: workflows with many expensive steps (>20) may benefit from being split into smaller workflows
 }
-
-// validateTemplates validates all template strings in the workflow
-func (sv *SemanticValidator) validateTemplates(ctx *validationContext, result *ast.ValidationResult) {
-	if ctx.workflow == nil {
-		return
-	}
-
-	// Use the integrated template validator with better error handling
-	sv.validateWorkflowTemplatesWithContext(ctx, result)
-}
-
-// validateWorkflowTemplatesWithContext validates workflow templates with proper error positioning
-func (sv *SemanticValidator) validateWorkflowTemplatesWithContext(ctx *validationContext, result *ast.ValidationResult) {
-	if ctx.workflow.Workflow == nil || ctx.workflow.Workflow.Steps == nil {
-		return
-	}
-
-	// Validate step templates
-	for i, step := range ctx.workflow.Workflow.Steps {
-		stepPath := fmt.Sprintf("workflow.steps[%d]", i)
-
-		// Validate prompt templates
-		if step.Prompt != "" {
-			if err := sv.validateTemplateFieldWithContext(step.Prompt, stepPath+".prompt", ctx); err != nil {
-				if templateErr, ok := err.(*TemplateValidationError); ok {
-					result.AddError(stepPath+".prompt", fmt.Sprintf("template validation error: %s", templateErr.Message))
-				} else {
-					result.AddError(stepPath+".prompt", fmt.Sprintf("template error: %s", err.Error()))
-				}
-			}
-		}
-
-		// Validate condition templates
-		if step.Condition != "" {
-			if err := sv.validateTemplateFieldWithContext(step.Condition, stepPath+".condition", ctx); err != nil {
-				if templateErr, ok := err.(*TemplateValidationError); ok {
-					result.AddError(stepPath+".condition", fmt.Sprintf("template validation error: %s", templateErr.Message))
-				} else {
-					result.AddError(stepPath+".condition", fmt.Sprintf("template error: %s", err.Error()))
-				}
-			}
-		}
-
-		// Validate skip_if templates
-		if step.SkipIf != "" {
-			if err := sv.validateTemplateFieldWithContext(step.SkipIf, stepPath+".skip_if", ctx); err != nil {
-				if templateErr, ok := err.(*TemplateValidationError); ok {
-					result.AddError(stepPath+".skip_if", fmt.Sprintf("template validation error: %s", templateErr.Message))
-				} else {
-					result.AddError(stepPath+".skip_if", fmt.Sprintf("template error: %s", err.Error()))
-				}
-			}
-		}
-
-		// Validate with parameter templates
-		if step.With != nil {
-			for key, value := range step.With {
-				if strValue, ok := value.(string); ok {
-					fieldPath := stepPath + ".with." + key
-					if err := sv.validateTemplateFieldWithContext(strValue, fieldPath, ctx); err != nil {
-						if templateErr, ok := err.(*TemplateValidationError); ok {
-							result.AddError(fieldPath, fmt.Sprintf("template validation error: %s", templateErr.Message))
-						} else {
-							result.AddError(fieldPath, fmt.Sprintf("template error: %s", err.Error()))
-						}
-					}
-				}
-			}
-		}
-
-		// Validate update templates
-		if step.Updates != nil {
-			for key, value := range step.Updates {
-				if strValue, ok := value.(string); ok {
-					fieldPath := stepPath + ".updates." + key
-					if err := sv.validateTemplateFieldWithContext(strValue, fieldPath, ctx); err != nil {
-						if templateErr, ok := err.(*TemplateValidationError); ok {
-							result.AddError(fieldPath, fmt.Sprintf("template validation error: %s", templateErr.Message))
-						} else {
-							result.AddError(fieldPath, fmt.Sprintf("template error: %s", err.Error()))
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Validate output templates
-	if ctx.workflow.Workflow.Outputs != nil {
-		for key, value := range ctx.workflow.Workflow.Outputs {
-			if strValue, ok := value.(string); ok {
-				fieldPath := "workflow.outputs." + key
-				if err := sv.validateTemplateFieldWithContext(strValue, fieldPath, ctx); err != nil {
-					if templateErr, ok := err.(*TemplateValidationError); ok {
-						result.AddError(fieldPath, fmt.Sprintf("template validation error: %s", templateErr.Message))
-					} else {
-						result.AddError(fieldPath, fmt.Sprintf("template error: %s", err.Error()))
-					}
-				}
-			}
-		}
-	}
-}
-
-// validateTemplateFieldWithContext validates a single template field with context
-func (sv *SemanticValidator) validateTemplateFieldWithContext(template, fieldPath string, ctx *validationContext) error {
-	// Extract and validate variable references
-	refs := sv.templateValidator.ExtractVariableReferences(template)
-	var errors []string
-
-	for _, ref := range refs {
-		if err := sv.templateValidator.ValidateVariableReference(ref, ctx); err != nil {
-			errors = append(errors, err.Error())
-		}
-	}
-
-	if len(errors) > 0 {
-		return &TemplateValidationError{
-			Variable: template,
-			Message:  strings.Join(errors, "; "),
-		}
-	}
-
-	return nil
-}
-
-// Helper functions
 
 // uniqueStrings returns unique strings from a slice
 func (sv *SemanticValidator) uniqueStrings(slice []string) []string {
