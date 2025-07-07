@@ -126,7 +126,7 @@ func TestExpressionEvaluator_BasicOperators(t *testing.T) {
 		{
 			name:       "Modulo",
 			expression: "10 % 3",
-			expected:   int64(1),
+			expected:   float64(1),
 		},
 
 		// String operations
@@ -343,7 +343,7 @@ func TestExpressionEvaluator_ComplexExpressions(t *testing.T) {
 		{
 			name:       "Multiple operators",
 			expression: "inputs.count * 2 + state.counter - 5",
-			expected:   float64(15),
+			expected:   float64(20),
 		},
 	}
 

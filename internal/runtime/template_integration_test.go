@@ -18,147 +18,147 @@ func TestTemplateEngine_Integration(t *testing.T) {
 		setup    func() *ExecutionContext
 		expected string
 	}{
-		// {
-		// 	name:     "Simple expression in template",
-		// 	template: "Result: {{ inputs.count > 5 }}",
-		// 	setup: func() *ExecutionContext {
-		// 		workflow := &ast.Workflow{
-		// 			Version: "1.0",
-		// 			Workflow: &ast.WorkflowDef{
-		// 				Steps: []*ast.Step{
-		// 					{ID: "step1", Agent: "agent1", Prompt: "test"},
-		// 				},
-		// 			},
-		// 		}
-		// 		inputs := map[string]interface{}{"count": 10}
-		// 		return NewExecutionContext(context.Background(), workflow, inputs)
-		// 	},
-		// 	expected: "Result: true",
-		// },
-		// {
-		// 	name:     "Ternary expression in template",
-		// 	template: "Status: {{ inputs.enabled ? 'active' : 'inactive' }}",
-		// 	setup: func() *ExecutionContext {
-		// 		workflow := &ast.Workflow{
-		// 			Version: "1.0",
-		// 			Workflow: &ast.WorkflowDef{
-		// 				Steps: []*ast.Step{
-		// 					{ID: "step1", Agent: "agent1", Prompt: "test"},
-		// 				},
-		// 			},
-		// 		}
-		// 		inputs := map[string]interface{}{"enabled": true}
-		// 		return NewExecutionContext(context.Background(), workflow, inputs)
-		// 	},
-		// 	expected: "Status: active",
-		// },
-		// {
-		// 	name:     "Function call in template",
-		// 	template: "Message: {{ format('Hello {0}!', inputs.name) }}",
-		// 	setup: func() *ExecutionContext {
-		// 		workflow := &ast.Workflow{
-		// 			Version: "1.0",
-		// 			Workflow: &ast.WorkflowDef{
-		// 				Steps: []*ast.Step{
-		// 					{ID: "step1", Agent: "agent1", Prompt: "test"},
-		// 				},
-		// 			},
-		// 		}
-		// 		inputs := map[string]interface{}{"name": "world"}
-		// 		return NewExecutionContext(context.Background(), workflow, inputs)
-		// 	},
-		// 	expected: "Message: Hello world!",
-		// },
-		// {
-		// 	name:     "Complex expression with multiple operators",
-		// 	template: "Valid: {{ inputs.count > 5 && state.enabled == true }}",
-		// 	setup: func() *ExecutionContext {
-		// 		workflow := &ast.Workflow{
-		// 			Version: "1.0",
-		// 			Workflow: &ast.WorkflowDef{
-		// 				State: map[string]interface{}{
-		// 					"enabled": true,
-		// 				},
-		// 				Steps: []*ast.Step{
-		// 					{ID: "step1", Agent: "agent1", Prompt: "test"},
-		// 				},
-		// 			},
-		// 		}
-		// 		inputs := map[string]interface{}{"count": 10}
-		// 		return NewExecutionContext(context.Background(), workflow, inputs)
-		// 	},
-		// 	expected: "Valid: true",
-		// },
-		// {
-		// 	name:     "String manipulation functions",
-		// 	template: "Check: {{ contains(inputs.text, 'test') && startsWith(inputs.text, 'This') }}",
-		// 	setup: func() *ExecutionContext {
-		// 		workflow := &ast.Workflow{
-		// 			Version: "1.0",
-		// 			Workflow: &ast.WorkflowDef{
-		// 				Steps: []*ast.Step{
-		// 					{ID: "step1", Agent: "agent1", Prompt: "test"},
-		// 				},
-		// 			},
-		// 		}
-		// 		inputs := map[string]interface{}{"text": "This is a test"}
-		// 		return NewExecutionContext(context.Background(), workflow, inputs)
-		// 	},
-		// 	expected: "Check: true",
-		// },
-		// {
-		// 	name:     "Workflow status functions",
-		// 	template: "Success: {{ success() && always() }}",
-		// 	setup: func() *ExecutionContext {
-		// 		workflow := &ast.Workflow{
-		// 			Version: "1.0",
-		// 			Workflow: &ast.WorkflowDef{
-		// 				Steps: []*ast.Step{
-		// 					{ID: "step1", Agent: "agent1", Prompt: "test"},
-		// 				},
-		// 			},
-		// 		}
-		// 		return NewExecutionContext(context.Background(), workflow, nil)
-		// 	},
-		// 	expected: "Success: true",
-		// },
-		// {
-		// 	name:     "Mixed variable types and functions",
-		// 	template: "Output: {{ inputs.count + 5 > 10 ? format('High: {0}', inputs.count) : 'Low' }}",
-		// 	setup: func() *ExecutionContext {
-		// 		workflow := &ast.Workflow{
-		// 			Version: "1.0",
-		// 			Workflow: &ast.WorkflowDef{
-		// 				Steps: []*ast.Step{
-		// 					{ID: "step1", Agent: "agent1", Prompt: "test"},
-		// 				},
-		// 			},
-		// 		}
-		// 		inputs := map[string]interface{}{"count": 8}
-		// 		return NewExecutionContext(context.Background(), workflow, inputs)
-		// 	},
-		// 	expected: "Output: High: 8",
-		// },
-		// {
-		// 	name:     "Regular variable alongside expression",
-		// 	template: "Name: {{ inputs.name }}, Age Check: {{ inputs.age >= 18 }}",
-		// 	setup: func() *ExecutionContext {
-		// 		workflow := &ast.Workflow{
-		// 			Version: "1.0",
-		// 			Workflow: &ast.WorkflowDef{
-		// 				Steps: []*ast.Step{
-		// 					{ID: "step1", Agent: "agent1", Prompt: "test"},
-		// 				},
-		// 			},
-		// 		}
-		// 		inputs := map[string]interface{}{
-		// 			"name": "Alice",
-		// 			"age":  25,
-		// 		}
-		// 		return NewExecutionContext(context.Background(), workflow, inputs)
-		// 	},
-		// 	expected: "Name: Alice, Age Check: true",
-		// },
+		{
+			name:     "Simple expression in template",
+			template: "Result: {{ inputs.count > 5 }}",
+			setup: func() *ExecutionContext {
+				workflow := &ast.Workflow{
+					Version: "1.0",
+					Workflow: &ast.WorkflowDef{
+						Steps: []*ast.Step{
+							{ID: "step1", Agent: "agent1", Prompt: "test"},
+						},
+					},
+				}
+				inputs := map[string]interface{}{"count": 10}
+				return NewExecutionContext(context.Background(), workflow, inputs)
+			},
+			expected: "Result: true",
+		},
+		{
+			name:     "Ternary expression in template",
+			template: "Status: {{ inputs.enabled ? 'active' : 'inactive' }}",
+			setup: func() *ExecutionContext {
+				workflow := &ast.Workflow{
+					Version: "1.0",
+					Workflow: &ast.WorkflowDef{
+						Steps: []*ast.Step{
+							{ID: "step1", Agent: "agent1", Prompt: "test"},
+						},
+					},
+				}
+				inputs := map[string]interface{}{"enabled": true}
+				return NewExecutionContext(context.Background(), workflow, inputs)
+			},
+			expected: "Status: active",
+		},
+		{
+			name:     "Function call in template",
+			template: "Message: {{ format('Hello {0}!', inputs.name) }}",
+			setup: func() *ExecutionContext {
+				workflow := &ast.Workflow{
+					Version: "1.0",
+					Workflow: &ast.WorkflowDef{
+						Steps: []*ast.Step{
+							{ID: "step1", Agent: "agent1", Prompt: "test"},
+						},
+					},
+				}
+				inputs := map[string]interface{}{"name": "world"}
+				return NewExecutionContext(context.Background(), workflow, inputs)
+			},
+			expected: "Message: Hello world!",
+		},
+		{
+			name:     "Complex expression with multiple operators",
+			template: "Valid: {{ inputs.count > 5 && state.enabled == true }}",
+			setup: func() *ExecutionContext {
+				workflow := &ast.Workflow{
+					Version: "1.0",
+					Workflow: &ast.WorkflowDef{
+						State: map[string]interface{}{
+							"enabled": true,
+						},
+						Steps: []*ast.Step{
+							{ID: "step1", Agent: "agent1", Prompt: "test"},
+						},
+					},
+				}
+				inputs := map[string]interface{}{"count": 10}
+				return NewExecutionContext(context.Background(), workflow, inputs)
+			},
+			expected: "Valid: true",
+		},
+		{
+			name:     "String manipulation functions",
+			template: "Check: {{ contains(inputs.text, 'test') && startsWith(inputs.text, 'This') }}",
+			setup: func() *ExecutionContext {
+				workflow := &ast.Workflow{
+					Version: "1.0",
+					Workflow: &ast.WorkflowDef{
+						Steps: []*ast.Step{
+							{ID: "step1", Agent: "agent1", Prompt: "test"},
+						},
+					},
+				}
+				inputs := map[string]interface{}{"text": "This is a test"}
+				return NewExecutionContext(context.Background(), workflow, inputs)
+			},
+			expected: "Check: true",
+		},
+		{
+			name:     "Workflow status functions",
+			template: "Success: {{ success() && always() }}",
+			setup: func() *ExecutionContext {
+				workflow := &ast.Workflow{
+					Version: "1.0",
+					Workflow: &ast.WorkflowDef{
+						Steps: []*ast.Step{
+							{ID: "step1", Agent: "agent1", Prompt: "test"},
+						},
+					},
+				}
+				return NewExecutionContext(context.Background(), workflow, nil)
+			},
+			expected: "Success: true",
+		},
+		{
+			name:     "Mixed variable types and functions",
+			template: "Output: {{ inputs.count + 5 > 10 ? format('High: {0}', inputs.count) : 'Low' }}",
+			setup: func() *ExecutionContext {
+				workflow := &ast.Workflow{
+					Version: "1.0",
+					Workflow: &ast.WorkflowDef{
+						Steps: []*ast.Step{
+							{ID: "step1", Agent: "agent1", Prompt: "test"},
+						},
+					},
+				}
+				inputs := map[string]interface{}{"count": 8}
+				return NewExecutionContext(context.Background(), workflow, inputs)
+			},
+			expected: "Output: High: 8",
+		},
+		{
+			name:     "Regular variable alongside expression",
+			template: "Name: {{ inputs.name }}, Age Check: {{ inputs.age >= 18 }}",
+			setup: func() *ExecutionContext {
+				workflow := &ast.Workflow{
+					Version: "1.0",
+					Workflow: &ast.WorkflowDef{
+						Steps: []*ast.Step{
+							{ID: "step1", Agent: "agent1", Prompt: "test"},
+						},
+					},
+				}
+				inputs := map[string]interface{}{
+					"name": "Alice",
+					"age":  25,
+				}
+				return NewExecutionContext(context.Background(), workflow, inputs)
+			},
+			expected: "Name: Alice, Age Check: true",
+		},
 		{
 			name:     "JSON manipulation",
 			template: "Data: {{ toJSON(inputs.data) }}",

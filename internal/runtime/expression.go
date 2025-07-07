@@ -2,788 +2,1069 @@ package runtime
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
-// ExpressionEvaluator handles GitHub Actions-style expression evaluation
+// Value represents any value in the expression system
+type Value interface {
+	Type() ValueType
+	GoValue() interface{}
+	String() string
+	Equals(Value) bool
+}
+
+// ValueType represents the type of a value
+type ValueType string
+
+const (
+	TypeNil     ValueType = "nil"
+	TypeBool    ValueType = "bool"
+	TypeNumber  ValueType = "number"
+	TypeString  ValueType = "string"
+	TypeList    ValueType = "list"
+	TypeMap     ValueType = "map"
+	TypeUnknown ValueType = "unknown"
+)
+
+// Basic value types
+
+type NilValue struct{}
+
+func (v NilValue) Type() ValueType         { return TypeNil }
+func (v NilValue) GoValue() interface{}    { return nil }
+func (v NilValue) String() string          { return "null" }
+func (v NilValue) Equals(other Value) bool { return other.Type() == TypeNil }
+
+type BoolValue struct {
+	Val bool
+}
+
+func (v BoolValue) Type() ValueType      { return TypeBool }
+func (v BoolValue) GoValue() interface{} { return v.Val }
+func (v BoolValue) String() string {
+	if v.Val {
+		return "true"
+	}
+	return "false"
+}
+func (v BoolValue) Equals(other Value) bool {
+	if other.Type() != TypeBool {
+		return false
+	}
+	return v.Val == other.(BoolValue).Val
+}
+
+type NumberValue struct {
+	Val float64
+}
+
+func (v NumberValue) Type() ValueType      { return TypeNumber }
+func (v NumberValue) GoValue() interface{} { return v.Val }
+func (v NumberValue) String() string       { return fmt.Sprintf("%g", v.Val) }
+func (v NumberValue) Equals(other Value) bool {
+	switch other.Type() {
+	case TypeNumber:
+		return v.Val == other.(NumberValue).Val
+	case TypeString:
+		// Attempt to convert string to number for comparison
+		if f, err := strconv.ParseFloat(other.(StringValue).Val, 64); err == nil {
+			return v.Val == f
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+type StringValue struct {
+	Val string
+}
+
+func (v StringValue) Type() ValueType      { return TypeString }
+func (v StringValue) GoValue() interface{} { return v.Val }
+func (v StringValue) String() string       { return v.Val }
+func (v StringValue) Equals(other Value) bool {
+	switch other.Type() {
+	case TypeString:
+		return v.Val == other.(StringValue).Val
+	case TypeNumber:
+		// Attempt to convert string to number for comparison
+		if f, err := strconv.ParseFloat(v.Val, 64); err == nil {
+			return f == other.(NumberValue).Val
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+type ListValue struct {
+	Vals []Value
+}
+
+func (v ListValue) Type() ValueType { return TypeList }
+func (v ListValue) GoValue() interface{} {
+	result := make([]interface{}, len(v.Vals))
+	for i, val := range v.Vals {
+		result[i] = val.GoValue()
+	}
+	return result
+}
+func (v ListValue) String() string {
+	parts := make([]string, len(v.Vals))
+	for i, val := range v.Vals {
+		parts[i] = val.String()
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+func (v ListValue) Equals(other Value) bool {
+	if other.Type() != TypeList {
+		return false
+	}
+	otherList := other.(ListValue)
+	if len(v.Vals) != len(otherList.Vals) {
+		return false
+	}
+	for i, val := range v.Vals {
+		if !val.Equals(otherList.Vals[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+type MapValue struct {
+	Vals map[string]Value
+}
+
+func (v MapValue) Type() ValueType { return TypeMap }
+func (v MapValue) GoValue() interface{} {
+	result := make(map[string]interface{})
+	for k, val := range v.Vals {
+		result[k] = val.GoValue()
+	}
+	return result
+}
+func (v MapValue) String() string {
+	parts := make([]string, 0, len(v.Vals))
+	for k, val := range v.Vals {
+		parts = append(parts, fmt.Sprintf("%s: %s", k, val.String()))
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
+}
+func (v MapValue) Equals(other Value) bool {
+	if other.Type() != TypeMap {
+		return false
+	}
+	otherMap := other.(MapValue)
+	if len(v.Vals) != len(otherMap.Vals) {
+		return false
+	}
+	for k, val := range v.Vals {
+		otherVal, ok := otherMap.Vals[k]
+		if !ok || !val.Equals(otherVal) {
+			return false
+		}
+	}
+	return true
+}
+
+// ExpressionEvaluator handles expression evaluation
 type ExpressionEvaluator struct {
-	variableResolver *VariableResolver
-	functions        *FunctionRegistry
+	functions *FunctionRegistry
 }
 
 // NewExpressionEvaluator creates a new expression evaluator
 func NewExpressionEvaluator() *ExpressionEvaluator {
 	return &ExpressionEvaluator{
-		variableResolver: NewVariableResolver(),
-		functions:        NewFunctionRegistry(),
+		functions: NewFunctionRegistry(),
 	}
 }
 
-// Token represents a lexical token in an expression
-type Token struct {
-	Type  TokenType
-	Value string
+// Evaluate evaluates an expression
+func (ee *ExpressionEvaluator) Evaluate(expression string, execCtx *ExecutionContext) (interface{}, error) {
+	// Parse the expression
+	expr, err := Parse(expression)
+	if err != nil {
+		return nil, fmt.Errorf("parse error: %w", err)
+	}
+
+	// Create evaluation context
+	evalCtx := &EvalContext{
+		Variables: NewVariableScope(execCtx),
+		Functions: ee.functions,
+		ExecCtx:   execCtx,
+	}
+
+	// Evaluate the expression
+	val, err := expr.Eval(evalCtx)
+	if err != nil {
+		return nil, fmt.Errorf("evaluation error: %w", err)
+	}
+
+	return val.GoValue(), nil
 }
 
-// TokenType represents the type of a token
-type TokenType int
+// EvalContext contains the context for expression evaluation
+type EvalContext struct {
+	Variables *VariableScope
+	Functions *FunctionRegistry
+	ExecCtx   *ExecutionContext
+}
 
-const (
-	TokenEOF TokenType = iota
-	TokenIdentifier
-	TokenNumber
-	TokenString
-	TokenBoolean
-	TokenNull
+// VariableScope manages variable resolution
+type VariableScope struct {
+	execCtx *ExecutionContext
+}
 
-	// Operators
-	TokenEQ    // ==
-	TokenNE    // !=
-	TokenLT    // <
-	TokenGT    // >
-	TokenLE    // <=
-	TokenGE    // >=
-	TokenAND   // &&
-	TokenOR    // ||
-	TokenNOT   // !
-	TokenPLUS  // +
-	TokenMINUS // -
-	TokenMUL   // *
-	TokenDIV   // /
-	TokenMOD   // %
-	TokenQUEST // ?
-	TokenCOLON // :
+// NewVariableScope creates a new variable scope
+func NewVariableScope(execCtx *ExecutionContext) *VariableScope {
+	return &VariableScope{execCtx: execCtx}
+}
 
-	// Delimiters
-	TokenLPAREN   // (
-	TokenRPAREN   // )
-	TokenLBRACKET // [
-	TokenRBRACKET // ]
-	TokenDOT      // .
-	TokenCOMMA    // ,
-)
+// Get retrieves a variable value
+func (vs *VariableScope) Get(name string) (Value, error) {
+	// Handle special built-in variables
+	switch name {
+	case "true":
+		return BoolValue{Val: true}, nil
+	case "false":
+		return BoolValue{Val: false}, nil
+	case "null":
+		return NilValue{}, nil
+	}
 
-// Evaluate evaluates a GitHub Actions-style expression
-func (ee *ExpressionEvaluator) Evaluate(expression string, execCtx *ExecutionContext) (interface{}, error) {
-	// First, resolve any variable references in the expression
-	resolvedExpr, err := ee.resolveVariables(expression, execCtx)
+	// Try to resolve as a context variable
+	parts := strings.Split(name, ".")
+	if len(parts) > 0 {
+		switch parts[0] {
+		case "inputs", "state", "steps", "metadata", "env", "workflow":
+			resolver := &VariableResolver{}
+			val, err := resolver.ResolveVariable(name, vs.execCtx)
+			if err != nil {
+				return nil, err
+			}
+			return GoToValue(val), nil
+		}
+	}
+
+	return nil, fmt.Errorf("undefined variable: %s", name)
+}
+
+// GoToValue converts a Go value to an expression Value
+func GoToValue(v interface{}) Value {
+	if v == nil {
+		return NilValue{}
+	}
+
+	switch val := v.(type) {
+	case bool:
+		return BoolValue{Val: val}
+	case int:
+		return NumberValue{Val: float64(val)}
+	case int32:
+		return NumberValue{Val: float64(val)}
+	case int64:
+		return NumberValue{Val: float64(val)}
+	case float32:
+		return NumberValue{Val: float64(val)}
+	case float64:
+		return NumberValue{Val: val}
+	case string:
+		return StringValue{Val: val}
+	case []interface{}:
+		result := make([]Value, len(val))
+		for i, item := range val {
+			result[i] = GoToValue(item)
+		}
+		return ListValue{Vals: result}
+	case []string:
+		result := make([]Value, len(val))
+		for i, item := range val {
+			result[i] = StringValue{Val: item}
+		}
+		return ListValue{Vals: result}
+	case map[string]interface{}:
+		result := make(map[string]Value)
+		for k, v := range val {
+			result[k] = GoToValue(v)
+		}
+		return MapValue{Vals: result}
+	case map[interface{}]interface{}:
+		result := make(map[string]Value)
+		for k, v := range val {
+			result[fmt.Sprintf("%v", k)] = GoToValue(v)
+		}
+		return MapValue{Vals: result}
+	default:
+		// For unknown types, convert to string
+		return StringValue{Val: fmt.Sprintf("%v", v)}
+	}
+}
+
+// Expression types
+
+type Expression interface {
+	Eval(*EvalContext) (Value, error)
+}
+
+// LiteralExpr represents a literal value
+type LiteralExpr struct {
+	Value Value
+}
+
+func (e *LiteralExpr) Eval(ctx *EvalContext) (Value, error) {
+	return e.Value, nil
+}
+
+// VariableExpr represents a variable reference
+type VariableExpr struct {
+	Name string
+}
+
+func (e *VariableExpr) Eval(ctx *EvalContext) (Value, error) {
+	return ctx.Variables.Get(e.Name)
+}
+
+// BinaryOpExpr represents a binary operation
+type BinaryOpExpr struct {
+	Left  Expression
+	Op    string
+	Right Expression
+}
+
+func (e *BinaryOpExpr) Eval(ctx *EvalContext) (Value, error) {
+	left, err := e.Left.Eval(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse and evaluate the expression
-	lexer := newLexer(resolvedExpr)
-	parser := newParser(lexer, ee.functions, execCtx)
-	return parser.parse()
-}
-
-// resolveVariables resolves variable references in an expression
-func (ee *ExpressionEvaluator) resolveVariables(expression string, execCtx *ExecutionContext) (string, error) {
-	// Pattern to match variable references like inputs.name, steps.step1.output
-	// But avoid matching those inside string literals
-	varPattern := regexp.MustCompile(`\b(inputs|state|steps|metadata|env|workflow)\.[\w.]+\b`)
-
-	result := expression
-	matches := varPattern.FindAllString(expression, -1)
-
-	// Track which parts of the string are inside string literals
-	inString := false
-	var stringChar rune
-	stringRanges := [][]int{}
-
-	runes := []rune(expression)
-	start := -1
-	for i, r := range runes {
-		if !inString && (r == '\'' || r == '"') {
-			inString = true
-			stringChar = r
-			start = i
-		} else if inString && r == stringChar {
-			inString = false
-			stringRanges = append(stringRanges, []int{start, i})
+	// Short-circuit evaluation for logical operators
+	if e.Op == "&&" {
+		if !ToBool(left) {
+			return BoolValue{Val: false}, nil
+		}
+	} else if e.Op == "||" {
+		if ToBool(left) {
+			return BoolValue{Val: true}, nil
 		}
 	}
 
-	for _, match := range matches {
-		// Check if this match is inside a string literal
-		matchPos := strings.Index(result, match)
-		if matchPos == -1 {
-			continue
-		}
-
-		insideString := false
-		for _, rang := range stringRanges {
-			if matchPos >= rang[0] && matchPos <= rang[1] {
-				insideString = true
-				break
-			}
-		}
-
-		if insideString {
-			continue // Skip variables inside string literals
-		}
-
-		value, err := ee.variableResolver.ResolveVariable(match, execCtx)
-		if err != nil {
-			return "", err
-		}
-		// Convert value to expression literal
-		literal := ee.valueToLiteral(value)
-		result = strings.ReplaceAll(result, match, literal)
+	right, err := e.Right.Eval(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	return result, nil
-}
-
-// valueToLiteral converts a value to an expression literal
-func (ee *ExpressionEvaluator) valueToLiteral(value interface{}) string {
-	switch v := value.(type) {
-	case string:
-		// Escape quotes in string
-		escaped := strings.ReplaceAll(v, "'", "\\'")
-		return "'" + escaped + "'"
-	case bool:
-		if v {
-			return "true"
+	switch e.Op {
+	case "==":
+		return BoolValue{Val: left.Equals(right)}, nil
+	case "!=":
+		return BoolValue{Val: !left.Equals(right)}, nil
+	case "<":
+		return BoolValue{Val: ToNumber(left) < ToNumber(right)}, nil
+	case ">":
+		return BoolValue{Val: ToNumber(left) > ToNumber(right)}, nil
+	case "<=":
+		return BoolValue{Val: ToNumber(left) <= ToNumber(right)}, nil
+	case ">=":
+		return BoolValue{Val: ToNumber(left) >= ToNumber(right)}, nil
+	case "&&":
+		return BoolValue{Val: ToBool(left) && ToBool(right)}, nil
+	case "||":
+		return BoolValue{Val: ToBool(left) || ToBool(right)}, nil
+	case "+":
+		// Handle string concatenation or numeric addition
+		if left.Type() == TypeString || right.Type() == TypeString {
+			return StringValue{Val: ToString(left) + ToString(right)}, nil
 		}
-		return "false"
-	case nil:
-		return "null"
+		return NumberValue{Val: ToNumber(left) + ToNumber(right)}, nil
+	case "-":
+		return NumberValue{Val: ToNumber(left) - ToNumber(right)}, nil
+	case "*":
+		return NumberValue{Val: ToNumber(left) * ToNumber(right)}, nil
+	case "/":
+		r := ToNumber(right)
+		if r == 0 {
+			return nil, fmt.Errorf("division by zero")
+		}
+		return NumberValue{Val: ToNumber(left) / r}, nil
+	case "%":
+		r := ToNumber(right)
+		if r == 0 {
+			return nil, fmt.Errorf("modulo by zero")
+		}
+		return NumberValue{Val: float64(int64(ToNumber(left)) % int64(r))}, nil
 	default:
-		return fmt.Sprintf("%v", value)
+		return nil, fmt.Errorf("unknown operator: %s", e.Op)
 	}
 }
 
-// Lexer tokenizes expressions
-type Lexer struct {
-	input    string
-	position int
-	current  rune
+// UnaryOpExpr represents a unary operation
+type UnaryOpExpr struct {
+	Op   string
+	Expr Expression
 }
 
-func newLexer(input string) *Lexer {
-	l := &Lexer{input: input}
-	l.readChar()
-	return l
-}
-
-func (l *Lexer) readChar() {
-	if l.position >= len(l.input) {
-		l.current = 0
-	} else {
-		l.current = rune(l.input[l.position])
+func (e *UnaryOpExpr) Eval(ctx *EvalContext) (Value, error) {
+	val, err := e.Expr.Eval(ctx)
+	if err != nil {
+		return nil, err
 	}
-	l.position++
+
+	switch e.Op {
+	case "!":
+		return BoolValue{Val: !ToBool(val)}, nil
+	case "-":
+		return NumberValue{Val: -ToNumber(val)}, nil
+	default:
+		return nil, fmt.Errorf("unknown unary operator: %s", e.Op)
+	}
 }
 
-func (l *Lexer) peekChar() rune {
-	if l.position >= len(l.input) {
+// ConditionalExpr represents a ternary conditional expression
+type ConditionalExpr struct {
+	Condition Expression
+	TrueExpr  Expression
+	FalseExpr Expression
+}
+
+func (e *ConditionalExpr) Eval(ctx *EvalContext) (Value, error) {
+	cond, err := e.Condition.Eval(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if ToBool(cond) {
+		return e.TrueExpr.Eval(ctx)
+	}
+	return e.FalseExpr.Eval(ctx)
+}
+
+// CallExpr represents a function call
+type CallExpr struct {
+	Name string
+	Args []Expression
+}
+
+func (e *CallExpr) Eval(ctx *EvalContext) (Value, error) {
+	// Evaluate arguments
+	args := make([]interface{}, len(e.Args))
+	for i, arg := range e.Args {
+		val, err := arg.Eval(ctx)
+		if err != nil {
+			return nil, err
+		}
+		args[i] = val.GoValue()
+	}
+
+	// Call the function
+	result, err := ctx.Functions.Call(e.Name, args, ctx.ExecCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	return GoToValue(result), nil
+}
+
+// IndexExpr represents array/map indexing
+type IndexExpr struct {
+	Object Expression
+	Index  Expression
+}
+
+func (e *IndexExpr) Eval(ctx *EvalContext) (Value, error) {
+	obj, err := e.Object.Eval(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	idx, err := e.Index.Eval(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	switch o := obj.(type) {
+	case ListValue:
+		i := int(ToNumber(idx))
+		if i < 0 || i >= len(o.Vals) {
+			return nil, fmt.Errorf("index %d out of bounds", i)
+		}
+		return o.Vals[i], nil
+	case MapValue:
+		key := ToString(idx)
+		val, ok := o.Vals[key]
+		if !ok {
+			return NilValue{}, nil
+		}
+		return val, nil
+	default:
+		return nil, fmt.Errorf("cannot index %s", obj.Type())
+	}
+}
+
+// DotExpr represents object property access
+type DotExpr struct {
+	Object Expression
+	Field  string
+}
+
+func (e *DotExpr) Eval(ctx *EvalContext) (Value, error) {
+	// Special handling for root-level accesses like inputs.name
+	if varExpr, ok := e.Object.(*VariableExpr); ok {
+		fullPath := varExpr.Name + "." + e.Field
+		if val, err := ctx.Variables.Get(fullPath); err == nil {
+			return val, nil
+		}
+	}
+
+	obj, err := e.Object.Eval(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	switch o := obj.(type) {
+	case MapValue:
+		val, ok := o.Vals[e.Field]
+		if !ok {
+			return NilValue{}, nil
+		}
+		return val, nil
+	default:
+		return nil, fmt.Errorf("cannot access field %s on %s", e.Field, obj.Type())
+	}
+}
+
+// Type conversion functions
+
+func ToBool(v Value) bool {
+	switch val := v.(type) {
+	case BoolValue:
+		return val.Val
+	case NumberValue:
+		return val.Val != 0
+	case StringValue:
+		return val.Val != ""
+	case NilValue:
+		return false
+	case ListValue:
+		return len(val.Vals) > 0
+	case MapValue:
+		return len(val.Vals) > 0
+	default:
+		return true
+	}
+}
+
+func ToNumber(v Value) float64 {
+	switch val := v.(type) {
+	case NumberValue:
+		return val.Val
+	case BoolValue:
+		if val.Val {
+			return 1
+		}
+		return 0
+	case StringValue:
+		f, _ := strconv.ParseFloat(val.Val, 64)
+		return f
+	default:
 		return 0
 	}
-	return rune(l.input[l.position])
 }
 
-func (l *Lexer) nextToken() Token {
-	l.skipWhitespace()
-
-	if l.current == 0 {
-		return Token{Type: TokenEOF}
-	}
-
-	// Handle two-character operators
-	if l.current == '=' && l.peekChar() == '=' {
-		l.readChar()
-		l.readChar()
-		return Token{Type: TokenEQ, Value: "=="}
-	}
-	if l.current == '!' && l.peekChar() == '=' {
-		l.readChar()
-		l.readChar()
-		return Token{Type: TokenNE, Value: "!="}
-	}
-	if l.current == '<' && l.peekChar() == '=' {
-		l.readChar()
-		l.readChar()
-		return Token{Type: TokenLE, Value: "<="}
-	}
-	if l.current == '>' && l.peekChar() == '=' {
-		l.readChar()
-		l.readChar()
-		return Token{Type: TokenGE, Value: ">="}
-	}
-	if l.current == '&' && l.peekChar() == '&' {
-		l.readChar()
-		l.readChar()
-		return Token{Type: TokenAND, Value: "&&"}
-	}
-	if l.current == '|' && l.peekChar() == '|' {
-		l.readChar()
-		l.readChar()
-		return Token{Type: TokenOR, Value: "||"}
-	}
-
-	// Handle single-character operators and delimiters
-	switch l.current {
-	case '<':
-		l.readChar()
-		return Token{Type: TokenLT, Value: "<"}
-	case '>':
-		l.readChar()
-		return Token{Type: TokenGT, Value: ">"}
-	case '!':
-		l.readChar()
-		return Token{Type: TokenNOT, Value: "!"}
-	case '+':
-		l.readChar()
-		return Token{Type: TokenPLUS, Value: "+"}
-	case '-':
-		l.readChar()
-		return Token{Type: TokenMINUS, Value: "-"}
-	case '*':
-		l.readChar()
-		return Token{Type: TokenMUL, Value: "*"}
-	case '/':
-		l.readChar()
-		return Token{Type: TokenDIV, Value: "/"}
-	case '%':
-		l.readChar()
-		return Token{Type: TokenMOD, Value: "%"}
-	case '?':
-		l.readChar()
-		return Token{Type: TokenQUEST, Value: "?"}
-	case ':':
-		l.readChar()
-		return Token{Type: TokenCOLON, Value: ":"}
-	case '(':
-		l.readChar()
-		return Token{Type: TokenLPAREN, Value: "("}
-	case ')':
-		l.readChar()
-		return Token{Type: TokenRPAREN, Value: ")"}
-	case '[':
-		l.readChar()
-		return Token{Type: TokenLBRACKET, Value: "["}
-	case ']':
-		l.readChar()
-		return Token{Type: TokenRBRACKET, Value: "]"}
-	case '.':
-		l.readChar()
-		return Token{Type: TokenDOT, Value: "."}
-	case ',':
-		l.readChar()
-		return Token{Type: TokenCOMMA, Value: ","}
-	}
-
-	// Handle strings
-	if l.current == '\'' || l.current == '"' {
-		return l.readString()
-	}
-
-	// Handle numbers
-	if isDigit(l.current) {
-		return l.readNumber()
-	}
-
-	// Handle identifiers and keywords
-	if isLetter(l.current) {
-		return l.readIdentifier()
-	}
-
-	// Unknown character
-	ch := l.current
-	l.readChar()
-	return Token{Type: TokenEOF, Value: string(ch)}
+func ToString(v Value) string {
+	return v.String()
 }
 
-func (l *Lexer) skipWhitespace() {
-	for l.current == ' ' || l.current == '\t' || l.current == '\n' || l.current == '\r' {
-		l.readChar()
-	}
-}
+// Parser
 
-func (l *Lexer) readString() Token {
-	quote := l.current
-	l.readChar()
-
-	start := l.position - 1
-	for l.current != quote && l.current != 0 {
-		if l.current == '\\' {
-			l.readChar() // Skip escaped character
-		}
-		l.readChar()
-	}
-
-	value := l.input[start : l.position-1]
-	l.readChar() // Skip closing quote
-
-	// Unescape the string
-	value = strings.ReplaceAll(value, "\\'", "'")
-	value = strings.ReplaceAll(value, "\\\"", "\"")
-	value = strings.ReplaceAll(value, "\\\\", "\\")
-
-	return Token{Type: TokenString, Value: value}
-}
-
-func (l *Lexer) readNumber() Token {
-	start := l.position - 1
-	hasDecimal := false
-
-	for isDigit(l.current) || (l.current == '.' && !hasDecimal) {
-		if l.current == '.' {
-			hasDecimal = true
-		}
-		l.readChar()
-	}
-
-	return Token{Type: TokenNumber, Value: l.input[start : l.position-1]}
-}
-
-func (l *Lexer) readIdentifier() Token {
-	start := l.position - 1
-
-	for isLetter(l.current) || isDigit(l.current) || l.current == '_' {
-		l.readChar()
-	}
-
-	value := l.input[start : l.position-1]
-
-	// Check for boolean and null keywords
-	switch value {
-	case "true", "false":
-		return Token{Type: TokenBoolean, Value: value}
-	case "null":
-		return Token{Type: TokenNull, Value: value}
-	}
-
-	return Token{Type: TokenIdentifier, Value: value}
-}
-
-func isLetter(ch rune) bool {
-	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z'
-}
-
-func isDigit(ch rune) bool {
-	return '0' <= ch && ch <= '9'
-}
-
-// Parser parses and evaluates expressions
 type Parser struct {
-	lexer     *Lexer
-	current   Token
-	peek      Token
-	functions *FunctionRegistry
-	execCtx   *ExecutionContext
+	tokens []Token
+	pos    int
 }
 
-func newParser(lexer *Lexer, functions *FunctionRegistry, execCtx *ExecutionContext) *Parser {
-	p := &Parser{
-		lexer:     lexer,
-		functions: functions,
-		execCtx:   execCtx,
-	}
-	// Read two tokens to initialize current and peek
-	p.nextToken()
-	p.nextToken()
-	return p
-}
-
-func (p *Parser) nextToken() {
-	p.current = p.peek
-	p.peek = p.lexer.nextToken()
-}
-
-func (p *Parser) parse() (interface{}, error) {
-	expr, err := p.parseExpression(0)
+func Parse(input string) (Expression, error) {
+	tokens, err := Tokenize(input)
 	if err != nil {
 		return nil, err
 	}
 
-	if p.current.Type != TokenEOF {
-		return nil, fmt.Errorf("unexpected token: %s", p.current.Value)
+	p := &Parser{tokens: tokens}
+	return p.parseExpression()
+}
+
+func (p *Parser) current() Token {
+	if p.pos >= len(p.tokens) {
+		return Token{Type: TokenEOF}
+	}
+	return p.tokens[p.pos]
+}
+
+func (p *Parser) advance() {
+	p.pos++
+}
+
+func (p *Parser) parseExpression() (Expression, error) {
+	return p.parseTernary()
+}
+
+func (p *Parser) parseTernary() (Expression, error) {
+	expr, err := p.parseOr()
+	if err != nil {
+		return nil, err
+	}
+
+	if p.current().Type == TokenQuestion {
+		p.advance() // consume ?
+		trueExpr, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+
+		if p.current().Type != TokenColon {
+			return nil, fmt.Errorf("expected : in ternary expression")
+		}
+		p.advance() // consume :
+
+		falseExpr, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+
+		return &ConditionalExpr{
+			Condition: expr,
+			TrueExpr:  trueExpr,
+			FalseExpr: falseExpr,
+		}, nil
 	}
 
 	return expr, nil
 }
 
-// parseExpression parses an expression with operator precedence
-func (p *Parser) parseExpression(precedence int) (interface{}, error) {
-	left, err := p.parsePrimary()
+func (p *Parser) parseOr() (Expression, error) {
+	left, err := p.parseAnd()
 	if err != nil {
 		return nil, err
 	}
 
-	for precedence < p.getPrecedence(p.current.Type) {
-		if p.current.Type == TokenQUEST {
-			// Handle ternary operator with special case
-			return p.parseTernary(left)
-		}
-
-		op := p.current
-		p.nextToken()
-
-		right, err := p.parseExpression(p.getPrecedence(op.Type) + 1)
+	for p.current().Type == TokenOr {
+		op := p.current().Value
+		p.advance()
+		right, err := p.parseAnd()
 		if err != nil {
 			return nil, err
 		}
-
-		left, err = p.applyOperator(op, left, right)
-		if err != nil {
-			return nil, err
-		}
+		left = &BinaryOpExpr{Left: left, Op: op, Right: right}
 	}
 
 	return left, nil
 }
 
-// parsePrimary parses primary expressions
-func (p *Parser) parsePrimary() (interface{}, error) {
-	switch p.current.Type {
+func (p *Parser) parseAnd() (Expression, error) {
+	left, err := p.parseEquality()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.current().Type == TokenAnd {
+		op := p.current().Value
+		p.advance()
+		right, err := p.parseEquality()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+	}
+
+	return left, nil
+}
+
+func (p *Parser) parseEquality() (Expression, error) {
+	left, err := p.parseComparison()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.current().Type == TokenEq || p.current().Type == TokenNe {
+		op := p.current().Value
+		p.advance()
+		right, err := p.parseComparison()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+	}
+
+	return left, nil
+}
+
+func (p *Parser) parseComparison() (Expression, error) {
+	left, err := p.parseAdditive()
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		switch p.current().Type {
+		case TokenLt, TokenGt, TokenLe, TokenGe:
+			op := p.current().Value
+			p.advance()
+			right, err := p.parseAdditive()
+			if err != nil {
+				return nil, err
+			}
+			left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+		default:
+			return left, nil
+		}
+	}
+}
+
+func (p *Parser) parseAdditive() (Expression, error) {
+	left, err := p.parseMultiplicative()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.current().Type == TokenPlus || p.current().Type == TokenMinus {
+		op := p.current().Value
+		p.advance()
+		right, err := p.parseMultiplicative()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+	}
+
+	return left, nil
+}
+
+func (p *Parser) parseMultiplicative() (Expression, error) {
+	left, err := p.parseUnary()
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		switch p.current().Type {
+		case TokenMul, TokenDiv, TokenMod:
+			op := p.current().Value
+			p.advance()
+			right, err := p.parseUnary()
+			if err != nil {
+				return nil, err
+			}
+			left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+		default:
+			return left, nil
+		}
+	}
+}
+
+func (p *Parser) parseUnary() (Expression, error) {
+	switch p.current().Type {
+	case TokenNot:
+		op := p.current().Value
+		p.advance()
+		expr, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		return &UnaryOpExpr{Op: op, Expr: expr}, nil
+	case TokenMinus:
+		op := p.current().Value
+		p.advance()
+		expr, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		return &UnaryOpExpr{Op: op, Expr: expr}, nil
+	default:
+		return p.parsePostfix()
+	}
+}
+
+func (p *Parser) parsePostfix() (Expression, error) {
+	expr, err := p.parsePrimary()
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		switch p.current().Type {
+		case TokenDot:
+			p.advance()
+			if p.current().Type != TokenIdent {
+				return nil, fmt.Errorf("expected identifier after .")
+			}
+			field := p.current().Value
+			p.advance()
+			expr = &DotExpr{Object: expr, Field: field}
+		case TokenLBracket:
+			p.advance()
+			index, err := p.parseExpression()
+			if err != nil {
+				return nil, err
+			}
+			if p.current().Type != TokenRBracket {
+				return nil, fmt.Errorf("expected ]")
+			}
+			p.advance()
+			expr = &IndexExpr{Object: expr, Index: index}
+		case TokenLParen:
+			// Function call
+			if varExpr, ok := expr.(*VariableExpr); ok {
+				p.advance() // consume (
+				args := []Expression{}
+				for p.current().Type != TokenRParen {
+					arg, err := p.parseExpression()
+					if err != nil {
+						return nil, err
+					}
+					args = append(args, arg)
+					if p.current().Type == TokenComma {
+						p.advance()
+					} else if p.current().Type != TokenRParen {
+						return nil, fmt.Errorf("expected , or )")
+					}
+				}
+				p.advance() // consume )
+				expr = &CallExpr{Name: varExpr.Name, Args: args}
+			} else {
+				return nil, fmt.Errorf("invalid function call")
+			}
+		default:
+			return expr, nil
+		}
+	}
+}
+
+func (p *Parser) parsePrimary() (Expression, error) {
+	switch p.current().Type {
 	case TokenNumber:
-		val := p.current.Value
-		p.nextToken()
-		if strings.Contains(val, ".") {
-			return strconv.ParseFloat(val, 64)
+		val, err := strconv.ParseFloat(p.current().Value, 64)
+		if err != nil {
+			return nil, err
 		}
-		return strconv.ParseInt(val, 10, 64)
-
+		p.advance()
+		return &LiteralExpr{Value: NumberValue{Val: val}}, nil
 	case TokenString:
-		val := p.current.Value
-		p.nextToken()
-		return val, nil
+		val := p.current().Value
+		p.advance()
+		return &LiteralExpr{Value: StringValue{Val: val}}, nil
+	case TokenIdent:
+		name := p.current().Value
+		p.advance()
 
-	case TokenBoolean:
-		val := p.current.Value == "true"
-		p.nextToken()
-		return val, nil
+		// Check for boolean literals
+		switch name {
+		case "true":
+			return &LiteralExpr{Value: BoolValue{Val: true}}, nil
+		case "false":
+			return &LiteralExpr{Value: BoolValue{Val: false}}, nil
+		case "null":
+			return &LiteralExpr{Value: NilValue{}}, nil
+		}
 
-	case TokenNull:
-		p.nextToken()
-		return nil, nil
-
-	case TokenIdentifier:
-		return p.parseIdentifier()
-
-	case TokenNOT:
-		p.nextToken()
-		expr, err := p.parseExpression(p.getPrecedence(TokenNOT))
+		return &VariableExpr{Name: name}, nil
+	case TokenLParen:
+		p.advance()
+		expr, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
-		return !toBool(expr), nil
-
-	case TokenMINUS:
-		p.nextToken()
-		expr, err := p.parseExpression(p.getPrecedence(TokenMINUS))
-		if err != nil {
-			return nil, err
+		if p.current().Type != TokenRParen {
+			return nil, fmt.Errorf("expected )")
 		}
-		return -toNumber(expr), nil
-
-	case TokenLPAREN:
-		p.nextToken()
-		expr, err := p.parseExpression(0)
-		if err != nil {
-			return nil, err
-		}
-		if p.current.Type != TokenRPAREN {
-			return nil, fmt.Errorf("expected ')', got %s", p.current.Value)
-		}
-		p.nextToken()
+		p.advance()
 		return expr, nil
-
 	default:
-		return nil, fmt.Errorf("unexpected token: %s", p.current.Value)
+		return nil, fmt.Errorf("unexpected token: %s", p.current().Value)
 	}
 }
 
-// parseIdentifier parses identifiers and function calls
-func (p *Parser) parseIdentifier() (interface{}, error) {
-	name := p.current.Value
-	p.nextToken()
+// Tokenizer
 
-	// Check if it's a function call
-	if p.current.Type == TokenLPAREN {
-		return p.parseFunctionCall(name)
-	}
+type TokenType int
 
-	// Check if it's an array/object access
-	if p.current.Type == TokenLBRACKET {
-		return p.parseArrayAccess(name)
-	}
+const (
+	TokenEOF TokenType = iota
+	TokenIdent
+	TokenNumber
+	TokenString
 
-	// Otherwise, it's a variable reference that wasn't resolved
-	return nil, fmt.Errorf("undefined variable: %s", name)
+	// Operators
+	TokenEq       // ==
+	TokenNe       // !=
+	TokenLt       // <
+	TokenGt       // >
+	TokenLe       // <=
+	TokenGe       // >=
+	TokenAnd      // &&
+	TokenOr       // ||
+	TokenNot      // !
+	TokenPlus     // +
+	TokenMinus    // -
+	TokenMul      // *
+	TokenDiv      // /
+	TokenMod      // %
+	TokenQuestion // ?
+	TokenColon    // :
+
+	// Delimiters
+	TokenLParen   // (
+	TokenRParen   // )
+	TokenLBracket // [
+	TokenRBracket // ]
+	TokenDot      // .
+	TokenComma    // ,
+)
+
+type Token struct {
+	Type  TokenType
+	Value string
 }
 
-// parseFunctionCall parses function calls
-func (p *Parser) parseFunctionCall(name string) (interface{}, error) {
-	p.nextToken() // skip '('
+func Tokenize(input string) ([]Token, error) {
+	var tokens []Token
+	i := 0
 
-	var args []interface{}
-	for p.current.Type != TokenRPAREN {
-		arg, err := p.parseExpression(0)
-		if err != nil {
-			return nil, err
+	for i < len(input) {
+		// Skip whitespace
+		for i < len(input) && unicode.IsSpace(rune(input[i])) {
+			i++
 		}
-		args = append(args, arg)
 
-		if p.current.Type == TokenCOMMA {
-			p.nextToken()
-		} else if p.current.Type != TokenRPAREN {
-			return nil, fmt.Errorf("expected ',' or ')', got %s", p.current.Value)
+		if i >= len(input) {
+			break
+		}
+
+		// Multi-character operators
+		if i+1 < len(input) {
+			two := input[i : i+2]
+			switch two {
+			case "==":
+				tokens = append(tokens, Token{Type: TokenEq, Value: two})
+				i += 2
+				continue
+			case "!=":
+				tokens = append(tokens, Token{Type: TokenNe, Value: two})
+				i += 2
+				continue
+			case "<=":
+				tokens = append(tokens, Token{Type: TokenLe, Value: two})
+				i += 2
+				continue
+			case ">=":
+				tokens = append(tokens, Token{Type: TokenGe, Value: two})
+				i += 2
+				continue
+			case "&&":
+				tokens = append(tokens, Token{Type: TokenAnd, Value: two})
+				i += 2
+				continue
+			case "||":
+				tokens = append(tokens, Token{Type: TokenOr, Value: two})
+				i += 2
+				continue
+			}
+		}
+
+		// Single character tokens
+		switch input[i] {
+		case '<':
+			tokens = append(tokens, Token{Type: TokenLt, Value: "<"})
+			i++
+		case '>':
+			tokens = append(tokens, Token{Type: TokenGt, Value: ">"})
+			i++
+		case '!':
+			tokens = append(tokens, Token{Type: TokenNot, Value: "!"})
+			i++
+		case '+':
+			tokens = append(tokens, Token{Type: TokenPlus, Value: "+"})
+			i++
+		case '-':
+			tokens = append(tokens, Token{Type: TokenMinus, Value: "-"})
+			i++
+		case '*':
+			tokens = append(tokens, Token{Type: TokenMul, Value: "*"})
+			i++
+		case '/':
+			tokens = append(tokens, Token{Type: TokenDiv, Value: "/"})
+			i++
+		case '%':
+			tokens = append(tokens, Token{Type: TokenMod, Value: "%"})
+			i++
+		case '?':
+			tokens = append(tokens, Token{Type: TokenQuestion, Value: "?"})
+			i++
+		case ':':
+			tokens = append(tokens, Token{Type: TokenColon, Value: ":"})
+			i++
+		case '(':
+			tokens = append(tokens, Token{Type: TokenLParen, Value: "("})
+			i++
+		case ')':
+			tokens = append(tokens, Token{Type: TokenRParen, Value: ")"})
+			i++
+		case '[':
+			tokens = append(tokens, Token{Type: TokenLBracket, Value: "["})
+			i++
+		case ']':
+			tokens = append(tokens, Token{Type: TokenRBracket, Value: "]"})
+			i++
+		case '.':
+			tokens = append(tokens, Token{Type: TokenDot, Value: "."})
+			i++
+		case ',':
+			tokens = append(tokens, Token{Type: TokenComma, Value: ","})
+			i++
+		case '\'', '"':
+			// String
+			quote := input[i]
+			i++
+			start := i
+			for i < len(input) && input[i] != quote {
+				if input[i] == '\\' && i+1 < len(input) {
+					i += 2
+				} else {
+					i++
+				}
+			}
+			if i >= len(input) {
+				return nil, fmt.Errorf("unterminated string")
+			}
+			val := input[start:i]
+			// Unescape
+			val = strings.ReplaceAll(val, "\\\"", "\"")
+			val = strings.ReplaceAll(val, "\\'", "'")
+			val = strings.ReplaceAll(val, "\\\\", "\\")
+			tokens = append(tokens, Token{Type: TokenString, Value: val})
+			i++
+		default:
+			// Number
+			if unicode.IsDigit(rune(input[i])) {
+				start := i
+				for i < len(input) && (unicode.IsDigit(rune(input[i])) || input[i] == '.') {
+					i++
+				}
+				tokens = append(tokens, Token{Type: TokenNumber, Value: input[start:i]})
+			} else if unicode.IsLetter(rune(input[i])) {
+				// Identifier
+				start := i
+				for i < len(input) && (unicode.IsLetter(rune(input[i])) || unicode.IsDigit(rune(input[i])) || input[i] == '_') {
+					i++
+				}
+				tokens = append(tokens, Token{Type: TokenIdent, Value: input[start:i]})
+			} else {
+				return nil, fmt.Errorf("unexpected character: %c", input[i])
+			}
 		}
 	}
 
-	p.nextToken() // skip ')'
-
-	// Call the function
-	return p.functions.Call(name, args, p.execCtx)
-}
-
-// parseArrayAccess parses array/object access with brackets
-func (p *Parser) parseArrayAccess(name string) (interface{}, error) {
-	// Parse the opening bracket
-	if p.current.Type != TokenLBRACKET {
-		return nil, fmt.Errorf("expected '[', got %s", p.current.Value)
-	}
-	p.nextToken() // consume '['
-
-	// Parse the index/key expression
-	index, err := p.parseExpression(0)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse the closing bracket
-	if p.current.Type != TokenRBRACKET {
-		return nil, fmt.Errorf("expected ']', got %s", p.current.Value)
-	}
-	p.nextToken() // consume ']'
-
-	// Resolve the base variable
-	resolver := NewVariableResolver()
-	baseValue, err := resolver.ResolveVariable(name, p.execCtx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve variable %s: %v", name, err)
-	}
-
-	// Access the index/key from the base value
-	return accessValue(baseValue, index)
-}
-
-// accessValue accesses a value from a map or array using the given index/key
-func accessValue(baseValue interface{}, index interface{}) (interface{}, error) {
-	switch base := baseValue.(type) {
-	case map[string]interface{}:
-		key := toString(index)
-		if value, exists := base[key]; exists {
-			return value, nil
-		}
-		return nil, fmt.Errorf("key '%s' not found", key)
-
-	case []interface{}:
-		idx := int(toNumber(index))
-		if idx < 0 || idx >= len(base) {
-			return nil, fmt.Errorf("index %d out of bounds", idx)
-		}
-		return base[idx], nil
-
-	case map[interface{}]interface{}:
-		if value, exists := base[index]; exists {
-			return value, nil
-		}
-		return nil, fmt.Errorf("key '%v' not found", index)
-
-	// Handle slices of specific types
-	case []string:
-		idx := int(toNumber(index))
-		if idx < 0 || idx >= len(base) {
-			return nil, fmt.Errorf("index %d out of bounds", idx)
-		}
-		return base[idx], nil
-
-	case []int:
-		idx := int(toNumber(index))
-		if idx < 0 || idx >= len(base) {
-			return nil, fmt.Errorf("index %d out of bounds", idx)
-		}
-		return base[idx], nil
-
-	case []float64:
-		idx := int(toNumber(index))
-		if idx < 0 || idx >= len(base) {
-			return nil, fmt.Errorf("index %d out of bounds", idx)
-		}
-		return base[idx], nil
-
-	default:
-		return nil, fmt.Errorf("cannot access index on type %T", baseValue)
-	}
-}
-
-// parseTernary parses ternary expressions (condition ? true : false)
-func (p *Parser) parseTernary(condition interface{}) (interface{}, error) {
-	p.nextToken() // consume '?'
-
-	trueExpr, err := p.parseExpression(0)
-	if err != nil {
-		return nil, err
-	}
-
-	if p.current.Type != TokenCOLON {
-		return nil, fmt.Errorf("expected ':', got %s", p.current.Value)
-	}
-	p.nextToken() // consume ':'
-
-	falseExpr, err := p.parseExpression(0)
-	if err != nil {
-		return nil, err
-	}
-
-	if toBool(condition) {
-		return trueExpr, nil
-	}
-	return falseExpr, nil
-}
-
-// getPrecedence returns the precedence of an operator
-func (p *Parser) getPrecedence(tokenType TokenType) int {
-	switch tokenType {
-	case TokenQUEST:
-		return 1 // Ternary has low precedence but not lowest
-	case TokenOR:
-		return 2
-	case TokenAND:
-		return 3
-	case TokenEQ, TokenNE:
-		return 4
-	case TokenLT, TokenGT, TokenLE, TokenGE:
-		return 5
-	case TokenPLUS, TokenMINUS:
-		return 6
-	case TokenMUL, TokenDIV, TokenMOD:
-		return 7
-	default:
-		return -1
-	}
-}
-
-// applyOperator applies a binary operator
-func (p *Parser) applyOperator(op Token, left, right interface{}) (interface{}, error) {
-	switch op.Type {
-	case TokenEQ:
-		return isEqual(left, right), nil
-	case TokenNE:
-		return !isEqual(left, right), nil
-	case TokenLT:
-		return toNumber(left) < toNumber(right), nil
-	case TokenGT:
-		return toNumber(left) > toNumber(right), nil
-	case TokenLE:
-		return toNumber(left) <= toNumber(right), nil
-	case TokenGE:
-		return toNumber(left) >= toNumber(right), nil
-	case TokenAND:
-		return toBool(left) && toBool(right), nil
-	case TokenOR:
-		return toBool(left) || toBool(right), nil
-	case TokenPLUS:
-		// Handle string concatenation or numeric addition
-		if isString(left) || isString(right) {
-			return toString(left) + toString(right), nil
-		}
-		return toNumber(left) + toNumber(right), nil
-	case TokenMINUS:
-		return toNumber(left) - toNumber(right), nil
-	case TokenMUL:
-		return toNumber(left) * toNumber(right), nil
-	case TokenDIV:
-		r := toNumber(right)
-		if r == 0 {
-			return nil, fmt.Errorf("division by zero")
-		}
-		return toNumber(left) / r, nil
-	case TokenMOD:
-		r := toNumber(right)
-		if r == 0 {
-			return nil, fmt.Errorf("modulo by zero")
-		}
-		return int64(toNumber(left)) % int64(r), nil
-	default:
-		return nil, fmt.Errorf("unknown operator: %s", op.Value)
-	}
-}
-
-// Type conversion helpers
-
-func toBool(v interface{}) bool {
-	switch val := v.(type) {
-	case bool:
-		return val
-	case string:
-		return val != ""
-	case int64:
-		return val != 0
-	case float64:
-		return val != 0
-	case nil:
-		return false
-	default:
-		return true
-	}
-}
-
-func toNumber(v interface{}) float64 {
-	switch val := v.(type) {
-	case float64:
-		return val
-	case int64:
-		return float64(val)
-	case int:
-		return float64(val)
-	case string:
-		f, _ := strconv.ParseFloat(val, 64)
-		return f
-	case bool:
-		if val {
-			return 1
-		}
-		return 0
-	default:
-		return 0
-	}
-}
-
-func isString(v interface{}) bool {
-	_, ok := v.(string)
-	return ok
-}
-
-func isEqual(a, b interface{}) bool {
-	// Handle nil cases
-	if a == nil || b == nil {
-		return a == b
-	}
-
-	// Try to compare as numbers if both can be converted
-	if isNumeric(a) && isNumeric(b) {
-		return toNumber(a) == toNumber(b)
-	}
-
-	// Otherwise, compare as strings
-	return toString(a) == toString(b)
-}
-
-func isNumeric(v interface{}) bool {
-	switch v.(type) {
-	case float64, int64, int:
-		return true
-	case string:
-		_, err := strconv.ParseFloat(v.(string), 64)
-		return err == nil
-	default:
-		return false
-	}
+	tokens = append(tokens, Token{Type: TokenEOF})
+	return tokens, nil
 }

@@ -372,6 +372,37 @@ func (fr *FunctionRegistry) registerObjectFunctions() {
 
 // Helper functions for type conversion
 
+func toString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+
+	switch val := v.(type) {
+	case string:
+		return val
+	case int:
+		return fmt.Sprintf("%d", val)
+	case int64:
+		return fmt.Sprintf("%d", val)
+	case float64:
+		return fmt.Sprintf("%g", val)
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
+	case []interface{}:
+		// Convert arrays to comma-separated strings
+		strs := make([]string, len(val))
+		for i, item := range val {
+			strs[i] = toString(item)
+		}
+		return strings.Join(strs, ", ")
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
 func toArray(v interface{}) []interface{} {
 	switch val := v.(type) {
 	case []interface{}:

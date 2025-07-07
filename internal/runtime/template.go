@@ -11,8 +11,6 @@ var expressionPattern = regexp.MustCompile(`\{\{\s*(.*?)\s*\}\}`)
 
 // TemplateEngine handles variable interpolation and template rendering
 type TemplateEngine struct {
-	variableResolver *VariableResolver
-
 	// Expression evaluator for complex expressions
 	expressionEvaluator *ExpressionEvaluator
 }
@@ -20,7 +18,6 @@ type TemplateEngine struct {
 // NewTemplateEngine creates a new template engine
 func NewTemplateEngine() *TemplateEngine {
 	return &TemplateEngine{
-		variableResolver:    NewVariableResolver(),
 		expressionEvaluator: NewExpressionEvaluator(),
 	}
 }
@@ -46,33 +43,68 @@ func (te *TemplateEngine) Render(template string, execCtx *ExecutionContext) (st
 		}
 
 		fullMatch := match[0]                        // Full match including {{ }}
-		rawExpression := strings.TrimSpace(match[1]) // Variable path
+		rawExpression := strings.TrimSpace(match[1]) // Expression content
 
 		value, err := te.expressionEvaluator.Evaluate(rawExpression, execCtx)
 		if err != nil {
 			return "", fmt.Errorf("failed to evaluate expression %s: %w", rawExpression, err)
 		}
 
-		strValue := te.variableResolver.valueToString(value)
-		result = strings.ReplaceAll(result, fullMatch, strValue)
-
+		strValue := valueToString(value)
 		result = strings.ReplaceAll(result, fullMatch, strValue)
 	}
 
 	return result, nil
 }
 
-type VariableResolver struct {
-	expressionRegexp *regexp.Regexp
-}
+// valueToString converts a value to its string representation
+func valueToString(value interface{}) string {
+	if value == nil {
+		return ""
+	}
 
-func NewVariableResolver() *VariableResolver {
-	return &VariableResolver{
-		expressionRegexp: regexp.MustCompile(`\{\{([^}]*)\}\}`),
+	switch v := value.(type) {
+	case string:
+		return v
+	case int:
+		return fmt.Sprintf("%d", v)
+	case int64:
+		return fmt.Sprintf("%d", v)
+	case float64:
+		return fmt.Sprintf("%g", v)
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	case []interface{}:
+		// Convert arrays to comma-separated strings
+		strs := make([]string, len(v))
+		for i, item := range v {
+			strs[i] = valueToString(item)
+		}
+		return strings.Join(strs, ", ")
+	case map[string]interface{}:
+		// For maps, return a JSON-like representation
+		parts := make([]string, 0, len(v))
+		for k, val := range v {
+			parts = append(parts, fmt.Sprintf("%s: %v", k, valueToString(val)))
+		}
+		return "{" + strings.Join(parts, ", ") + "}"
+	default:
+		return fmt.Sprintf("%v", value)
 	}
 }
 
-// resolveVariable resolves a variable path from the execution context
+// VariableResolver handles variable resolution from the execution context
+type VariableResolver struct{}
+
+// NewVariableResolver creates a new variable resolver
+func NewVariableResolver() *VariableResolver {
+	return &VariableResolver{}
+}
+
+// ResolveVariable resolves a variable path from the execution context
 func (vr *VariableResolver) ResolveVariable(varPath string, execCtx *ExecutionContext) (interface{}, error) {
 	if varPath == "" {
 		return "", nil
@@ -169,12 +201,7 @@ func (vr *VariableResolver) resolveStepField(result *StepResult, field string, r
 	case "outputs":
 		// `outputs` is a special case which is used to access the outputs of the step
 		// so if this key is not found, we return the entire output map
-		v, ok := result.Output[field]
-		if !ok {
-			value = result.Output
-		} else {
-			value = v
-		}
+		value = result.Output
 	default:
 		// Try to find field in output
 		if result.Output != nil {
@@ -241,68 +268,4 @@ func (vr *VariableResolver) resolveNestedPath(value interface{}, path []string) 
 	}
 
 	return current, nil
-}
-
-// valueToString converts a value to its string representation
-func (vr *VariableResolver) valueToString(value interface{}) string {
-	if value == nil {
-		return ""
-	}
-
-	switch v := value.(type) {
-	case string:
-		return v
-	case int:
-		return fmt.Sprintf("%d", v)
-	case int64:
-		return fmt.Sprintf("%d", v)
-	case float64:
-		return fmt.Sprintf("%g", v)
-	case bool:
-		if v {
-			return "true"
-		}
-		return "false"
-	case []interface{}:
-		// Convert arrays to comma-separated strings
-		strs := make([]string, len(v))
-		for i, item := range v {
-			strs[i] = vr.valueToString(item)
-		}
-		return strings.Join(strs, ", ")
-	default:
-		return fmt.Sprintf("%v", value)
-	}
-}
-
-// isExpression determines if a variable path should be evaluated as an expression
-func (te *TemplateEngine) isExpression(varPath string) bool {
-	// Check for operators
-	operators := []string{
-		"==", "!=", ">=", "<=", ">", "<",
-		"&&", "||", "!",
-		"+", "-", "*", "/", "%",
-		"?", ":", // Ternary operator
-	}
-
-	for _, op := range operators {
-		if strings.Contains(varPath, op) {
-			return true
-		}
-	}
-
-	// Check for function calls
-	if strings.Contains(varPath, "(") && strings.Contains(varPath, ")") {
-		return true
-	}
-
-	// Check for conditional keywords
-	conditionalKeywords := []string{" if ", " else ", " and ", " or ", " not "}
-	for _, keyword := range conditionalKeywords {
-		if strings.Contains(varPath, keyword) {
-			return true
-		}
-	}
-
-	return false
 }

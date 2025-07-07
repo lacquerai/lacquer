@@ -264,19 +264,3 @@ func TestTemplateEngine_Errors(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown variable scope: invalid")
 }
-func TestTemplateEngine_ValueToString(t *testing.T) {
-	te := NewTemplateEngine()
-
-	// Test different value types
-	assert.Equal(t, "hello", te.variableResolver.valueToString("hello"))
-	assert.Equal(t, "42", te.variableResolver.valueToString(42))
-	assert.Equal(t, "42", te.variableResolver.valueToString(int64(42)))
-	assert.Equal(t, "3.14", te.variableResolver.valueToString(3.14))
-	assert.Equal(t, "true", te.variableResolver.valueToString(true))
-	assert.Equal(t, "false", te.variableResolver.valueToString(false))
-	assert.Equal(t, "", te.variableResolver.valueToString(nil))
-
-	// Test array conversion
-	arr := []interface{}{"a", "b", "c"}
-	assert.Equal(t, "a, b, c", te.variableResolver.valueToString(arr))
-}

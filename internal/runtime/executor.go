@@ -376,48 +376,6 @@ func getWorkflowNameFromContext(execCtx *ExecutionContext) string {
 	return "Untitled Workflow"
 }
 
-// Execute runs a workflow with the given inputs
-func (e *Executor) Execute(ctx context.Context, workflow *ast.Workflow, inputs map[string]interface{}) (*ExecutionSummary, error) {
-	// Create execution context
-	execCtx := NewExecutionContext(ctx, workflow, inputs)
-
-	log.Info().
-		Str("workflow", workflow.Metadata.Name).
-		Str("run_id", execCtx.RunID).
-		Int("total_steps", execCtx.TotalSteps).
-		Msg("Starting workflow execution")
-
-	// Validate inputs
-	if err := e.validateInputs(workflow, inputs); err != nil {
-		return nil, fmt.Errorf("input validation failed: %w", err)
-	}
-
-	// Execute workflow steps with concurrency support
-	if err := e.executeStepsWithConcurrency(execCtx, workflow.Workflow.Steps); err != nil {
-		log.Error().
-			Err(err).
-			Str("run_id", execCtx.RunID).
-			Msg("Workflow execution failed")
-		return &ExecutionSummary{
-			RunID:    execCtx.RunID,
-			Status:   ExecutionStatusFailed,
-			Duration: time.Since(execCtx.StartTime),
-		}, err
-	}
-
-	summary := execCtx.GetExecutionSummary()
-
-	log.Info().
-		Str("run_id", execCtx.RunID).
-		Str("status", string(summary.Status)).
-		Dur("duration", summary.Duration).
-		Int("total_tokens", summary.TotalTokens).
-		Float64("estimated_cost", summary.EstimatedCost).
-		Msg("Workflow execution completed")
-
-	return &summary, nil
-}
-
 // executeStep executes a single workflow step
 func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) (err error) {
 	defer func() {
