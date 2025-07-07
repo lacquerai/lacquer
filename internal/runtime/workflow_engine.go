@@ -5,17 +5,19 @@ import (
 	"fmt"
 
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/execcontext"
+	"github.com/lacquerai/lacquer/internal/provider"
 	"gopkg.in/yaml.v3"
 )
 
 // RuntimeWorkflowEngine implements block.WorkflowEngine using runtime.Executor
 type RuntimeWorkflowEngine struct {
 	config        *ExecutorConfig
-	modelRegistry *ModelRegistry
+	modelRegistry *provider.Registry
 }
 
 // NewRuntimeWorkflowEngine creates a new workflow engine using runtime.Executor
-func NewRuntimeWorkflowEngine(config *ExecutorConfig, registry *ModelRegistry) *RuntimeWorkflowEngine {
+func NewRuntimeWorkflowEngine(config *ExecutorConfig, registry *provider.Registry) *RuntimeWorkflowEngine {
 	return &RuntimeWorkflowEngine{
 		config:        config,
 		modelRegistry: registry,
@@ -37,7 +39,7 @@ func (e *RuntimeWorkflowEngine) Execute(ctx context.Context, workflow interface{
 	}
 
 	// Create execution context for the child workflow
-	execCtx := NewExecutionContext(ctx, astWorkflow, inputs)
+	execCtx := execcontext.NewExecutionContext(ctx, astWorkflow, inputs)
 
 	// Execute the workflow
 	err = executor.ExecuteWorkflow(ctx, execCtx, nil) // nil progress channel for now

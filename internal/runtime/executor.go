@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -12,154 +11,33 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/block"
-	"github.com/lacquerai/lacquer/internal/style"
+	"github.com/lacquerai/lacquer/internal/events"
+	"github.com/lacquerai/lacquer/internal/execcontext"
+	"github.com/lacquerai/lacquer/internal/expression"
+	"github.com/lacquerai/lacquer/internal/provider"
+	"github.com/lacquerai/lacquer/internal/provider/anthropic"
+	"github.com/lacquerai/lacquer/internal/provider/claudecode"
+	"github.com/lacquerai/lacquer/internal/provider/openai"
+	"github.com/lacquerai/lacquer/internal/tools"
+	"github.com/lacquerai/lacquer/internal/tools/mcp"
+	"github.com/lacquerai/lacquer/internal/tools/script"
+	"github.com/lacquerai/lacquer/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
-// ExecutionEventType represents the type of execution event
-type ExecutionEventType string
-
-const (
-	EventWorkflowStarted     ExecutionEventType = "workflow_started"
-	EventWorkflowCompleted   ExecutionEventType = "workflow_completed"
-	EventWorkflowFailed      ExecutionEventType = "workflow_failed"
-	EventStepStarted         ExecutionEventType = "step_started"
-	EventStepProgress        ExecutionEventType = "step_progress"
-	EventStepCompleted       ExecutionEventType = "step_completed"
-	EventStepFailed          ExecutionEventType = "step_failed"
-	EventStepSkipped         ExecutionEventType = "step_skipped"
-	EventStepRetrying        ExecutionEventType = "step_retrying"
-	EventStepActionStarted   ExecutionEventType = "step_action_started"
-	EventStepActionCompleted ExecutionEventType = "step_action_completed"
-	EventStepActionFailed    ExecutionEventType = "step_action_failed"
-)
-
-// ExecutionEvent represents an event during workflow execution
-type ExecutionEvent struct {
-	Type      ExecutionEventType     `json:"type"`
-	Timestamp time.Time              `json:"timestamp"`
-	RunID     string                 `json:"run_id"`
-	StepID    string                 `json:"step_id,omitempty"`
-	ActionID  string                 `json:"action_id,omitempty"`
-	StepIndex int                    `json:"step_index,omitempty"`
-	Duration  time.Duration          `json:"duration,omitempty"`
-	Error     string                 `json:"error,omitempty"`
-	Attempt   int                    `json:"attempt,omitempty"`
-	Text      string                 `json:"text,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-}
-
-func NewToolUseEvent(stepID, actionID string, toolName string, runID string, text string) ExecutionEvent {
-	input := text
-	if input == "" {
-		input = generateRandomUsageText(toolName)
-	}
-
-	return ExecutionEvent{
-		Type:      EventStepActionStarted,
-		ActionID:  actionID,
-		Text:      input,
-		Timestamp: time.Now(),
-		RunID:     runID,
-		StepID:    stepID,
-	}
-}
-
-func NewToolUseCompletedEvent(stepID, actionID string, toolName string, runID string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionCompleted,
-		ActionID:  actionID,
-		Text:      generateRandomUsageText(toolName),
-		Timestamp: time.Now(),
-		RunID:     runID,
-		StepID:    stepID,
-	}
-}
-
-func NewToolUseFailedEvent(step *ast.Step, actionID string, toolName string, runID string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionFailed,
-		ActionID:  actionID,
-		Timestamp: time.Now(),
-		RunID:     runID,
-		StepID:    step.ID,
-	}
-}
-
-func NewPromptAgentEvent(stepID, actionID string, runID string, prompt ...string) ExecutionEvent {
-	text := generateRandomPromptingText()
-	if len(prompt) > 0 {
-		text = strings.Join(prompt, "\n")
-		if len(text) > 200 {
-			text = text[:200] + "..."
-		}
-	}
-	return ExecutionEvent{
-		Type:      EventStepActionStarted,
-		ActionID:  actionID,
-		Text:      text,
-		Timestamp: time.Now(),
-		RunID:     runID,
-		StepID:    stepID,
-	}
-}
-
-func NewAgentCompletedEvent(step *ast.Step, actionID string, runID string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionCompleted,
-		ActionID:  actionID,
-		Timestamp: time.Now(),
-		RunID:     runID,
-		StepID:    step.ID,
-	}
-}
-
-func NewAgentFailedEvent(step *ast.Step, actionID string, runID string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionFailed,
-		ActionID:  actionID,
-		Timestamp: time.Now(),
-		RunID:     runID,
-		StepID:    step.ID,
-	}
-}
-
-func NewGenericActionEvent(stepID, actionID string, runID string, text string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionStarted,
-		ActionID:  actionID,
-		Text:      text,
-		Timestamp: time.Now(),
-		RunID:     runID,
-		StepID:    stepID,
-	}
-}
-
-func NewGenericActionCompletedEvent(stepID, actionID string, runID string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionCompleted,
-		ActionID:  actionID,
-		Timestamp: time.Now(),
-		RunID:     runID,
-		StepID:    stepID,
-	}
-}
-
 // Executor is the main workflow execution engine
 type Executor struct {
-	templateEngine  *TemplateEngine
-	modelRegistry   *ModelRegistry
-	toolRegistry    *ToolRegistry
-	config          *ExecutorConfig
-	outputParser    *OutputParser
-	schemaGenerator *SchemaGenerator
-	progressChan    chan<- ExecutionEvent
-	blockManager    *block.Manager
-	goExecutor      block.Executor
-	dockerExecutor  block.Executor
+	templateEngine *expression.TemplateEngine
+	modelRegistry  *provider.Registry
+	toolRegistry   *tools.Registry
+	config         *ExecutorConfig
+	outputParser   *OutputParser
+	progressChan   chan<- events.ExecutionEvent
+	blockManager   *block.Manager
+	goExecutor     block.Executor
+	dockerExecutor block.Executor
 }
 
 // ExecutorConfig contains configuration for the executor
@@ -187,13 +65,13 @@ func DefaultExecutorConfig() *ExecutorConfig {
 }
 
 // NewExecutor creates a new workflow executor with only required providers
-func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *ModelRegistry) (*Executor, error) {
+func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry) (*Executor, error) {
 	if config == nil {
 		config = DefaultExecutorConfig()
 	}
 
 	if registry == nil {
-		registry = NewModelRegistry(false)
+		registry = provider.NewRegistry(false)
 	}
 
 	// Only initialize providers that are used in the workflow
@@ -223,7 +101,7 @@ func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *Model
 	dockerExecutor := block.NewDockerExecutor()
 
 	// Create tool registry
-	toolRegistry := NewToolRegistry()
+	toolRegistry := tools.NewRegistry()
 
 	// Initialize tool providers for workflow
 	if err := initializeToolProviders(toolRegistry, workflow, cacheDir); err != nil {
@@ -231,20 +109,19 @@ func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *Model
 	}
 
 	return &Executor{
-		templateEngine:  NewTemplateEngine(),
-		modelRegistry:   registry,
-		toolRegistry:    toolRegistry,
-		config:          config,
-		outputParser:    NewOutputParser(),
-		schemaGenerator: NewSchemaGenerator(),
-		blockManager:    blockManager,
-		goExecutor:      goExecutor,
-		dockerExecutor:  dockerExecutor,
+		templateEngine: expression.NewTemplateEngine(),
+		modelRegistry:  registry,
+		toolRegistry:   toolRegistry,
+		config:         config,
+		outputParser:   NewOutputParser(),
+		blockManager:   blockManager,
+		goExecutor:     goExecutor,
+		dockerExecutor: dockerExecutor,
 	}, nil
 }
 
 // ExecuteWorkflow runs a workflow with progress events sent to the given channel
-func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContext, progressChan chan<- ExecutionEvent) error {
+func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *execcontext.ExecutionContext, progressChan chan<- events.ExecutionEvent) error {
 	e.progressChan = progressChan
 	log.Info().
 		Str("workflow", getWorkflowNameFromContext(execCtx)).
@@ -254,8 +131,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 
 	// Send workflow started event
 	if e.progressChan != nil {
-		e.progressChan <- ExecutionEvent{
-			Type:      EventWorkflowStarted,
+		e.progressChan <- events.ExecutionEvent{
+			Type:      events.EventWorkflowStarted,
 			Timestamp: time.Now(),
 			RunID:     execCtx.RunID,
 		}
@@ -272,8 +149,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 
 		// Send step started event
 		if e.progressChan != nil {
-			e.progressChan <- ExecutionEvent{
-				Type:      EventStepStarted,
+			e.progressChan <- events.ExecutionEvent{
+				Type:      events.EventStepStarted,
 				Timestamp: time.Now(),
 				RunID:     execCtx.RunID,
 				StepID:    step.ID,
@@ -294,8 +171,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 
 			// Send step failed event
 			if e.progressChan != nil {
-				e.progressChan <- ExecutionEvent{
-					Type:      EventStepFailed,
+				e.progressChan <- events.ExecutionEvent{
+					Type:      events.EventStepFailed,
 					Timestamp: time.Now(),
 					RunID:     execCtx.RunID,
 					StepID:    step.ID,
@@ -306,9 +183,9 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 			}
 
 			// Mark step as failed
-			result := &StepResult{
+			result := &execcontext.StepResult{
 				StepID:    step.ID,
-				Status:    StepStatusFailed,
+				Status:    execcontext.StepStatusFailed,
 				StartTime: stepStart,
 				EndTime:   time.Now(),
 				Duration:  stepDuration,
@@ -318,8 +195,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 
 			// Send workflow failed event
 			if e.progressChan != nil {
-				e.progressChan <- ExecutionEvent{
-					Type:      EventWorkflowFailed,
+				e.progressChan <- events.ExecutionEvent{
+					Type:      events.EventWorkflowFailed,
 					Timestamp: time.Now(),
 					RunID:     execCtx.RunID,
 					Error:     err.Error(),
@@ -330,8 +207,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 		} else {
 			// Send step completed event
 			if e.progressChan != nil {
-				e.progressChan <- ExecutionEvent{
-					Type:      EventStepCompleted,
+				e.progressChan <- events.ExecutionEvent{
+					Type:      events.EventStepCompleted,
 					Timestamp: time.Now(),
 					RunID:     execCtx.RunID,
 					StepID:    step.ID,
@@ -353,8 +230,8 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 
 	// Send workflow completed event
 	if e.progressChan != nil {
-		e.progressChan <- ExecutionEvent{
-			Type:      EventWorkflowCompleted,
+		e.progressChan <- events.ExecutionEvent{
+			Type:      events.EventWorkflowCompleted,
 			Timestamp: time.Now(),
 			RunID:     execCtx.RunID,
 		}
@@ -369,7 +246,7 @@ func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *ExecutionContex
 }
 
 // getWorkflowNameFromContext extracts workflow name from execution context
-func getWorkflowNameFromContext(execCtx *ExecutionContext) string {
+func getWorkflowNameFromContext(execCtx *execcontext.ExecutionContext) string {
 	if execCtx.Workflow.Metadata != nil && execCtx.Workflow.Metadata.Name != "" {
 		return execCtx.Workflow.Metadata.Name
 	}
@@ -377,7 +254,7 @@ func getWorkflowNameFromContext(execCtx *ExecutionContext) string {
 }
 
 // executeStep executes a single workflow step
-func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) (err error) {
+func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
@@ -389,9 +266,9 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) (err e
 	start := time.Now()
 
 	// Mark step as running
-	result := &StepResult{
+	result := &execcontext.StepResult{
 		StepID:    step.ID,
-		Status:    StepStatusRunning,
+		Status:    execcontext.StepStatusRunning,
 		StartTime: start,
 	}
 	execCtx.SetStepResult(step.ID, result)
@@ -402,7 +279,7 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) (err e
 	} else if shouldSkip {
 		// TODO: should we send a step skipped event?
 
-		result.Status = StepStatusSkipped
+		result.Status = execcontext.StepStatusSkipped
 		result.EndTime = time.Now()
 		result.Duration = result.EndTime.Sub(start)
 		execCtx.SetStepResult(step.ID, result)
@@ -415,7 +292,7 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) (err e
 
 	var stepOutput map[string]interface{}
 	var stepResponse string
-	var tokenUsage *TokenUsage
+	var tokenUsage *provider.TokenUsage
 
 	switch {
 	case step.IsAgentStep():
@@ -459,10 +336,10 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) (err e
 	result.Response = stepResponse
 
 	if err != nil {
-		result.Status = StepStatusFailed
+		result.Status = execcontext.StepStatusFailed
 		result.Error = err
 	} else {
-		result.Status = StepStatusCompleted
+		result.Status = execcontext.StepStatusCompleted
 		result.Output = stepOutput
 
 		// Store step outputs for template access
@@ -499,7 +376,7 @@ func (e *Executor) executeStep(execCtx *ExecutionContext, step *ast.Step) (err e
 }
 
 // executeStepsWithConcurrency executes steps with support for concurrent execution
-func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps []*ast.Step) error {
+func (e *Executor) executeStepsWithConcurrency(execCtx *execcontext.ExecutionContext, steps []*ast.Step) error {
 	if e.config.MaxConcurrentSteps <= 1 {
 		// Fall back to sequential execution
 		return e.executeStepsSequentially(execCtx, steps)
@@ -629,7 +506,7 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *ExecutionContext, steps 
 }
 
 // executeStepsSequentially executes steps one by one (fallback for sequential execution)
-func (e *Executor) executeStepsSequentially(execCtx *ExecutionContext, steps []*ast.Step) error {
+func (e *Executor) executeStepsSequentially(execCtx *execcontext.ExecutionContext, steps []*ast.Step) error {
 	for i, step := range steps {
 		if execCtx.IsCancelled() {
 			log.Info().Str("run_id", execCtx.RunID).Msg("Workflow execution cancelled")
@@ -653,9 +530,9 @@ func (e *Executor) executeStepsSequentially(execCtx *ExecutionContext, steps []*
 				Msg("Step execution failed")
 
 			// Mark step as failed
-			result := &StepResult{
+			result := &execcontext.StepResult{
 				StepID:    step.ID,
-				Status:    StepStatusFailed,
+				Status:    execcontext.StepStatusFailed,
 				StartTime: time.Now(),
 				EndTime:   time.Now(),
 				Error:     err,
@@ -807,7 +684,7 @@ func (e *Executor) findReadySteps(steps []*ast.Step, dependencies map[string][]s
 }
 
 // executeAgentStep executes a step that uses an AI agent
-func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (string, *TokenUsage, error) {
+func (e *Executor) executeAgentStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (string, *provider.TokenUsage, error) {
 	// Get the agent configuration
 	agent, exists := execCtx.Workflow.GetAgent(step.Agent)
 	if !exists {
@@ -818,7 +695,7 @@ func (e *Executor) executeAgentStep(execCtx *ExecutionContext, step *ast.Step) (
 }
 
 // executeAgentStepWithTools executes an agent step with tool support
-func (e *Executor) executeAgentStepWithTools(execCtx *ExecutionContext, step *ast.Step, agent *ast.Agent) (string, *TokenUsage, error) {
+func (e *Executor) executeAgentStepWithTools(execCtx *execcontext.ExecutionContext, step *ast.Step, agent *ast.Agent) (string, *provider.TokenUsage, error) {
 	prompt, err := e.templateEngine.Render(step.Prompt, execCtx)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to render prompt template: %w", err)
@@ -841,30 +718,30 @@ func (e *Executor) executeAgentStepWithTools(execCtx *ExecutionContext, step *as
 }
 
 // executeConversationWithTools handles multi-turn conversation with tool calling
-func (e *Executor) executeConversationWithTools(ctx context.Context, provider ModelProvider, agent *ast.Agent, initialPrompt string, execCtx *ExecutionContext, step *ast.Step) (string, *TokenUsage, error) {
-	totalTokenUsage := &TokenUsage{}
+func (e *Executor) executeConversationWithTools(ctx context.Context, pr provider.Provider, agent *ast.Agent, initialPrompt string, execCtx *execcontext.ExecutionContext, step *ast.Step) (string, *provider.TokenUsage, error) {
+	totalTokenUsage := &provider.TokenUsage{}
 
 	// @TODO: make this configurable in the step & or agent definition
 	maxTurns := 10
 
-	messages := []ModelMessage{
+	messages := []provider.Message{
 		{
 			Role: "user",
-			Content: []ContentBlockParamUnion{
-				NewTextBlock(initialPrompt),
+			Content: []provider.ContentBlockParamUnion{
+				provider.NewTextBlock(initialPrompt),
 			},
 		},
 	}
 
 	// if the provider is local, don't run in a loop as these models are self contained and
 	// handle all the tool calling themselves
-	if _, ok := provider.(LocalModelProvider); ok {
-		request, err := e.createModelRequestWithTools(agent, messages, provider.GetName())
+	if _, ok := pr.(provider.LocalModelProvider); ok {
+		request, err := e.createModelRequestWithTools(agent, messages, pr.GetName())
 		if err != nil {
 			return "", totalTokenUsage, fmt.Errorf("failed to create model request: %w", err)
 		}
 
-		responseMessages, tokenUsage, err := provider.Generate(GenerateContext{
+		responseMessages, tokenUsage, err := pr.Generate(provider.GenerateContext{
 			StepID:  step.ID,
 			RunID:   execCtx.RunID,
 			Context: ctx,
@@ -878,27 +755,27 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 
 	for turn := 0; turn < maxTurns; turn++ {
 		// Create request with tools
-		request, err := e.createModelRequestWithTools(agent, messages, provider.GetName())
+		request, err := e.createModelRequestWithTools(agent, messages, pr.GetName())
 		if err != nil {
 			return "", totalTokenUsage, fmt.Errorf("failed to create model request: %w", err)
 		}
 
 		actionID := fmt.Sprintf("turn-%d", turn)
 		prompt := getLastContentBlock(messages)
-		e.progressChan <- NewPromptAgentEvent(step.ID, actionID, execCtx.RunID, prompt)
+		e.progressChan <- events.NewPromptAgentEvent(step.ID, actionID, execCtx.RunID, prompt)
 
-		responseMessages, tokenUsage, err := provider.Generate(GenerateContext{
+		responseMessages, tokenUsage, err := pr.Generate(provider.GenerateContext{
 			StepID:  step.ID,
 			RunID:   execCtx.RunID,
 			Context: ctx,
 		}, request, e.progressChan)
 		if err != nil {
-			e.progressChan <- NewAgentFailedEvent(step, actionID, execCtx.RunID)
+			e.progressChan <- events.NewAgentFailedEvent(step, actionID, execCtx.RunID)
 
 			return "", totalTokenUsage, fmt.Errorf("model generation failed: %w", err)
 		}
 
-		e.progressChan <- NewAgentCompletedEvent(step, actionID, execCtx.RunID)
+		e.progressChan <- events.NewAgentCompletedEvent(step, actionID, execCtx.RunID)
 
 		// Accumulate token usage
 		if tokenUsage != nil {
@@ -929,12 +806,12 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, provider Mo
 	return "Max conversation turns reached without completion", totalTokenUsage, nil
 }
 
-func (e *Executor) getToolCallsFromResponseMessages(responseMessages []ModelMessage) []*ToolUseBlockParam {
-	var toolCalls []*ToolUseBlockParam
+func (e *Executor) getToolCallsFromResponseMessages(responseMessages []provider.Message) []*provider.ToolUseBlockParam {
+	var toolCalls []*provider.ToolUseBlockParam
 
 	for _, message := range responseMessages {
 		for _, content := range message.Content {
-			if content.Type() == ContentBlockTypeToolUse {
+			if content.Type() == provider.ContentBlockTypeToolUse {
 				toolCalls = append(toolCalls, content.OfToolUse)
 			}
 		}
@@ -944,7 +821,7 @@ func (e *Executor) getToolCallsFromResponseMessages(responseMessages []ModelMess
 }
 
 // createModelRequestWithTools creates a model request with tool schemas
-func (e *Executor) createModelRequestWithTools(agent *ast.Agent, messages []ModelMessage, providerName string) (*ModelRequest, error) {
+func (e *Executor) createModelRequestWithTools(agent *ast.Agent, messages []provider.Message, providerName string) (*provider.Request, error) {
 	// Create request based on provider type
 	switch providerName {
 	case "anthropic":
@@ -960,8 +837,8 @@ func (e *Executor) createModelRequestWithTools(agent *ast.Agent, messages []Mode
 }
 
 // createLocalRequest creates a local request with tools
-func (e *Executor) createLocalRequest(agent *ast.Agent, messages []ModelMessage) (*ModelRequest, error) {
-	request := &ModelRequest{
+func (e *Executor) createLocalRequest(agent *ast.Agent, messages []provider.Message) (*provider.Request, error) {
+	request := &provider.Request{
 		Model:        agent.Model,
 		Messages:     messages,
 		SystemPrompt: agent.SystemPrompt,
@@ -977,8 +854,8 @@ func (e *Executor) createLocalRequest(agent *ast.Agent, messages []ModelMessage)
 }
 
 // createAnthropicRequestWithTools creates an Anthropic request with tools
-func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, messages []ModelMessage) (*ModelRequest, error) {
-	request := &ModelRequest{
+func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, messages []provider.Message) (*provider.Request, error) {
+	request := &provider.Request{
 		Model:        agent.Model,
 		Messages:     messages,
 		SystemPrompt: agent.SystemPrompt,
@@ -995,8 +872,8 @@ func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, messages []
 }
 
 // createOpenAIRequestWithTools creates an OpenAI request with tools
-func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, messages []ModelMessage) (*ModelRequest, error) {
-	request := &ModelRequest{
+func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, messages []provider.Message) (*provider.Request, error) {
+	request := &provider.Request{
 		Model:        agent.Model,
 		Messages:     messages,
 		SystemPrompt: agent.SystemPrompt,
@@ -1013,16 +890,16 @@ func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, messages []Mod
 }
 
 // executeToolCalls executes the tool calls and returns results
-func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlockParam, execCtx *ExecutionContext, step *ast.Step) ([]ModelMessage, error) {
-	var results []ModelMessage
+func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*provider.ToolUseBlockParam, execCtx *execcontext.ExecutionContext, step *ast.Step) ([]provider.Message, error) {
+	var results []provider.Message
 
 	for _, toolCall := range toolCalls {
 		actionID := fmt.Sprintf("tool-%s", toolCall.ID)
 
-		toolCallMsg := formatToolCall(toolCall)
-		e.progressChan <- NewToolUseEvent(step.ID, actionID, toolCall.Name, execCtx.RunID, toolCallMsg)
+		toolCallMsg := provider.FormatToolCall(toolCall)
+		e.progressChan <- events.NewToolUseEvent(step.ID, actionID, toolCall.Name, execCtx.RunID, toolCallMsg)
 
-		toolExecCtx := &ToolExecutionContext{
+		toolExecCtx := &tools.ExecutionContext{
 			WorkflowID: execCtx.RunID,
 			StepID:     step.ID,
 			AgentID:    step.Agent,
@@ -1042,18 +919,18 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlo
 			// Add error result
 			isError := true
 			results = append(results,
-				ModelMessage{
+				provider.Message{
 					Role: "user",
-					Content: []ContentBlockParamUnion{
-						NewToolResultBlock(toolCall.ID, err.Error(), &isError),
+					Content: []provider.ContentBlockParamUnion{
+						provider.NewToolResultBlock(toolCall.ID, err.Error(), &isError),
 					},
 				},
 			)
-			e.progressChan <- NewToolUseFailedEvent(step, actionID, toolCall.Name, execCtx.RunID)
+			e.progressChan <- events.NewToolUseFailedEvent(step, actionID, toolCall.Name, execCtx.RunID)
 			continue
 		}
 
-		e.progressChan <- NewToolUseCompletedEvent(step.ID, actionID, toolCall.Name, execCtx.RunID)
+		e.progressChan <- events.NewToolUseCompletedEvent(step.ID, actionID, toolCall.Name, execCtx.RunID)
 
 		content := "Tool executed successfully"
 		if outputJSON, err := json.Marshal(result.Output); err == nil {
@@ -1061,10 +938,10 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlo
 		}
 
 		results = append(results,
-			ModelMessage{
+			provider.Message{
 				Role: "user",
-				Content: []ContentBlockParamUnion{
-					NewToolResultBlock(toolCall.ID, content, &result.Success),
+				Content: []provider.ContentBlockParamUnion{
+					provider.NewToolResultBlock(toolCall.ID, content, &result.Success),
 				},
 			},
 		)
@@ -1074,7 +951,7 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*ToolUseBlo
 }
 
 // executeBlockStep executes a step that uses a reusable block
-func (e *Executor) executeBlockStep(execCtx *ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
+func (e *Executor) executeBlockStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
 	log.Debug().
 		Str("step_id", step.ID).
 		Str("block", step.Uses).
@@ -1116,7 +993,7 @@ func (e *Executor) executeBlockStep(execCtx *ExecutionContext, step *ast.Step) (
 }
 
 // executeScriptStep executes a step that runs a Go script
-func (e *Executor) executeScriptStep(execCtx *ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
+func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
 	log.Debug().
 		Str("step_id", step.ID).
 		Str("script", step.Script).
@@ -1190,7 +1067,7 @@ func (e *Executor) executeScriptStep(execCtx *ExecutionContext, step *ast.Step) 
 }
 
 // executeContainerStep executes a step that runs a Docker container
-func (e *Executor) executeContainerStep(execCtx *ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
+func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
 	log.Debug().
 		Str("step_id", step.ID).
 		Str("container", step.Container).
@@ -1263,7 +1140,7 @@ func (e *Executor) executeContainerStep(execCtx *ExecutionContext, step *ast.Ste
 }
 
 // executeActionStep executes a step that performs a system action
-func (e *Executor) executeActionStep(execCtx *ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
+func (e *Executor) executeActionStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
 	switch step.Action {
 	case "update_state":
 		// Render update values using templates
@@ -1287,7 +1164,7 @@ func (e *Executor) executeActionStep(execCtx *ExecutionContext, step *ast.Step) 
 }
 
 // evaluateSkipCondition evaluates whether a step should be skipped
-func (e *Executor) evaluateSkipCondition(execCtx *ExecutionContext, step *ast.Step) (bool, error) {
+func (e *Executor) evaluateSkipCondition(execCtx *execcontext.ExecutionContext, step *ast.Step) (bool, error) {
 	if step.SkipIf == "" && step.Condition == "" {
 		return false, nil
 	}
@@ -1297,7 +1174,7 @@ func (e *Executor) evaluateSkipCondition(execCtx *ExecutionContext, step *ast.St
 		if err != nil {
 			return false, err
 		}
-		return SafeBool(result), nil
+		return utils.SafeBool(result), nil
 	}
 
 	if step.Condition != "" {
@@ -1305,7 +1182,7 @@ func (e *Executor) evaluateSkipCondition(execCtx *ExecutionContext, step *ast.St
 		if err != nil {
 			return false, err
 		}
-		return !SafeBool(result), nil // Skip if condition is false
+		return !utils.SafeBool(result), nil // Skip if condition is false
 	}
 
 	return false, nil
@@ -1333,7 +1210,7 @@ func (e *Executor) validateInputs(workflow *ast.Workflow, inputs map[string]inte
 }
 
 // renderValueRecursively renders template variables in nested structures
-func (e *Executor) renderValueRecursively(value interface{}, execCtx *ExecutionContext) (interface{}, error) {
+func (e *Executor) renderValueRecursively(value interface{}, execCtx *execcontext.ExecutionContext) (interface{}, error) {
 	switch v := value.(type) {
 	case string:
 		// Render template strings
@@ -1390,7 +1267,7 @@ func getRequiredProviders(workflow *ast.Workflow) map[string]bool {
 }
 
 // initializeRequiredProviders initializes only the specified providers
-func initializeRequiredProviders(registry *ModelRegistry, requiredProviders map[string]bool) error {
+func initializeRequiredProviders(registry *provider.Registry, requiredProviders map[string]bool) error {
 	for providerName := range requiredProviders {
 		// Check if provider is already registered (e.g., mock providers in tests)
 		if _, err := registry.GetProviderByName(providerName); err == nil {
@@ -1398,16 +1275,16 @@ func initializeRequiredProviders(registry *ModelRegistry, requiredProviders map[
 			continue
 		}
 
-		var provider ModelProvider
+		var pr provider.Provider
 		var err error
 
 		switch providerName {
 		case "anthropic":
-			provider, err = NewAnthropicProvider(nil)
+			pr, err = anthropic.NewProvider(nil)
 		case "openai":
-			provider, err = NewOpenAIProvider(nil)
+			pr, err = openai.NewProvider(nil)
 		case "local":
-			provider, err = NewClaudeCodeProvider(nil)
+			pr, err = claudecode.NewProvider(nil)
 		default:
 			return fmt.Errorf("unknown provider: %s", providerName)
 		}
@@ -1416,7 +1293,7 @@ func initializeRequiredProviders(registry *ModelRegistry, requiredProviders map[
 			return fmt.Errorf("failed to initialize %s provider: %w", providerName, err)
 		}
 
-		if err := registry.RegisterProvider(provider); err != nil {
+		if err := registry.RegisterProvider(pr); err != nil {
 			return fmt.Errorf("failed to register %s provider: %w", providerName, err)
 		}
 
@@ -1427,8 +1304,8 @@ func initializeRequiredProviders(registry *ModelRegistry, requiredProviders map[
 }
 
 // initializeToolProviders initializes tool providers for the workflow
-func initializeToolProviders(toolRegistry *ToolRegistry, workflow *ast.Workflow, cacheDir string) error {
-	scriptProvider, err := NewScriptToolProvider("local", cacheDir)
+func initializeToolProviders(toolRegistry *tools.Registry, workflow *ast.Workflow, cacheDir string) error {
+	scriptProvider, err := script.NewScriptToolProvider("local", cacheDir)
 	if err != nil {
 		return fmt.Errorf("failed to create script tool provider: %w", err)
 	}
@@ -1438,7 +1315,7 @@ func initializeToolProviders(toolRegistry *ToolRegistry, workflow *ast.Workflow,
 	}
 
 	// Register MCP tool provider
-	mcpProvider := NewMCPToolProvider()
+	mcpProvider := mcp.NewMCPToolProvider()
 	if err := toolRegistry.RegisterProvider(mcpProvider); err != nil {
 		return fmt.Errorf("failed to register MCP tool provider: %w", err)
 	}
@@ -1455,7 +1332,7 @@ func initializeToolProviders(toolRegistry *ToolRegistry, workflow *ast.Workflow,
 }
 
 // collectWorkflowOutputs collects and renders workflow-level outputs using the template engine
-func (e *Executor) collectWorkflowOutputs(execCtx *ExecutionContext) error {
+func (e *Executor) collectWorkflowOutputs(execCtx *execcontext.ExecutionContext) error {
 	workflowOutputs := execCtx.Workflow.Workflow.Outputs
 	if len(workflowOutputs) == 0 {
 		return nil // No outputs defined
@@ -1497,7 +1374,7 @@ func (e *Executor) collectWorkflowOutputs(execCtx *ExecutionContext) error {
 	return nil
 }
 
-func getLastContentBlock(responseMessages []ModelMessage) string {
+func getLastContentBlock(responseMessages []provider.Message) string {
 	if len(responseMessages) == 0 {
 		return ""
 	}
@@ -1512,99 +1389,8 @@ func getLastContentBlock(responseMessages []ModelMessage) string {
 	}
 
 	if lastMessage.Content[len(lastMessage.Content)-1].OfToolResult != nil {
-		return formatToolResult(lastMessage.Content[len(lastMessage.Content)-1].OfToolResult)
+		return provider.FormatToolResult(lastMessage.Content[len(lastMessage.Content)-1].OfToolResult)
 	}
 
 	return ""
-}
-
-func generateRandomPromptingText() string {
-	promptingTexts := []string{
-		"Pondering the mysteries of the universe...",
-		"Neurons firing at maximum capacity...",
-		"Channeling digital wisdom...",
-		"Consulting the AI crystal ball...",
-		"Launching thoughts into cyberspace...",
-		"Juggling ones and zeros...",
-		"️Casting computational spells...",
-		"Painting with pixels of possibility...",
-		"Aiming for the perfect response...",
-		"Summoning stellar insights...",
-		"Rolling the dice of creativity...",
-		"Conducting experiments in thought...",
-		"Composing a symphony of words...",
-		"Surfing waves of information...",
-		"Performing mental acrobatics...",
-		"Igniting sparks of brilliance...",
-		"Chasing rainbows of logic...",
-		"Brewing the perfect response...",
-		"Hovering over the solution...",
-		"Taming wild thoughts...",
-		"Dreaming in binary...",
-		"Sketching ideas in the digital ether...",
-	}
-
-	return promptingTexts[rand.Intn(len(promptingTexts))]
-}
-
-func generateRandomUsageText(rawTool string) string {
-	toolName := lipgloss.NewStyle().Foreground(lipgloss.Color("#42A5F5")).Bold(true).Render(rawTool)
-
-	usageTexts := []string{
-		fmt.Sprintf("Wielding the mighty %s tool...", toolName),
-		fmt.Sprintf("Summoning the power of %s tool...", toolName),
-		fmt.Sprintf("Channeling the ancient art of %s tool...", toolName),
-		fmt.Sprintf("Invoking %s tool from the depths of cyberspace...", toolName),
-		fmt.Sprintf("Whispering sweet commands to %s tool...", toolName),
-		fmt.Sprintf("Convincing %s tool to do the heavy lifting...", toolName),
-		fmt.Sprintf("Politely asking %s tool to work its magic...", toolName),
-		fmt.Sprintf("Giving %s tool a gentle nudge...", toolName),
-		fmt.Sprintf("Waking up %s tool from its digital slumber...", toolName),
-		fmt.Sprintf("Feeding %s tool some tasty data...", toolName),
-		fmt.Sprintf("Cranking the %s tool machine to eleven...", toolName),
-		fmt.Sprintf("Letting %s tool stretch its computational legs...", toolName),
-	}
-
-	return usageTexts[rand.Intn(len(usageTexts))]
-}
-
-func formatToolCall(toolCall *ToolUseBlockParam) string {
-	sb := strings.Builder{}
-	sb.WriteString(fmt.Sprintf("Using tool %s ", style.InfoStyle.Render(toolCall.Name)))
-	var input map[string]interface{}
-	err := json.Unmarshal(toolCall.Input, &input)
-	if err != nil {
-		return sb.String()
-	}
-
-	sb.WriteString(formatInputs(input))
-
-	return sb.String()
-}
-
-func formatToolResult(toolResult *ToolResultBlockParam) string {
-	sb := strings.Builder{}
-
-	sb.WriteString(fmt.Sprintf("Tool result: %s", toolResult.Content))
-
-	return sb.String()
-}
-
-func formatInputs(inputs map[string]interface{}) string {
-	sb := strings.Builder{}
-	if len(inputs) > 0 {
-		sb.WriteString("(")
-		var i int
-		for key, value := range inputs {
-			sb.WriteString(fmt.Sprintf("%s: %v", style.MutedStyle.Render(key), style.MutedStyle.Render(fmt.Sprintf("%v", value))))
-			if i != len(inputs)-1 {
-				sb.WriteString("; ")
-			}
-			i++
-		}
-
-		sb.WriteString(")")
-	}
-
-	return sb.String()
 }

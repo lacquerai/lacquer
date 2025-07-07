@@ -5,12 +5,12 @@ import (
 	"strings"
 
 	"github.com/lacquerai/lacquer/internal/ast"
-	"github.com/lacquerai/lacquer/internal/runtime"
+	"github.com/lacquerai/lacquer/internal/expression"
 )
 
 // TemplateValidator handles variable interpolation validation during parsing
 type TemplateValidator struct {
-	templateEngine *runtime.TemplateEngine
+	templateEngine *expression.TemplateEngine
 	// Variable pattern: {{ variable.path }}
 	variablePattern *regexp.Regexp
 }
@@ -18,7 +18,7 @@ type TemplateValidator struct {
 // NewTemplateValidator creates a new template validator
 func NewTemplateValidator() *TemplateValidator {
 	return &TemplateValidator{
-		templateEngine:  runtime.NewTemplateEngine(),
+		templateEngine:  expression.NewTemplateEngine(),
 		variablePattern: regexp.MustCompile(`\{\{\s*([^}]+)\s*\}\}`),
 	}
 }

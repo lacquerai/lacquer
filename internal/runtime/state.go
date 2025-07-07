@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lacquerai/lacquer/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -125,7 +126,7 @@ func (sm *StateManager) SaveState(runID string, state map[string]interface{}) er
 	}
 
 	// Create a copy to avoid external modifications
-	stateCopy := CopyMap(state)
+	stateCopy := utils.CopyMap(state)
 
 	// Add timestamp
 	stateCopy["_last_saved"] = time.Now().UTC().Format(time.RFC3339)
@@ -200,7 +201,7 @@ func (sm *StateManager) CreateSnapshot(runID string, stepIndex int, stepID strin
 		Timestamp: time.Now().UTC(),
 		StepIndex: stepIndex,
 		StepID:    stepID,
-		State:     CopyMap(state),
+		State:     utils.CopyMap(state),
 		Metadata: map[string]interface{}{
 			"created_by": "state_manager",
 		},
@@ -260,7 +261,7 @@ func (sm *StateManager) RestoreSnapshot(runID string, snapshotID string) (map[st
 	}
 
 	// Return a copy of the state
-	restoredState := CopyMap(snapshot.State)
+	restoredState := utils.CopyMap(snapshot.State)
 
 	log.Info().
 		Str("run_id", runID).
@@ -352,7 +353,7 @@ func (m *MemoryStateStore) Get(runID string) (map[string]interface{}, error) {
 	}
 
 	// Return a copy
-	return CopyMap(state), nil
+	return utils.CopyMap(state), nil
 }
 
 // Set stores state in memory
@@ -360,7 +361,7 @@ func (m *MemoryStateStore) Set(runID string, state map[string]interface{}) error
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.states[runID] = CopyMap(state)
+	m.states[runID] = utils.CopyMap(state)
 	return nil
 }
 
@@ -710,7 +711,7 @@ func (so *StateOperations) Merge(runID string, updates map[string]interface{}) e
 	}
 
 	// Merge updates
-	MergeMap(state, updates)
+	utils.MergeMap(state, updates)
 
 	// Save merged state
 	return so.manager.SaveState(runID, state)

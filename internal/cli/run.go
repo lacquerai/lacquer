@@ -14,6 +14,8 @@ import (
 	"github.com/briandowns/spinner"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/events"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/parser"
 	"github.com/lacquerai/lacquer/internal/runtime"
 	"github.com/lacquerai/lacquer/internal/style"
@@ -281,7 +283,7 @@ func runWorkflow(workflowFile string) {
 	}
 
 	// Create execution context
-	execCtx := runtime.NewExecutionContext(ctx, workflow, workflowInputs)
+	execCtx := execcontext.NewExecutionContext(ctx, workflow, workflowInputs)
 
 	// Execute workflow
 	result := ExecutionResult{
@@ -330,9 +332,9 @@ func runWorkflow(workflowFile string) {
 	}
 }
 
-func executeWithProgress(ctx context.Context, executor *runtime.Executor, execCtx *runtime.ExecutionContext, result *ExecutionResult) error {
+func executeWithProgress(ctx context.Context, executor *runtime.Executor, execCtx *execcontext.ExecutionContext, result *ExecutionResult) error {
 	// Create a progress channel for real-time updates
-	progressChan := make(chan runtime.ExecutionEvent, 100)
+	progressChan := make(chan events.ExecutionEvent, 100)
 	defer close(progressChan)
 
 	// Start progress reporter if not quiet and text output
@@ -357,33 +359,33 @@ func NewProgressTracker() *ProgressTracker {
 }
 
 // Start begins the progress tracking
-func (pt *ProgressTracker) Start(progressChan <-chan runtime.ExecutionEvent, result *ExecutionResult) {
+func (pt *ProgressTracker) Start(progressChan <-chan events.ExecutionEvent, result *ExecutionResult) {
 	// Process events - spinners handle their own animation
 	for event := range progressChan {
 		switch event.Type {
-		case runtime.EventStepStarted:
+		case events.EventStepStarted:
 			result.StepsExecuted++
 			pt.startStep(event.StepID, event.StepIndex, result.StepsTotal)
 
-		case runtime.EventStepCompleted:
+		case events.EventStepCompleted:
 			pt.completeStep(event.StepID, event.Duration)
 
-		case runtime.EventStepFailed:
+		case events.EventStepFailed:
 			pt.failStep(event.StepID, event.Duration, event.Error)
 
-		case runtime.EventStepRetrying:
+		case events.EventStepRetrying:
 			pt.retryStep(event.StepID, event.Attempt)
 
-		case runtime.EventStepProgress:
+		case events.EventStepProgress:
 			pt.updateStepProgress(event.StepID, event.ActionID, event.Text)
 
-		case runtime.EventStepActionStarted:
+		case events.EventStepActionStarted:
 			pt.createActionSpinner(event.StepID, event.ActionID, event.Text)
 
-		case runtime.EventStepActionCompleted:
+		case events.EventStepActionCompleted:
 			pt.completeActionSpinner(event.StepID, event.ActionID)
 
-		case runtime.EventStepActionFailed:
+		case events.EventStepActionFailed:
 			pt.failActionSpinner(event.StepID, event.ActionID)
 		}
 	}
@@ -541,7 +543,7 @@ func (pt *ProgressTracker) retryStep(stepID string, attempt int) {
 
 // No animation functions needed - briandowns/spinner handles animation automatically
 
-func collectExecutionResults(execCtx *runtime.ExecutionContext, result *ExecutionResult) {
+func collectExecutionResults(execCtx *execcontext.ExecutionContext, result *ExecutionResult) {
 	summary := execCtx.GetExecutionSummary()
 
 	// Convert step results

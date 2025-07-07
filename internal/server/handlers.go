@@ -10,6 +10,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/events"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/runtime"
 	"github.com/rs/zerolog/log"
 )
@@ -90,7 +92,7 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 	// use background context as hanging off the request context
 	// will cause the context to be cancelled when the request is finished.
 	ctx, cancel := context.WithCancel(context.Background())
-	execCtx := runtime.NewExecutionContext(ctx, workflow, processedInputs)
+	execCtx := execcontext.NewExecutionContext(ctx, workflow, processedInputs)
 	runID := execCtx.RunID
 
 	// Start execution tracking
@@ -110,7 +112,7 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 }
 
 // executeWorkflowAsync executes a workflow in the background
-func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflow, execCtx *runtime.ExecutionContext, runID, workflowID string) {
+func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflow, execCtx *execcontext.ExecutionContext, runID, workflowID string) {
 
 	// Create executor
 	executorConfig := &runtime.ExecutorConfig{
@@ -128,7 +130,7 @@ func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflo
 	}
 
 	// Create progress channel
-	progressChan := make(chan runtime.ExecutionEvent, 100)
+	progressChan := make(chan events.ExecutionEvent, 100)
 
 	// Forward progress events to manager
 	go func() {
@@ -213,13 +215,13 @@ func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	// Send final status if execution is complete
 	if status.Status != "running" {
-		finalEvent := runtime.ExecutionEvent{
-			Type:      runtime.EventWorkflowCompleted,
+		finalEvent := events.ExecutionEvent{
+			Type:      events.EventWorkflowCompleted,
 			Timestamp: time.Now(),
 			RunID:     runID,
 		}
 		if status.Status == "failed" {
-			finalEvent.Type = runtime.EventWorkflowFailed
+			finalEvent.Type = events.EventWorkflowFailed
 			finalEvent.Error = status.Error
 		}
 		eventJSON, _ := json.Marshal(finalEvent)
