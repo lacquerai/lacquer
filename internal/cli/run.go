@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -276,14 +277,15 @@ func runWorkflow(workflowFile string) {
 		EnableStateSnapshots: saveState,
 	}
 
-	executor, err := engine.NewExecutor(executorConfig, workflow, nil)
+	executor, err := engine.NewExecutor(ctx, executorConfig, workflow, nil)
 	if err != nil {
 		style.Error(fmt.Sprintf("Failed to create executor: %v", err))
 		return
 	}
 
 	// Create execution context
-	execCtx := execcontext.NewExecutionContext(ctx, workflow, workflowInputs)
+	wd := filepath.Dir(workflowFile)
+	execCtx := execcontext.NewExecutionContext(ctx, workflow, workflowInputs, wd)
 
 	// Execute workflow
 	result := ExecutionResult{

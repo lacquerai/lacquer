@@ -80,7 +80,7 @@ func (l *FileLoader) Load(ctx context.Context, path string) (*Block, error) {
 
 	// Validate runtime type
 	switch block.Runtime {
-	case RuntimeNative, RuntimeGo, RuntimeDocker:
+	case RuntimeNative, RuntimeBash, RuntimeDocker:
 		// Valid runtime types
 	default:
 		return nil, fmt.Errorf("unsupported runtime type: %s", block.Runtime)
@@ -172,9 +172,9 @@ func (l *FileLoader) validateBlock(block *Block) error {
 		if block.Workflow == nil {
 			return fmt.Errorf("native block requires 'workflow' field")
 		}
-	case RuntimeGo:
+	case RuntimeBash:
 		if block.Script == "" {
-			return fmt.Errorf("go block requires 'script' field")
+			return fmt.Errorf("bash block requires 'script' field")
 		}
 	case RuntimeDocker:
 		if block.Image == "" {

@@ -471,7 +471,7 @@ func (v *Validator) validateStep(step *Step, path string, result *ValidationResu
 	if step.Action != "" {
 		stepTypes++
 	}
-	if step.Script != "" {
+	if step.Run != "" {
 		stepTypes++
 	}
 	if step.Container != "" {

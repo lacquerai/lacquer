@@ -11,6 +11,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/lacquerai/lacquer/internal/events"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/provider"
 	"github.com/lacquerai/lacquer/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -205,7 +206,7 @@ func NewProvider(config *Config) (*Provider, error) {
 }
 
 // Generate generates a response using the Anthropic API
-func (p *Provider) Generate(gtx provider.GenerateContext, request *provider.Request, progressChan chan<- events.ExecutionEvent) ([]provider.Message, *provider.TokenUsage, error) {
+func (p *Provider) Generate(gtx provider.GenerateContext, request *provider.Request, progressChan chan<- events.ExecutionEvent) ([]provider.Message, *execcontext.TokenUsage, error) {
 	// Build the Anthropic request
 	anthropicReq, err := p.buildAnthropicRequest(request)
 	if err != nil {
@@ -219,7 +220,7 @@ func (p *Provider) Generate(gtx provider.GenerateContext, request *provider.Requ
 	}
 
 	// Convert usage information
-	tokenUsage := &provider.TokenUsage{
+	tokenUsage := &execcontext.TokenUsage{
 		PromptTokens:     int(response.Usage.InputTokens),
 		CompletionTokens: int(response.Usage.OutputTokens),
 		TotalTokens:      int(response.Usage.InputTokens + response.Usage.OutputTokens),

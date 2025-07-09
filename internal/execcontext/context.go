@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/ast"
-	"github.com/lacquerai/lacquer/internal/provider"
 	"github.com/lacquerai/lacquer/internal/utils"
 	"github.com/rs/zerolog"
 )
@@ -17,6 +16,7 @@ type ExecutionContext struct {
 	Workflow  *ast.Workflow
 	RunID     string
 	StartTime time.Time
+	Cwd       string
 
 	// Input parameters and state
 	Inputs  map[string]interface{}
@@ -52,7 +52,7 @@ type StepResult struct {
 	Output     map[string]interface{} `json:"output"`
 	Response   string                 `json:"response,omitempty"`
 	Error      error                  `json:"error,omitempty"`
-	TokenUsage *provider.TokenUsage   `json:"token_usage,omitempty"`
+	TokenUsage *TokenUsage            `json:"token_usage,omitempty"`
 	Retries    int                    `json:"retries"`
 }
 
@@ -68,7 +68,7 @@ const (
 )
 
 // NewExecutionContext creates a new execution context for a workflow
-func NewExecutionContext(ctx context.Context, workflow *ast.Workflow, inputs map[string]interface{}) *ExecutionContext {
+func NewExecutionContext(ctx context.Context, workflow *ast.Workflow, inputs map[string]interface{}, wd string) *ExecutionContext {
 	runID := utils.GenerateRunID()
 	execCtx, cancel := context.WithCancel(ctx)
 
@@ -90,6 +90,7 @@ func NewExecutionContext(ctx context.Context, workflow *ast.Workflow, inputs map
 		State:       make(map[string]interface{}),
 		Outputs:     make(map[string]interface{}),
 		StepResults: make(map[string]*StepResult),
+		Cwd:         wd,
 		Environment: utils.GetEnvironmentVars(),
 		Metadata:    utils.BuildMetadata(workflow),
 		Matrix:      make(map[string]interface{}),
@@ -360,3 +361,10 @@ const (
 	ExecutionStatusFailed    ExecutionStatus = "failed"
 	ExecutionStatusCancelled ExecutionStatus = "cancelled"
 )
+
+// TokenUsage tracks token consumption for model API calls
+type TokenUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}

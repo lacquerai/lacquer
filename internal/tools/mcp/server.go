@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 )
 
 // Server represents a connection to an MCP server
@@ -172,7 +173,7 @@ func (s *Server) DiscoverTools(ctx context.Context) ([]Tool, error) {
 }
 
 // ExecuteTool executes a tool on the MCP server
-func (s *Server) ExecuteTool(ctx context.Context, toolName string, parameters json.RawMessage) (map[string]interface{}, error) {
+func (s *Server) ExecuteTool(execCtx *execcontext.ExecutionContext, toolName string, parameters json.RawMessage) (map[string]interface{}, error) {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -186,7 +187,7 @@ func (s *Server) ExecuteTool(ctx context.Context, toolName string, parameters js
 	}
 
 	// Execute the tool
-	result, err := client.CallTool(ctx, toolName, parameters)
+	result, err := client.CallTool(execCtx.Context, toolName, parameters)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute tool: %w", err)
 	}

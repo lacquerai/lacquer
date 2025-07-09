@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/events"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/provider"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -88,7 +89,7 @@ func NewProvider(config *OpenAIConfig) (*OpenAIProvider, error) {
 }
 
 // Generate generates a response using the OpenAI API
-func (p *OpenAIProvider) Generate(ctx provider.GenerateContext, request *provider.Request, progressChan chan<- events.ExecutionEvent) ([]provider.Message, *provider.TokenUsage, error) {
+func (p *OpenAIProvider) Generate(ctx provider.GenerateContext, request *provider.Request, progressChan chan<- events.ExecutionEvent) ([]provider.Message, *execcontext.TokenUsage, error) {
 	tools := make([]openai.ChatCompletionToolParam, len(request.Tools), 0)
 	for _, tool := range request.Tools {
 		parameters, err := json.Marshal(tool.Parameters)
@@ -139,7 +140,7 @@ func (p *OpenAIProvider) Generate(ctx provider.GenerateContext, request *provide
 	}
 
 	// Calculate token usage and cost
-	tokenUsage := &provider.TokenUsage{
+	tokenUsage := &execcontext.TokenUsage{
 		PromptTokens:     int(response.Usage.PromptTokens),
 		CompletionTokens: int(response.Usage.CompletionTokens),
 		TotalTokens:      int(response.Usage.TotalTokens),

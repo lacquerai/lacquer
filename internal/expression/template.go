@@ -138,18 +138,17 @@ func (vr *VariableResolver) ResolveVariable(varPath string, execCtx *execcontext
 		return vr.resolveNestedPath(value, parts[2:])
 
 	case "steps":
-		if len(parts) < 3 {
-			return nil, fmt.Errorf("steps variable requires step_id and field name")
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("steps variable requires step_id")
 		}
 		stepID := parts[1]
-		field := parts[2]
 
 		result, exists := execCtx.GetStepResult(stepID)
 		if !exists {
 			return nil, fmt.Errorf("step %s not found", stepID)
 		}
 
-		return vr.resolveStepField(result, field, parts[3:])
+		return result.Output, nil
 
 	case "metadata":
 		if len(parts) < 2 {

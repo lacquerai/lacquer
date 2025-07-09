@@ -1,4 +1,3 @@
-# The simplest Lacquer workflow - Hello World
 version: "1.0"
 metadata:
   name: hello-world
@@ -6,57 +5,36 @@ metadata:
   author: lacquer-team
 
 # Define a single agent using Claude 3.5 Sonnet
-# agents:
-  # greeter:
-  #   provider: anthropic
-  #   model: claude-3-5-sonnet-20241022
-  #   temperature: 0.7
-  #   system_prompt: You are a friendly assistant who gives warm greetings.
+agents:
+  greeter:
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    temperature: 0.7
+    system_prompt: You are a friendly assistant who gives warm greetings.
 
 # Define the workflow
 workflow:
   # Input parameter - name to greet
   inputs:
-  
     name:
       type: string
-      description: Name of the person to greet
+      description: Name of the being to greet
       required: true
-      # default: "World"
+      default: "human"
+    type:
+      type: string
+      description: Type of being to greet
+      required: true
+      default: "human"
   
   # Single step workflow
   steps:
     - id: say_hello
-      script: |
-        package main
-        import (
-          "encoding/json"
-          "os"
-          "time"
-        )
-
-        type Context struct {
-          Inputs Inputs `json:"inputs"`
-        }
-
-        type Inputs struct {
-          Name string `json:"name"`
-        }
-
-        func main() {
-          var context Context
-          err := json.NewDecoder(os.Stdin).Decode(&context)
-          if err != nil {
-            panic(err)
-          }
-          json.NewEncoder(os.Stdout).Encode(map[string]interface{}{
-            "outputs": map[string]interface{}{
-              "greeting": "Hello, " + context.Inputs.Name + "!",
-            },
-          })
-        }
+      run: |
+        go run main.go
       with:
         name: "{{ inputs.name }}"
+      
 
   # Return the greeting as output
   outputs:

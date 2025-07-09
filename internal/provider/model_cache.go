@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lacquerai/lacquer/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,13 +31,7 @@ type CachedModels struct {
 
 // NewModelCache creates a new model cache
 func NewModelCache(disable bool) *ModelCache {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Warn().Err(err).Msg("Could not get user home directory, using current directory for cache")
-		homeDir = "."
-	}
-
-	cacheDir := filepath.Join(homeDir, ".lacquer", "cache", "models")
+	cacheDir := filepath.Join(utils.LacquerCacheDir, "models")
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		log.Warn().Err(err).Str("dir", cacheDir).Msg("Could not create cache directory")
 	}

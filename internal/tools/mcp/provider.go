@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/tools"
 )
 
@@ -68,7 +69,7 @@ func (p *MCPToolProvider) AddToolDefinition(tool *ast.Tool) ([]tools.Tool, error
 }
 
 // ExecuteTool executes an MCP tool
-func (p *MCPToolProvider) ExecuteTool(ctx context.Context, toolName string, parameters json.RawMessage, execCtx *tools.ExecutionContext) (*tools.Result, error) {
+func (p *MCPToolProvider) ExecuteTool(execCtx *execcontext.ExecutionContext, toolName string, parameters json.RawMessage) (*tools.Result, error) {
 	p.mu.RLock()
 	server, exists := p.servers[toolName]
 	p.mu.RUnlock()
@@ -78,7 +79,7 @@ func (p *MCPToolProvider) ExecuteTool(ctx context.Context, toolName string, para
 	}
 
 	// Execute the tool through the MCP server
-	result, err := server.ExecuteTool(ctx, toolName, parameters)
+	result, err := server.ExecuteTool(execCtx, toolName, parameters)
 	if err != nil {
 		return &tools.Result{
 			ToolName: toolName,

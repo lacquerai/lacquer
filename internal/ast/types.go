@@ -99,14 +99,34 @@ func max(a, b int) int {
 
 // Workflow represents the root of a Lacquer workflow
 type Workflow struct {
-	Version  string            `yaml:"version" json:"version" validate:"required,eq=1.0"`
-	Metadata *WorkflowMetadata `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	Agents   map[string]*Agent `yaml:"agents,omitempty" json:"agents,omitempty"`
-	Workflow *WorkflowDef      `yaml:"workflow" json:"workflow" validate:"required"`
+	Version      string            `yaml:"version" json:"version" validate:"required,eq=1.0"`
+	Metadata     *WorkflowMetadata `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	Agents       map[string]*Agent `yaml:"agents,omitempty" json:"agents,omitempty"`
+	Requirements *Requirements     `yaml:"requirements,omitempty" json:"requirements,omitempty"`
+	Workflow     *WorkflowDef      `yaml:"workflow" json:"workflow" validate:"required"`
 
 	// Internal fields for tracking
 	SourceFile string   `yaml:"-" json:"-"`
 	Position   Position `yaml:"-" json:"-"`
+}
+
+// Requirements represents the requirements for the workflow
+type Requirements struct {
+	Runtimes []Runtime `yaml:"runtimes" json:"runtimes" validate:"required"`
+}
+
+// RuntimeType represents a runtime type, e.g. "node" or "go"
+type RuntimeType string
+
+var (
+	RuntimeTypeNode RuntimeType = "node"
+	RuntimeTypeGo   RuntimeType = "go"
+)
+
+// Runtime represents a runtime requirement, e.g. "node" or "go"
+type Runtime struct {
+	Name    RuntimeType `yaml:"name" json:"name" validate:"required"`
+	Version string      `yaml:"version,omitempty" json:"version,omitempty"`
 }
 
 // WorkflowMetadata contains descriptive information about the workflow
@@ -228,6 +248,7 @@ type Tool struct {
 	Uses       string                 `yaml:"uses,omitempty" json:"uses,omitempty"`
 	Script     string                 `yaml:"script,omitempty" json:"script,omitempty"`
 	Runtime    string                 `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	Version    string                 `yaml:"version,omitempty" json:"version,omitempty"`
 	Parameters JSONSchema             `yaml:"parameters,omitempty" json:"parameters,omitempty"`
 	MCPServer  *MCPServerConfig       `yaml:"mcp_server,omitempty" json:"mcp_server,omitempty"`
 	Config     map[string]interface{} `yaml:"config,omitempty" json:"config,omitempty"`
@@ -332,7 +353,6 @@ type Step struct {
 	Prompt    string                 `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 	Uses      string                 `yaml:"uses,omitempty" json:"uses,omitempty"`
 	Run       string                 `yaml:"run,omitempty" json:"run,omitempty"`
-	Runtime   string                 `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	Container string                 `yaml:"container,omitempty" json:"container,omitempty"`
 	With      map[string]interface{} `yaml:"with,omitempty" json:"with,omitempty"`
 	Action    string                 `yaml:"action,omitempty" json:"action,omitempty"`

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 )
 
 // ExecutionContext provides context for tool execution
@@ -51,7 +52,7 @@ type Provider interface {
 	AddToolDefinition(tool *ast.Tool) ([]Tool, error)
 
 	// ExecuteTool executes a tool with the given parameters
-	ExecuteTool(ctx context.Context, toolName string, parameters json.RawMessage, execCtx *ExecutionContext) (*Result, error)
+	ExecuteTool(execCtx *execcontext.ExecutionContext, toolName string, parameters json.RawMessage) (*Result, error)
 
 	// Close cleans up resources
 	Close() error
@@ -119,7 +120,7 @@ func (tr *Registry) RegisterToolsForAgent(agent *ast.Agent) error {
 }
 
 // GetProvider returns a provider by name
-func (tr *Registry) ExecuteTool(ctx context.Context, toolName string, parameters json.RawMessage, execCtx *ExecutionContext) (*Result, error) {
+func (tr *Registry) ExecuteTool(execCtx *execcontext.ExecutionContext, toolName string, parameters json.RawMessage) (*Result, error) {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
 
@@ -128,7 +129,7 @@ func (tr *Registry) ExecuteTool(ctx context.Context, toolName string, parameters
 		return nil, fmt.Errorf("provider for tool %s not found", toolName)
 	}
 
-	return provider.ExecuteTool(ctx, toolName, parameters, execCtx)
+	return provider.ExecuteTool(execCtx, toolName, parameters)
 }
 
 func (tr *Registry) GetToolsForAgent(agentName string) []Tool {

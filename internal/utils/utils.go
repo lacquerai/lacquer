@@ -4,11 +4,29 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/rs/zerolog/log"
 )
+
+var (
+	LacquerRootDir  string
+	LacquerCacheDir string
+)
+
+func init() {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Err(err).Msg("Could not get user home directory")
+		homeDir = "."
+	}
+
+	LacquerRootDir = filepath.Join(homeDir, ".lacquer")
+	LacquerCacheDir = filepath.Join(LacquerRootDir, "cache")
+}
 
 // generateRunID creates a unique identifier for a workflow execution
 func GenerateRunID() string {

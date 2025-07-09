@@ -20,6 +20,7 @@ import (
 	"github.com/lacquerai/lacquer/internal/provider/anthropic"
 	"github.com/lacquerai/lacquer/internal/provider/claudecode"
 	"github.com/lacquerai/lacquer/internal/provider/openai"
+	"github.com/lacquerai/lacquer/internal/runtime"
 	"github.com/lacquerai/lacquer/internal/tools"
 	"github.com/lacquerai/lacquer/internal/tools/mcp"
 	"github.com/lacquerai/lacquer/internal/tools/script"
@@ -36,7 +37,6 @@ type Executor struct {
 	outputParser   *OutputParser
 	progressChan   chan<- events.ExecutionEvent
 	blockManager   *block.Manager
-	goExecutor     block.Executor
 	dockerExecutor block.Executor
 }
 
@@ -65,7 +65,7 @@ func DefaultExecutorConfig() *ExecutorConfig {
 }
 
 // NewExecutor creates a new workflow executor with only required providers
-func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry) (*Executor, error) {
+func NewExecutor(ctx context.Context, config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry) (*Executor, error) {
 	if config == nil {
 		config = DefaultExecutorConfig()
 	}
@@ -87,24 +87,39 @@ func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *provi
 		return nil, fmt.Errorf("failed to create block manager: %w", err)
 	}
 
+	runtimeManager, err := runtime.NewManager(filepath.Join(utils.LacquerCacheDir, "runtimes"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create runtime manager: %w", err)
+	}
+
+	// install requirements so any script steps can be executed
+	if workflow.Requirements != nil {
+
+		for _, runtime := range workflow.Requirements.Runtimes {
+			if runtime.Version != "" {
+				_, err := runtimeManager.Get(ctx, string(runtime.Name), runtime.Version)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get runtime %s: %w", runtime.Name, err)
+				}
+				continue
+			}
+
+			_, err := runtimeManager.GetLatest(ctx, string(runtime.Name))
+			if err != nil {
+				return nil, fmt.Errorf("failed to get latest runtime %s: %w", runtime.Name, err)
+			}
+		}
+	}
+
 	// Register native executor with workflow engine
 	workflowEngine := NewRuntimeWorkflowEngine(config, registry)
 	blockManager.RegisterNativeExecutor(workflowEngine)
-
-	// Create Go executor for script execution
-	goExecutor, err := block.NewGoExecutor(cacheDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Go executor: %w", err)
-	}
-
-	// Create Docker executor for container execution
-	dockerExecutor := block.NewDockerExecutor()
 
 	// Create tool registry
 	toolRegistry := tools.NewRegistry()
 
 	// Initialize tool providers for workflow
-	if err := initializeToolProviders(toolRegistry, workflow, cacheDir); err != nil {
+	if err := initializeToolProviders(toolRegistry, workflow, cacheDir, runtimeManager); err != nil {
 		return nil, fmt.Errorf("failed to initialize tool providers: %w", err)
 	}
 
@@ -115,8 +130,6 @@ func NewExecutor(config *ExecutorConfig, workflow *ast.Workflow, registry *provi
 		config:         config,
 		outputParser:   NewOutputParser(),
 		blockManager:   blockManager,
-		goExecutor:     goExecutor,
-		dockerExecutor: dockerExecutor,
 	}, nil
 }
 
@@ -292,7 +305,7 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 
 	var stepOutput map[string]interface{}
 	var stepResponse string
-	var tokenUsage *provider.TokenUsage
+	var tokenUsage *execcontext.TokenUsage
 
 	switch {
 	case step.IsAgentStep():
@@ -684,7 +697,7 @@ func (e *Executor) findReadySteps(steps []*ast.Step, dependencies map[string][]s
 }
 
 // executeAgentStep executes a step that uses an AI agent
-func (e *Executor) executeAgentStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (string, *provider.TokenUsage, error) {
+func (e *Executor) executeAgentStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (string, *execcontext.TokenUsage, error) {
 	// Get the agent configuration
 	agent, exists := execCtx.Workflow.GetAgent(step.Agent)
 	if !exists {
@@ -695,7 +708,7 @@ func (e *Executor) executeAgentStep(execCtx *execcontext.ExecutionContext, step 
 }
 
 // executeAgentStepWithTools executes an agent step with tool support
-func (e *Executor) executeAgentStepWithTools(execCtx *execcontext.ExecutionContext, step *ast.Step, agent *ast.Agent) (string, *provider.TokenUsage, error) {
+func (e *Executor) executeAgentStepWithTools(execCtx *execcontext.ExecutionContext, step *ast.Step, agent *ast.Agent) (string, *execcontext.TokenUsage, error) {
 	prompt, err := e.templateEngine.Render(step.Prompt, execCtx)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to render prompt template: %w", err)
@@ -706,20 +719,12 @@ func (e *Executor) executeAgentStepWithTools(execCtx *execcontext.ExecutionConte
 		return "", nil, fmt.Errorf("failed to get provider %s for model %s: %w", agent.Provider, agent.Model, err)
 	}
 
-	timeout := e.config.DefaultTimeout
-	if step.Timeout != nil {
-		timeout = step.Timeout.Duration
-	}
-
-	ctx, cancel := context.WithTimeout(execCtx.Context, timeout)
-	defer cancel()
-
-	return e.executeConversationWithTools(ctx, provider, agent, prompt, execCtx, step)
+	return e.executeConversationWithTools(execCtx, provider, agent, prompt, step)
 }
 
 // executeConversationWithTools handles multi-turn conversation with tool calling
-func (e *Executor) executeConversationWithTools(ctx context.Context, pr provider.Provider, agent *ast.Agent, initialPrompt string, execCtx *execcontext.ExecutionContext, step *ast.Step) (string, *provider.TokenUsage, error) {
-	totalTokenUsage := &provider.TokenUsage{}
+func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionContext, pr provider.Provider, agent *ast.Agent, initialPrompt string, step *ast.Step) (string, *execcontext.TokenUsage, error) {
+	totalTokenUsage := &execcontext.TokenUsage{}
 
 	// @TODO: make this configurable in the step & or agent definition
 	maxTurns := 10
@@ -744,7 +749,7 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, pr provider
 		responseMessages, tokenUsage, err := pr.Generate(provider.GenerateContext{
 			StepID:  step.ID,
 			RunID:   execCtx.RunID,
-			Context: ctx,
+			Context: execCtx.Context,
 		}, request, e.progressChan)
 		if err != nil {
 			return "", tokenUsage, fmt.Errorf("model generation failed: %w", err)
@@ -767,7 +772,7 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, pr provider
 		responseMessages, tokenUsage, err := pr.Generate(provider.GenerateContext{
 			StepID:  step.ID,
 			RunID:   execCtx.RunID,
-			Context: ctx,
+			Context: execCtx.Context,
 		}, request, e.progressChan)
 		if err != nil {
 			e.progressChan <- events.NewAgentFailedEvent(step, actionID, execCtx.RunID)
@@ -791,7 +796,7 @@ func (e *Executor) executeConversationWithTools(ctx context.Context, pr provider
 		}
 
 		// Execute tool calls
-		toolResults, err := e.executeToolCalls(ctx, toolCalls, execCtx, step)
+		toolResults, err := e.executeToolCalls(execCtx, toolCalls, step)
 		if err != nil {
 			return "", totalTokenUsage, fmt.Errorf("tool execution failed: %w", err)
 		}
@@ -890,7 +895,7 @@ func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, messages []pro
 }
 
 // executeToolCalls executes the tool calls and returns results
-func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*provider.ToolUseBlockParam, execCtx *execcontext.ExecutionContext, step *ast.Step) ([]provider.Message, error) {
+func (e *Executor) executeToolCalls(execCtx *execcontext.ExecutionContext, toolCalls []*provider.ToolUseBlockParam, step *ast.Step) ([]provider.Message, error) {
 	var results []provider.Message
 
 	for _, toolCall := range toolCalls {
@@ -899,17 +904,8 @@ func (e *Executor) executeToolCalls(ctx context.Context, toolCalls []*provider.T
 		toolCallMsg := provider.FormatToolCall(toolCall)
 		e.progressChan <- events.NewToolUseEvent(step.ID, actionID, toolCall.Name, execCtx.RunID, toolCallMsg)
 
-		toolExecCtx := &tools.ExecutionContext{
-			WorkflowID: execCtx.RunID,
-			StepID:     step.ID,
-			AgentID:    step.Agent,
-			RunID:      execCtx.RunID,
-			Context:    ctx,
-			Timeout:    e.config.DefaultTimeout,
-		}
-
 		// Execute the tool
-		result, err := e.toolRegistry.ExecuteTool(ctx, toolCall.Name, toolCall.Input, toolExecCtx)
+		result, err := e.toolRegistry.ExecuteTool(execCtx, toolCall.Name, toolCall.Input)
 		if err != nil {
 			log.Warn().
 				Err(err).
@@ -977,11 +973,9 @@ func (e *Executor) executeBlockStep(execCtx *execcontext.ExecutionContext, step 
 
 	// Execute block using block manager
 	outputs, err := e.blockManager.ExecuteBlock(
-		execCtx.Context,
+		execCtx,
 		blockPath,
 		inputs,
-		execCtx.RunID,
-		step.ID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("block execution failed: %w", err)
@@ -1009,10 +1003,9 @@ func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step
 		inputs[key] = rendered
 	}
 
-	// Get script content - either from file or inline
 	scriptContent := step.Run
 	if strings.HasPrefix(step.Run, "./") || strings.HasPrefix(step.Run, "/") {
-		// It's a file path, read the content
+		// load the script from the file
 		contentBytes, err := os.ReadFile(step.Run)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read script file %s: %w", step.Run, err)
@@ -1020,50 +1013,20 @@ func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step
 		scriptContent = string(contentBytes)
 	}
 
-	// Create a temporary block configuration for Go script execution
 	tempBlock := &block.Block{
 		Name:    fmt.Sprintf("script-%s", step.ID),
-		Runtime: block.RuntimeGo,
+		Runtime: block.RuntimeBash,
 		Script:  scriptContent,
-		Inputs:  make(map[string]block.InputSchema),
-		Outputs: make(map[string]block.OutputSchema),
 	}
 
-	// Validate the block before execution
-	if err := e.goExecutor.Validate(tempBlock); err != nil {
-		return nil, fmt.Errorf("script validation failed: %w", err)
-	}
-
-	// Define dynamic inputs based on step.With
-	for key := range inputs {
-		tempBlock.Inputs[key] = block.InputSchema{
-			Type:     "string", // Default type
-			Required: false,
-		}
-	}
-
-	// Create workspace directory
-	workspace := filepath.Join(os.TempDir(), fmt.Sprintf("laq-script-%s", step.ID))
-	if err := os.MkdirAll(workspace, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create workspace: %w", err)
-	}
-
-	// Create execution context for the block
-	blockExecCtx := &block.ExecutionContext{
-		WorkflowID: execCtx.RunID,
-		StepID:     step.ID,
-		Workspace:  workspace,
-		Timeout:    e.config.DefaultTimeout,
-		Context:    execCtx.Context,
-	}
-
-	// Execute using Go executor
-	outputs, err := e.goExecutor.Execute(execCtx.Context, tempBlock, inputs, blockExecCtx)
+	outputs, err := e.blockManager.ExecuteRawBlock(execCtx, tempBlock, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("script execution failed: %w", err)
 	}
 
-	return outputs, nil
+	return map[string]interface{}{
+		"outputs": outputs,
+	}, nil
 }
 
 // executeContainerStep executes a step that runs a Docker container
@@ -1115,23 +1078,8 @@ func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, s
 		}
 	}
 
-	// Create workspace directory
-	workspace := filepath.Join(os.TempDir(), fmt.Sprintf("laq-container-%s", step.ID))
-	if err := os.MkdirAll(workspace, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create workspace: %w", err)
-	}
-
-	// Create execution context for the block
-	blockExecCtx := &block.ExecutionContext{
-		WorkflowID: execCtx.RunID,
-		StepID:     step.ID,
-		Workspace:  workspace,
-		Timeout:    e.config.DefaultTimeout,
-		Context:    execCtx.Context,
-	}
-
 	// Execute using Docker executor
-	outputs, err := e.dockerExecutor.Execute(execCtx.Context, tempBlock, inputs, blockExecCtx)
+	outputs, err := e.dockerExecutor.Execute(execCtx, tempBlock, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("container execution failed: %w", err)
 	}
@@ -1304,8 +1252,8 @@ func initializeRequiredProviders(registry *provider.Registry, requiredProviders 
 }
 
 // initializeToolProviders initializes tool providers for the workflow
-func initializeToolProviders(toolRegistry *tools.Registry, workflow *ast.Workflow, cacheDir string) error {
-	scriptProvider, err := script.NewScriptToolProvider("local", cacheDir)
+func initializeToolProviders(toolRegistry *tools.Registry, workflow *ast.Workflow, cacheDir string, runtimeManager *runtime.Manager) error {
+	scriptProvider, err := script.NewScriptToolProvider("local", cacheDir, runtimeManager)
 	if err != nil {
 		return fmt.Errorf("failed to create script tool provider: %w", err)
 	}

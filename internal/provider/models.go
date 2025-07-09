@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/lacquerai/lacquer/internal/events"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/lacquerai/lacquer/internal/tools"
 )
@@ -25,7 +26,7 @@ type LocalModelProvider interface {
 // Provider defines the interface for AI model providers
 type Provider interface {
 	// Generate generates a response from the model
-	Generate(ctx GenerateContext, request *Request, progressChan chan<- events.ExecutionEvent) ([]Message, *TokenUsage, error)
+	Generate(ctx GenerateContext, request *Request, progressChan chan<- events.ExecutionEvent) ([]Message, *execcontext.TokenUsage, error)
 
 	// GetName returns the provider name
 	GetName() string
@@ -386,7 +387,7 @@ func (mp *MockProvider) SetResponse(prompt, response string) {
 }
 
 // Generate generates a mock response
-func (mp *MockProvider) Generate(gtx GenerateContext, request *Request, progressChan chan<- events.ExecutionEvent) ([]Message, *TokenUsage, error) {
+func (mp *MockProvider) Generate(gtx GenerateContext, request *Request, progressChan chan<- events.ExecutionEvent) ([]Message, *execcontext.TokenUsage, error) {
 	// Check for specific response
 	if response, exists := mp.responses[request.GetPrompt()]; exists {
 		return []Message{
@@ -394,7 +395,7 @@ func (mp *MockProvider) Generate(gtx GenerateContext, request *Request, progress
 					Role:    "assistant",
 					Content: []ContentBlockParamUnion{NewTextBlock(response)},
 				},
-			}, &TokenUsage{
+			}, &execcontext.TokenUsage{
 				PromptTokens:     10,
 				CompletionTokens: 20,
 				TotalTokens:      30,
@@ -408,7 +409,7 @@ func (mp *MockProvider) Generate(gtx GenerateContext, request *Request, progress
 				Role:    "assistant",
 				Content: []ContentBlockParamUnion{NewTextBlock(response)},
 			},
-		}, &TokenUsage{
+		}, &execcontext.TokenUsage{
 			PromptTokens:     len(request.GetPrompt()) / 4,
 			CompletionTokens: len(response) / 4,
 			TotalTokens:      (len(request.GetPrompt()) + len(response)) / 4,
@@ -433,13 +434,6 @@ func (mp *MockProvider) IsModelSupported(model string) bool {
 // Close cleans up resources
 func (mp *MockProvider) Close() error {
 	return nil
-}
-
-// TokenUsage tracks token consumption for model API calls
-type TokenUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
 }
 
 func FormatToolCall(toolCall *ToolUseBlockParam) string {

@@ -8,6 +8,8 @@ import (
 	"io"
 	"os/exec"
 	"time"
+
+	"github.com/lacquerai/lacquer/internal/execcontext"
 )
 
 // DockerExecutor executes Docker blocks
@@ -40,9 +42,9 @@ func (e *DockerExecutor) Validate(block *Block) error {
 }
 
 // Execute runs a Docker block
-func (e *DockerExecutor) Execute(ctx context.Context, block *Block, inputs map[string]interface{}, execCtx *ExecutionContext) (map[string]interface{}, error) {
+func (e *DockerExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
 	// Pull image if not present
-	if err := e.pullImageIfNeeded(ctx, block.Image); err != nil {
+	if err := e.pullImageIfNeeded(execCtx.Context, block.Image); err != nil {
 		return nil, fmt.Errorf("failed to pull image: %w", err)
 	}
 
@@ -50,11 +52,6 @@ func (e *DockerExecutor) Execute(ctx context.Context, block *Block, inputs map[s
 	execInput := ExecutionInput{
 		Inputs: inputs,
 		Env:    make(map[string]string),
-		Context: ExecutionContextJSON{
-			WorkflowID: execCtx.WorkflowID,
-			StepID:     execCtx.StepID,
-			Workspace:  execCtx.Workspace,
-		},
 	}
 
 	// Add environment variables from block config
@@ -62,10 +59,6 @@ func (e *DockerExecutor) Execute(ctx context.Context, block *Block, inputs map[s
 		execInput.Env[key] = value
 	}
 
-	// Add workspace environment
-	execInput.Env["WORKSPACE"] = execCtx.Workspace
-
-	// Marshal input to JSON
 	inputJSON, err := json.Marshal(execInput)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal input: %w", err)
@@ -83,8 +76,8 @@ func (e *DockerExecutor) Execute(ctx context.Context, block *Block, inputs map[s
 	}
 
 	// Mount workspace if specified
-	if execCtx.Workspace != "" {
-		args = append(args, "-v", fmt.Sprintf("%s:/workspace", execCtx.Workspace))
+	if execCtx.Cwd != "" {
+		args = append(args, "-v", fmt.Sprintf("%s:/workspace", execCtx.Cwd))
 	}
 
 	// Add image
@@ -96,7 +89,7 @@ func (e *DockerExecutor) Execute(ctx context.Context, block *Block, inputs map[s
 	}
 
 	// Execute Docker container
-	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd := exec.CommandContext(execCtx.Context, "docker", args...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

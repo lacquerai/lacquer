@@ -1,13 +1,15 @@
 package block
 
 import (
-	"context"
 	"fmt"
+
+	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 )
 
 // WorkflowEngine interface for workflow execution
 type WorkflowEngine interface {
-	Execute(ctx context.Context, workflow interface{}, inputs map[string]interface{}) (map[string]interface{}, error)
+	Execute(execCtx *execcontext.ExecutionContext, workflow *ast.Workflow, inputs map[string]interface{}) (map[string]interface{}, error)
 }
 
 // NativeExecutor executes native Lacquer blocks (YAML workflows)
@@ -34,7 +36,7 @@ func (e *NativeExecutor) Validate(block *Block) error {
 }
 
 // Execute runs a native block
-func (e *NativeExecutor) Execute(ctx context.Context, block *Block, inputs map[string]interface{}, execCtx *ExecutionContext) (map[string]interface{}, error) {
+func (e *NativeExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
 	// 1. Validate and map inputs according to block schema
 	mappedInputs, err := e.validateAndMapInputs(block, inputs)
 	if err != nil {
@@ -42,7 +44,7 @@ func (e *NativeExecutor) Execute(ctx context.Context, block *Block, inputs map[s
 	}
 
 	// 2. Execute the workflow using the engine
-	outputs, err := e.engine.Execute(ctx, block.Workflow, mappedInputs)
+	outputs, err := e.engine.Execute(execCtx, block.Workflow, mappedInputs)
 	if err != nil {
 		return nil, fmt.Errorf("workflow execution failed: %w", err)
 	}

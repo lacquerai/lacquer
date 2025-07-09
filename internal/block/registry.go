@@ -1,9 +1,10 @@
 package block
 
 import (
-	"context"
 	"fmt"
 	"sync"
+
+	"github.com/lacquerai/lacquer/internal/execcontext"
 )
 
 // ExecutorRegistry manages block executors by runtime type
@@ -35,7 +36,7 @@ func (r *ExecutorRegistry) Get(runtime RuntimeType) (Executor, bool) {
 }
 
 // Execute runs a block using the appropriate executor
-func (r *ExecutorRegistry) Execute(ctx context.Context, block *Block, inputs map[string]interface{}, execCtx *ExecutionContext) (map[string]interface{}, error) {
+func (r *ExecutorRegistry) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
 	executor, ok := r.Get(block.Runtime)
 	if !ok {
 		return nil, fmt.Errorf("no executor registered for runtime: %s", block.Runtime)
@@ -47,7 +48,7 @@ func (r *ExecutorRegistry) Execute(ctx context.Context, block *Block, inputs map
 	}
 
 	// Execute the block
-	outputs, err := executor.Execute(ctx, block, inputs, execCtx)
+	outputs, err := executor.Execute(execCtx, block, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("block execution failed: %w", err)
 	}

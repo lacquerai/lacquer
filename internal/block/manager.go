@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
+
+	"github.com/lacquerai/lacquer/internal/execcontext"
 )
 
 // Manager manages block loading and execution
@@ -26,18 +27,15 @@ func NewManager(cacheDir string) (*Manager, error) {
 	registry := NewExecutorRegistry()
 
 	// Create executors
-	goExecutor, err := NewGoExecutor(filepath.Join(cacheDir, "go"))
+	bashExecutor, err := NewBashExecutor(filepath.Join(cacheDir, "bash"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create go executor: %w", err)
+		return nil, fmt.Errorf("failed to create bash executor: %w", err)
 	}
 
 	dockerExecutor := NewDockerExecutor()
 
-	// Register executors
-	// Note: Native executor requires workflow engine, will be registered separately
-	registry.Register(RuntimeGo, goExecutor)
+	registry.Register(RuntimeBash, bashExecutor)
 	registry.Register(RuntimeDocker, dockerExecutor)
-	// registry.Register(RuntimeNative, executor)
 
 	return &Manager{
 		loader:   loader,
@@ -57,42 +55,28 @@ func (m *Manager) LoadBlock(ctx context.Context, path string) (*Block, error) {
 	return m.loader.Load(ctx, path)
 }
 
-// ExecuteBlock executes a block with the given inputs
-func (m *Manager) ExecuteBlock(ctx context.Context, blockPath string, inputs map[string]interface{}, workflowID, stepID string) (map[string]interface{}, error) {
-	// Load the block
-	block, err := m.LoadBlock(ctx, blockPath)
+// ExecuteBlock executes a block at the given path with the given inputs
+func (m *Manager) ExecuteBlock(execCtx *execcontext.ExecutionContext, blockPath string, inputs map[string]interface{}) (map[string]interface{}, error) {
+	block, err := m.LoadBlock(execCtx.Context, blockPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load block: %w", err)
 	}
 
-	// Create workspace directory
-	workspace, err := os.MkdirTemp("", fmt.Sprintf("laq-block-%s-", block.Name))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create workspace: %w", err)
-	}
-	defer os.RemoveAll(workspace)
-
-	// Create execution context
-	execCtx := &ExecutionContext{
-		WorkflowID: workflowID,
-		StepID:     stepID,
-		Workspace:  workspace,
-		Timeout:    30 * time.Second, // Default timeout
-		Context:    ctx,
-	}
-
-	// Validate inputs against block schema
 	if err := m.validateInputs(block, inputs); err != nil {
 		return nil, fmt.Errorf("input validation failed: %w", err)
 	}
 
-	// Execute the block
+	return m.ExecuteRawBlock(execCtx, block, inputs)
+}
+
+// ExecuteRawBlock executes a block with the given inputs, it does not validate inputs
+func (m *Manager) ExecuteRawBlock(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
 	executor, ok := m.registry.Get(block.Runtime)
 	if !ok {
 		return nil, fmt.Errorf("no executor registered for runtime: %s", block.Runtime)
 	}
 
-	outputs, err := executor.Execute(ctx, block, inputs, execCtx)
+	outputs, err := executor.Execute(execCtx, block, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("block execution failed: %w", err)
 	}

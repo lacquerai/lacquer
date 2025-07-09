@@ -13,16 +13,17 @@ import (
 
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/block"
+	"github.com/lacquerai/lacquer/internal/execcontext"
+	"github.com/lacquerai/lacquer/internal/runtime"
 	"github.com/lacquerai/lacquer/internal/tools"
 )
 
 type ScriptType string
 
 const (
-	ScriptTypeGo     ScriptType = "go"
-	ScriptTypePython ScriptType = "python"
-	ScriptTypeBash   ScriptType = "bash"
-	ScriptTypeJS     ScriptType = "js"
+	ScriptTypeGo   ScriptType = "go"
+	ScriptTypeBash ScriptType = "bash"
+	ScriptTypeNode ScriptType = "node"
 )
 
 // ScriptTool represents a script-based tool
@@ -32,20 +33,22 @@ type ScriptTool struct {
 	ScriptPath  string
 	Content     string
 	ScriptType  ScriptType
+	Version     string
 	Parameters  ast.JSONSchema
 }
 
 // ScriptToolProvider implements the ToolProvider interface for script-based tools
 type ScriptToolProvider struct {
-	name       string
-	tools      map[string]*ScriptTool
-	goExecutor *block.GoExecutor
-	cacheDir   string
-	mu         sync.RWMutex
+	name           string
+	tools          map[string]*ScriptTool
+	bashExecutor   *block.BashExecutor
+	runtimeManager *runtime.Manager
+	cacheDir       string
+	mu             sync.RWMutex
 }
 
 // NewScriptToolProvider creates a new script tool provider
-func NewScriptToolProvider(name string, cacheDir string) (*ScriptToolProvider, error) {
+func NewScriptToolProvider(name string, cacheDir string, runtimeManager *runtime.Manager) (*ScriptToolProvider, error) {
 	if name == "" {
 		return nil, fmt.Errorf("provider name is required")
 	}
@@ -59,17 +62,17 @@ func NewScriptToolProvider(name string, cacheDir string) (*ScriptToolProvider, e
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
-	// Create Go executor for Go script execution
-	goExecutor, err := block.NewGoExecutor(cacheDir)
+	bashExecutor, err := block.NewBashExecutor(cacheDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Go executor: %w", err)
+		return nil, fmt.Errorf("failed to create bash executor: %w", err)
 	}
 
 	return &ScriptToolProvider{
-		name:       name,
-		tools:      make(map[string]*ScriptTool),
-		goExecutor: goExecutor,
-		cacheDir:   cacheDir,
+		name:           name,
+		tools:          make(map[string]*ScriptTool),
+		bashExecutor:   bashExecutor,
+		runtimeManager: runtimeManager,
+		cacheDir:       cacheDir,
 	}, nil
 }
 
@@ -95,12 +98,10 @@ func (stp *ScriptToolProvider) AddToolDefinition(tool *ast.Tool) ([]tools.Tool, 
 	switch strings.Split(tool.Runtime, "-")[0] {
 	case "go":
 		scriptType = ScriptTypeGo
-	case "python":
-		scriptType = ScriptTypePython
 	case "bash":
 		scriptType = ScriptTypeBash
-	case "js":
-		scriptType = ScriptTypeJS
+	case "node":
+		scriptType = ScriptTypeNode
 	default:
 		scriptType = ScriptTypeGo
 	}
@@ -127,7 +128,13 @@ func (stp *ScriptToolProvider) AddToolDefinition(tool *ast.Tool) ([]tools.Tool, 
 		ScriptPath:  tool.Script,
 		Content:     string(content),
 		ScriptType:  scriptType,
+		Version:     tool.Version,
 		Parameters:  tool.Parameters,
+	}
+
+	_, err := stp.runtimeManager.Get(context.Background(), string(scriptType), scriptTool.Version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get runtime %s: %w", scriptTool.Version, err)
 	}
 
 	stp.tools[tool.Name] = scriptTool
@@ -141,7 +148,7 @@ func (stp *ScriptToolProvider) AddToolDefinition(tool *ast.Tool) ([]tools.Tool, 
 }
 
 // ExecuteTool executes a script tool
-func (stp *ScriptToolProvider) ExecuteTool(ctx context.Context, toolName string, parameters json.RawMessage, execCtx *tools.ExecutionContext) (*tools.Result, error) {
+func (stp *ScriptToolProvider) ExecuteTool(execCtx *execcontext.ExecutionContext, toolName string, parameters json.RawMessage) (*tools.Result, error) {
 	stp.mu.RLock()
 	defer stp.mu.RUnlock()
 
@@ -156,18 +163,7 @@ func (stp *ScriptToolProvider) ExecuteTool(ctx context.Context, toolName string,
 	var output map[string]interface{}
 	var err error
 
-	switch scriptTool.ScriptType {
-	case ScriptTypeGo:
-		output, err = stp.executeGoScript(ctx, scriptTool, parameters, execCtx)
-	case ScriptTypePython:
-		output, err = stp.executePythonScript(ctx, scriptTool, parameters, execCtx)
-	case ScriptTypeBash:
-		output, err = stp.executeBashScript(ctx, scriptTool, parameters, execCtx)
-	case ScriptTypeJS:
-		output, err = stp.executeJSScript(ctx, scriptTool, parameters, execCtx)
-	default:
-		err = fmt.Errorf("unsupported script type: %s", scriptTool.ScriptType)
-	}
+	output, err = stp.executeBashScript(execCtx, scriptTool, parameters)
 
 	duration := time.Since(startTime)
 
@@ -188,8 +184,7 @@ func (stp *ScriptToolProvider) ExecuteTool(ctx context.Context, toolName string,
 	}, nil
 }
 
-// executeGoScript executes a Go script using the existing block executor
-func (stp *ScriptToolProvider) executeGoScript(ctx context.Context, scriptTool *ScriptTool, parameters json.RawMessage, execCtx *tools.ExecutionContext) (map[string]interface{}, error) {
+func (stp *ScriptToolProvider) executeBashScript(execCtx *execcontext.ExecutionContext, scriptTool *ScriptTool, parameters json.RawMessage) (map[string]interface{}, error) {
 	// Get script content
 	scriptContent := scriptTool.Content
 	if scriptContent == "" && scriptTool.ScriptPath != "" {
@@ -203,68 +198,14 @@ func (stp *ScriptToolProvider) executeGoScript(ctx context.Context, scriptTool *
 	// Create a temporary block for execution
 	tempBlock := &block.Block{
 		Name:    fmt.Sprintf("tool-%s", scriptTool.Name),
-		Runtime: block.RuntimeGo,
+		Runtime: block.RuntimeBash,
 		Script:  scriptContent,
 		Inputs:  make(map[string]block.InputSchema),
 		Outputs: make(map[string]block.OutputSchema),
 	}
 
-	// Create workspace directory
-	workspace := filepath.Join(stp.cacheDir, fmt.Sprintf("tool-%s-%s", scriptTool.Name, execCtx.StepID))
-	if err := os.MkdirAll(workspace, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create workspace: %w", err)
-	}
-	defer os.RemoveAll(workspace) // Clean up
-
-	// Create execution context for the block
-	blockExecCtx := &block.ExecutionContext{
-		WorkflowID: execCtx.WorkflowID,
-		StepID:     execCtx.StepID,
-		Workspace:  workspace,
-		Timeout:    execCtx.Timeout,
-		Context:    execCtx.Context,
-	}
-
 	// Execute using Go executor
-	return stp.goExecutor.ExecuteRaw(ctx, tempBlock, parameters, blockExecCtx)
-}
-
-// executePythonScript executes a Python script
-func (stp *ScriptToolProvider) executePythonScript(ctx context.Context, scriptTool *ScriptTool, parameters json.RawMessage, execCtx *tools.ExecutionContext) (map[string]interface{}, error) {
-	// For MVP, implement basic Python script execution
-	// In a full implementation, this would use a proper Python executor similar to the Go executor
-
-	// Get script content
-	scriptContent := scriptTool.Content
-	if scriptContent == "" && scriptTool.ScriptPath != "" {
-		contentBytes, err := os.ReadFile(scriptTool.ScriptPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read script file: %w", err)
-		}
-		scriptContent = string(contentBytes)
-	}
-
-	return stp.executeScriptWithCommand(ctx, "python3", scriptContent, parameters, execCtx)
-}
-
-// executeBashScript executes a Bash script
-func (stp *ScriptToolProvider) executeBashScript(ctx context.Context, scriptTool *ScriptTool, parameters json.RawMessage, execCtx *tools.ExecutionContext) (map[string]interface{}, error) {
-	// Get script content
-	scriptContent := scriptTool.Content
-	if scriptContent == "" && scriptTool.ScriptPath != "" {
-		contentBytes, err := os.ReadFile(scriptTool.ScriptPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read script file: %w", err)
-		}
-		scriptContent = string(contentBytes)
-	}
-
-	return stp.executeScriptWithCommand(ctx, "bash", scriptContent, parameters, execCtx)
-}
-
-func (stp *ScriptToolProvider) executeJSScript(ctx context.Context, scriptTool *ScriptTool, parameters json.RawMessage, execCtx *tools.ExecutionContext) (map[string]interface{}, error) {
-	// TODO: Implement JavaScript script execution
-	return nil, nil
+	return stp.bashExecutor.ExecuteRaw(execCtx, tempBlock, parameters)
 }
 
 // executeScriptWithCommand executes a script using the specified command

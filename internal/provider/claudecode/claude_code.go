@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/events"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/provider"
 	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/rs/zerolog/log"
@@ -183,7 +184,7 @@ func (p *ClaudeCodeProvider) isLocal() bool {
 }
 
 // Generate generates a response using Claude Code with streaming enabled by default
-func (p *ClaudeCodeProvider) Generate(ctx provider.GenerateContext, request *provider.Request, progressChan chan<- events.ExecutionEvent) ([]provider.Message, *provider.TokenUsage, error) {
+func (p *ClaudeCodeProvider) Generate(ctx provider.GenerateContext, request *provider.Request, progressChan chan<- events.ExecutionEvent) ([]provider.Message, *execcontext.TokenUsage, error) {
 	p.progressChan = progressChan
 
 	response, err := p.sendRequestWithOptions(ctx, request)

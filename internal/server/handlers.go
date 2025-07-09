@@ -92,7 +92,11 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 	// use background context as hanging off the request context
 	// will cause the context to be cancelled when the request is finished.
 	ctx, cancel := context.WithCancel(context.Background())
-	execCtx := execcontext.NewExecutionContext(ctx, workflow, processedInputs)
+
+	// TODO: get the workflow file path
+	wd := ""
+	panic("not implemented")
+	execCtx := execcontext.NewExecutionContext(ctx, workflow, processedInputs, wd)
 	runID := execCtx.RunID
 
 	// Start execution tracking
@@ -123,7 +127,7 @@ func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflo
 		EnableStateSnapshots: false,
 	}
 
-	executor, err := engine.NewExecutor(executorConfig, workflow, nil)
+	executor, err := engine.NewExecutor(ctx, executorConfig, workflow, nil)
 	if err != nil {
 		s.manager.FinishExecution(runID, nil, fmt.Errorf("failed to create executor: %w", err))
 		return
