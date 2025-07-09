@@ -14,10 +14,10 @@ import (
 	"github.com/briandowns/spinner"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/engine"
 	"github.com/lacquerai/lacquer/internal/events"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/parser"
-	"github.com/lacquerai/lacquer/internal/runtime"
 	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -248,7 +248,7 @@ func runWorkflow(workflowFile string) {
 		}
 	}
 
-	validationResult := runtime.ValidateWorkflowInputs(workflow, workflowInputs)
+	validationResult := engine.ValidateWorkflowInputs(workflow, workflowInputs)
 	if !validationResult.Valid {
 		printValidationErrors(validationResult)
 		os.Exit(1)
@@ -268,7 +268,7 @@ func runWorkflow(workflowFile string) {
 	}
 
 	// Create executor with configuration
-	executorConfig := &runtime.ExecutorConfig{
+	executorConfig := &engine.ExecutorConfig{
 		MaxConcurrentSteps:   3, // TODO: make this configurable
 		DefaultTimeout:       5 * time.Minute,
 		EnableRetries:        true,
@@ -276,7 +276,7 @@ func runWorkflow(workflowFile string) {
 		EnableStateSnapshots: saveState,
 	}
 
-	executor, err := runtime.NewExecutor(executorConfig, workflow, nil)
+	executor, err := engine.NewExecutor(executorConfig, workflow, nil)
 	if err != nil {
 		style.Error(fmt.Sprintf("Failed to create executor: %v", err))
 		return
@@ -332,7 +332,7 @@ func runWorkflow(workflowFile string) {
 	}
 }
 
-func executeWithProgress(ctx context.Context, executor *runtime.Executor, execCtx *execcontext.ExecutionContext, result *ExecutionResult) error {
+func executeWithProgress(ctx context.Context, executor *engine.Executor, execCtx *execcontext.ExecutionContext, result *ExecutionResult) error {
 	// Create a progress channel for real-time updates
 	progressChan := make(chan events.ExecutionEvent, 100)
 	defer close(progressChan)
@@ -653,7 +653,7 @@ func printExecutionSummary(result ExecutionResult) {
 
 }
 
-func printValidationErrors(validationResult *runtime.InputValidationResult) {
+func printValidationErrors(validationResult *engine.InputValidationResult) {
 	fmt.Printf("\n❌ Input validation failed:\n\n")
 
 	for i, err := range validationResult.Errors {

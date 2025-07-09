@@ -10,9 +10,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/engine"
 	"github.com/lacquerai/lacquer/internal/events"
 	"github.com/lacquerai/lacquer/internal/execcontext"
-	"github.com/lacquerai/lacquer/internal/runtime"
 	"github.com/rs/zerolog/log"
 )
 
@@ -78,7 +78,7 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate inputs against workflow definition
-	validationResult := runtime.ValidateWorkflowInputs(workflow, req.Inputs)
+	validationResult := engine.ValidateWorkflowInputs(workflow, req.Inputs)
 	if !validationResult.Valid {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -115,7 +115,7 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflow, execCtx *execcontext.ExecutionContext, runID, workflowID string) {
 
 	// Create executor
-	executorConfig := &runtime.ExecutorConfig{
+	executorConfig := &engine.ExecutorConfig{
 		MaxConcurrentSteps:   3,
 		DefaultTimeout:       5 * time.Minute,
 		EnableRetries:        true,
@@ -123,7 +123,7 @@ func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflo
 		EnableStateSnapshots: false,
 	}
 
-	executor, err := runtime.NewExecutor(executorConfig, workflow, nil)
+	executor, err := engine.NewExecutor(executorConfig, workflow, nil)
 	if err != nil {
 		s.manager.FinishExecution(runID, nil, fmt.Errorf("failed to create executor: %w", err))
 		return
@@ -260,7 +260,7 @@ func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 // formatValidationErrors formats validation errors for HTTP response
-func formatValidationErrors(result *runtime.InputValidationResult) map[string]any {
+func formatValidationErrors(result *engine.InputValidationResult) map[string]any {
 	response := map[string]any{
 		"error":   "Input validation failed",
 		"details": make([]map[string]any, len(result.Errors)),

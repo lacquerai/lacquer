@@ -1,4 +1,4 @@
-package runtime
+package engine
 
 import (
 	"context"
@@ -10,13 +10,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// RuntimeWorkflowEngine implements block.WorkflowEngine using runtime.Executor
+// RuntimeWorkflowEngine implements block.WorkflowEngine using engine.Executor
 type RuntimeWorkflowEngine struct {
 	config        *ExecutorConfig
 	modelRegistry *provider.Registry
 }
 
-// NewRuntimeWorkflowEngine creates a new workflow engine using runtime.Executor
+// NewRuntimeWorkflowEngine creates a new workflow engine using engine.Executor
 func NewRuntimeWorkflowEngine(config *ExecutorConfig, registry *provider.Registry) *RuntimeWorkflowEngine {
 	return &RuntimeWorkflowEngine{
 		config:        config,

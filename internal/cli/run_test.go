@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/ast"
-	"github.com/lacquerai/lacquer/internal/runtime"
+	"github.com/lacquerai/lacquer/internal/execcontext"
+	"github.com/lacquerai/lacquer/internal/provider"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -175,38 +176,36 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	execCtx := runtime.NewExecutionContext(ctx, workflow, nil)
+	execCtx := execcontext.NewExecutionContext(ctx, workflow, nil)
 
 	// Add step results with token usage
-	execCtx.SetStepResult("step1", &runtime.StepResult{
+	execCtx.SetStepResult("step1", &execcontext.StepResult{
 		StepID:    "step1",
-		Status:    runtime.StepStatusCompleted,
+		Status:    execcontext.StepStatusCompleted,
 		StartTime: time.Now().Add(-2 * time.Second),
 		EndTime:   time.Now().Add(-1 * time.Second),
 		Duration:  time.Second,
 		Output:    map[string]interface{}{"output": "Result 1"},
 		Response:  "Result 1",
-		TokenUsage: &runtime.TokenUsage{
+		TokenUsage: &provider.TokenUsage{
 			PromptTokens:     10,
 			CompletionTokens: 15,
 			TotalTokens:      25,
-			EstimatedCost:    0.001,
 		},
 	})
 
-	execCtx.SetStepResult("step2", &runtime.StepResult{
+	execCtx.SetStepResult("step2", &execcontext.StepResult{
 		StepID:    "step2",
-		Status:    runtime.StepStatusCompleted,
+		Status:    execcontext.StepStatusCompleted,
 		StartTime: time.Now().Add(-1 * time.Second),
 		EndTime:   time.Now(),
 		Duration:  time.Second,
 		Output:    map[string]interface{}{"output": "Result 2"},
 		Response:  "Result 2",
-		TokenUsage: &runtime.TokenUsage{
+		TokenUsage: &provider.TokenUsage{
 			PromptTokens:     20,
 			CompletionTokens: 30,
 			TotalTokens:      50,
-			EstimatedCost:    0.002,
 		},
 	})
 

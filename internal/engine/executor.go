@@ -1,4 +1,4 @@
-package runtime
+package engine
 
 import (
 	"context"
@@ -996,7 +996,7 @@ func (e *Executor) executeBlockStep(execCtx *execcontext.ExecutionContext, step 
 func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
 	log.Debug().
 		Str("step_id", step.ID).
-		Str("script", step.Script).
+		Str("script", step.Run).
 		Msg("Executing script step")
 
 	// Prepare inputs from step.With
@@ -1010,12 +1010,12 @@ func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step
 	}
 
 	// Get script content - either from file or inline
-	scriptContent := step.Script
-	if strings.HasPrefix(step.Script, "./") || strings.HasPrefix(step.Script, "/") {
+	scriptContent := step.Run
+	if strings.HasPrefix(step.Run, "./") || strings.HasPrefix(step.Run, "/") {
 		// It's a file path, read the content
-		contentBytes, err := os.ReadFile(step.Script)
+		contentBytes, err := os.ReadFile(step.Run)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read script file %s: %w", step.Script, err)
+			return nil, fmt.Errorf("failed to read script file %s: %w", step.Run, err)
 		}
 		scriptContent = string(contentBytes)
 	}

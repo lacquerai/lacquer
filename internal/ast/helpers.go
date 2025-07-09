@@ -90,7 +90,7 @@ func (s *Step) IsActionStep() bool {
 
 // IsScriptStep returns true if this is a script execution step
 func (s *Step) IsScriptStep() bool {
-	return s.Script != ""
+	return s.Run != ""
 }
 
 // IsContainerStep returns true if this is a container execution step
