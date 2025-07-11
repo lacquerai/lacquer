@@ -44,7 +44,7 @@ func (e *DockerExecutor) Validate(block *Block) error {
 // Execute runs a Docker block
 func (e *DockerExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
 	// Pull image if not present
-	if err := e.pullImageIfNeeded(execCtx.Context, block.Image); err != nil {
+	if err := e.pullImageIfNeeded(execCtx.Context.Context, block.Image); err != nil {
 		return nil, fmt.Errorf("failed to pull image: %w", err)
 	}
 
@@ -89,7 +89,7 @@ func (e *DockerExecutor) Execute(execCtx *execcontext.ExecutionContext, block *B
 	}
 
 	// Execute Docker container
-	cmd := exec.CommandContext(execCtx.Context, "docker", args...)
+	cmd := exec.CommandContext(execCtx.Context.Context, "docker", args...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

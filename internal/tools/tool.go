@@ -10,6 +10,7 @@ import (
 
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/execcontext"
+	"github.com/lacquerai/lacquer/internal/schema"
 )
 
 // ExecutionContext provides context for tool execution
@@ -36,9 +37,9 @@ type Result struct {
 // This is a simplified version of the ast.Tool type
 // which is used to provide
 type Tool struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Parameters  ast.JSONSchema `json:"parameters"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Parameters  schema.JSON `json:"parameters"`
 }
 
 // ToolProvider defines the interface for tool providers

@@ -47,8 +47,6 @@ func (sv *SemanticValidator) ValidateWorkflow(w *ast.Workflow) *ast.ValidationRe
 
 	// Perform semantic checks
 	sv.validateStepDependencies(ctx, result)
-	sv.validateVariableReferences(ctx, result)
-	sv.validateOutputReferences(ctx, result)
 	sv.validateBlockReferences(ctx, result)
 	sv.validateControlFlow(ctx, result)
 	sv.validateResourceUsage(ctx, result)
@@ -232,63 +230,6 @@ func (sv *SemanticValidator) hasCycle(stepID string, dependencies map[string][]s
 	return false
 }
 
-// validateVariableReferences checks that all variable references are valid
-func (sv *SemanticValidator) validateVariableReferences(ctx *validationContext, result *ast.ValidationResult) {
-	if ctx.workflow.Workflow == nil || ctx.workflow.Workflow.Steps == nil {
-		return
-	}
-
-	for i, step := range ctx.workflow.Workflow.Steps {
-		stepPath := fmt.Sprintf("workflow.steps[%d]", i)
-
-		// Validate prompt variables
-		if step.Prompt != "" {
-			sv.validateStringVariables(step.Prompt, stepPath+".prompt", ctx, result)
-		}
-
-		// Validate condition variables
-		if step.Condition != "" {
-			sv.validateStringVariables(step.Condition, stepPath+".condition", ctx, result)
-		}
-
-		// Validate skip_if variables
-		if step.SkipIf != "" {
-			sv.validateStringVariables(step.SkipIf, stepPath+".skip_if", ctx, result)
-		}
-
-		// Validate with parameters
-		if step.With != nil {
-			sv.validateMapVariables(step.With, stepPath+".with", ctx, result)
-		}
-
-		// Validate updates
-		if step.Updates != nil {
-			sv.validateMapVariables(step.Updates, stepPath+".updates", ctx, result)
-		}
-	}
-}
-
-// validateStringVariables validates variable references in a string
-// Note: Template validation is now handled by validateTemplates method
-func (sv *SemanticValidator) validateStringVariables(text, path string, ctx *validationContext, result *ast.ValidationResult) {
-	// Skip template validation here - it's handled by validateTemplates
-	// This method is kept for backwards compatibility and non-template variable references
-	return
-}
-
-// validateMapVariables validates variable references in map values
-func (sv *SemanticValidator) validateMapVariables(m map[string]interface{}, path string, ctx *validationContext, result *ast.ValidationResult) {
-	for key, value := range m {
-		fieldPath := fmt.Sprintf("%s.%s", path, key)
-
-		if str, ok := value.(string); ok {
-			sv.validateStringVariables(str, fieldPath, ctx, result)
-		} else if nestedMap, ok := value.(map[string]interface{}); ok {
-			sv.validateMapVariables(nestedMap, fieldPath, ctx, result)
-		}
-	}
-}
-
 // extractAllVariableReferences extracts all {{ variable }} references from text
 func (sv *SemanticValidator) extractAllVariableReferences(text string) []string {
 	// Match {{ variable.path }} patterns
@@ -382,21 +323,6 @@ func (sv *SemanticValidator) isValidVariableReference(variable string, ctx *vali
 	}
 
 	return false
-}
-
-// validateOutputReferences checks that output references are valid
-func (sv *SemanticValidator) validateOutputReferences(ctx *validationContext, result *ast.ValidationResult) {
-	if ctx.workflow.Workflow == nil || ctx.workflow.Workflow.Outputs == nil {
-		return
-	}
-
-	for key, value := range ctx.workflow.Workflow.Outputs {
-		path := fmt.Sprintf("workflow.outputs.%s", key)
-
-		if str, ok := value.(string); ok {
-			sv.validateStringVariables(str, path, ctx, result)
-		}
-	}
 }
 
 // validateBlockReferences validates that block references are properly formatted and accessible

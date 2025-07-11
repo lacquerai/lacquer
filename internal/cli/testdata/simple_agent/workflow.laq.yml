@@ -1,0 +1,31 @@
+version: "1.0"
+metadata:
+  name: hello-world
+  description: A simple greeting workflow demonstrating basic Lacquer syntax
+  author: lacquer-team
+
+agents:
+  greeter:
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    temperature: 0
+    system_prompt: You are a friendly assistant who gives warm greetings.
+
+workflow:
+  inputs:
+    name:
+      type: string
+      description: Name of the person to greet
+  
+  steps:
+    - id: say_hello
+      agent: greeter
+      prompt: |
+        Say hello to {{ inputs.name }} in a creative and friendly way.
+        Make it warm and welcoming!
+      outputs:
+        greeting:
+          type: string
+          description: The greeting to the person
+  outputs:
+    greeting: "{{ steps.say_hello.outputs.greeting }}"

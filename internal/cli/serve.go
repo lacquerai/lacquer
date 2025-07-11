@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/server"
 	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/spf13/cobra"
@@ -44,24 +45,30 @@ Examples:
   laq serve --port 8080 --host 0.0.0.0         # Custom host and port
   laq serve --concurrency 10 workflow.laq.yaml # Allow 10 concurrent executions`,
 	Run: func(cmd *cobra.Command, args []string) {
+		runCtx := execcontext.RunContext{
+			Context: cmd.Context(),
+			StdOut:  cmd.OutOrStdout(),
+			StdErr:  cmd.OutOrStderr(),
+		}
+
 		// Collect workflow files from args and directory
 		workflowFiles := args
 		if serveWorkflowDir != "" {
 			dirFiles, err := findWorkflowFiles(serveWorkflowDir)
 			if err != nil {
-				style.Error(fmt.Sprintf("Failed to scan workflow directory: %v", err))
+				style.Error(runCtx, fmt.Sprintf("Failed to scan workflow directory: %v", err))
 				os.Exit(1)
 			}
 			workflowFiles = append(workflowFiles, dirFiles...)
 		}
 
 		if len(workflowFiles) == 0 && len(serveWorkflows) == 0 {
-			style.Error("No workflow files specified. Use arguments or --workflow-dir")
+			style.Error(runCtx, "No workflow files specified. Use arguments or --workflow-dir")
 			os.Exit(1)
 		}
 
 		workflowFiles = append(workflowFiles, serveWorkflows...)
-		startServer(workflowFiles)
+		startServer(runCtx, workflowFiles)
 	},
 }
 
@@ -83,7 +90,7 @@ func init() {
 	serveCmd.Flags().BoolVar(&serveCORS, "cors", true, "enable CORS headers")
 }
 
-func startServer(workflowFiles []string) {
+func startServer(runCtx execcontext.RunContext, workflowFiles []string) {
 	// Create server configuration
 	config := &server.Config{
 		Host:          serveHost,
@@ -99,29 +106,29 @@ func startServer(workflowFiles []string) {
 	// Create server
 	srv, err := server.New(config)
 	if err != nil {
-		style.Error(fmt.Sprintf("Failed to create server: %v", err))
+		style.Error(runCtx, fmt.Sprintf("Failed to create server: %v", err))
 		os.Exit(1)
 	}
 
 	// Load workflows
 	if err := srv.LoadWorkflows(); err != nil {
-		style.Error(fmt.Sprintf("Failed to load workflows: %v", err))
+		style.Error(runCtx, fmt.Sprintf("Failed to load workflows: %v", err))
 		os.Exit(1)
 	}
 
 	// Display startup info
 	if !viper.GetBool("quiet") {
-		style.Success(fmt.Sprintf("Lacquer server starting at http://%s", srv.GetAddr()))
-		fmt.Printf("📋 Loaded workflows: %d\n", srv.GetWorkflowCount())
-		fmt.Printf("🚀 API: http://%s/api/v1/workflows\n", srv.GetAddr())
+		style.Success(runCtx, fmt.Sprintf("Lacquer server starting at http://%s", srv.GetAddr()))
+		fmt.Fprintf(runCtx, "📋 Loaded workflows: %d\n", srv.GetWorkflowCount())
+		fmt.Fprintf(runCtx, "🚀 API: http://%s/api/v1/workflows\n", srv.GetAddr())
 		if serveMetrics {
-			fmt.Printf("📊 Metrics: http://%s/metrics\n", srv.GetAddr())
+			fmt.Fprintf(runCtx, "📊 Metrics: http://%s/metrics\n", srv.GetAddr())
 		}
 	}
 
 	// Start server with graceful shutdown
 	if err := srv.StartWithGracefulShutdown(); err != nil {
-		style.Error(fmt.Sprintf("Server error: %v", err))
+		style.Error(runCtx, fmt.Sprintf("Server error: %v", err))
 		os.Exit(1)
 	}
 }

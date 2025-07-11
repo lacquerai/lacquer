@@ -15,6 +15,7 @@ import (
 	"github.com/lacquerai/lacquer/internal/block"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/runtime"
+	"github.com/lacquerai/lacquer/internal/schema"
 	"github.com/lacquerai/lacquer/internal/tools"
 )
 
@@ -34,7 +35,7 @@ type ScriptTool struct {
 	Content     string
 	ScriptType  ScriptType
 	Version     string
-	Parameters  ast.JSONSchema
+	Parameters  schema.JSON
 }
 
 // ScriptToolProvider implements the ToolProvider interface for script-based tools

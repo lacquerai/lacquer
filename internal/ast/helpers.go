@@ -125,19 +125,6 @@ func (s *Step) HasOutput(name string) bool {
 	return exists
 }
 
-// ListOutputs returns a list of all output names for this step
-func (s *Step) ListOutputs() []string {
-	if s.Outputs == nil {
-		return nil
-	}
-
-	outputs := make([]string, 0, len(s.Outputs))
-	for name := range s.Outputs {
-		outputs = append(outputs, name)
-	}
-	return outputs
-}
-
 // Agent helper methods
 
 // IsPreBuilt returns true if this agent uses a pre-built configuration

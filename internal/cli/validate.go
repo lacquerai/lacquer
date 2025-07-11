@@ -1,14 +1,17 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/parser"
 	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/rs/zerolog/log"
@@ -36,7 +39,12 @@ Examples:
   laq validate --output json workflow.laq.yaml  # JSON output for CI/CD`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		validateWorkflows(args)
+		runCtx := execcontext.RunContext{
+			Context: context.Background(),
+			StdOut:  cmd.OutOrStdout(),
+			StdErr:  cmd.OutOrStderr(),
+		}
+		validateWorkflows(runCtx, args)
 	},
 }
 
@@ -129,25 +137,25 @@ type ValidationSummary struct {
 	Results  []ValidationResult `json:"results" yaml:"results"`
 }
 
-func validateWorkflows(args []string) {
+func validateWorkflows(runCtx execcontext.RunContext, args []string) {
 	start := time.Now()
 
 	// Collect files to validate
 	files, err := collectFiles(args, recursive)
 	if err != nil {
-		style.Error(fmt.Sprintf("Failed to collect files: %v", err))
+		style.Error(runCtx, fmt.Sprintf("Failed to collect files: %v", err))
 		os.Exit(1)
 	}
 
 	if len(files) == 0 {
-		style.Warning("No workflow files found to validate")
+		style.Warning(runCtx, "No workflow files found to validate")
 		return
 	}
 
 	// Create parser
 	yamlParser, err := parser.NewYAMLParser()
 	if err != nil {
-		style.Error(fmt.Sprintf("Failed to create parser: %v", err))
+		style.Error(runCtx, fmt.Sprintf("Failed to create parser: %v", err))
 		os.Exit(1)
 	}
 
@@ -162,7 +170,7 @@ func validateWorkflows(args []string) {
 		if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
 			if result.Valid {
 				if showAll {
-					style.Success(fmt.Sprintf("%s (%v)", file, result.Duration))
+					style.Success(runCtx, fmt.Sprintf("%s (%v)", file, result.Duration))
 				}
 			}
 			// Invalid results will be shown in the detailed summary section
@@ -188,11 +196,11 @@ func validateWorkflows(args []string) {
 	outputFormat := viper.GetString("output")
 	switch outputFormat {
 	case "json":
-		style.PrintJSON(summary)
+		style.PrintJSON(runCtx, summary)
 	case "yaml":
-		style.PrintYAML(summary)
+		style.PrintYAML(runCtx, summary)
 	default:
-		printValidationSummary(summary)
+		printValidationSummary(runCtx, summary)
 	}
 
 	// Exit with error code if any validations failed
@@ -290,26 +298,26 @@ func isLacquerFile(filename string) bool {
 	return (ext == ".yaml" || ext == ".yml") && strings.HasSuffix(base, ".laq")
 }
 
-func printValidationSummary(summary ValidationSummary) {
+func printValidationSummary(w io.Writer, summary ValidationSummary) {
 	if !viper.GetBool("quiet") {
-		fmt.Printf("\n")
+		fmt.Fprintf(w, "\n")
 		if summary.Invalid == 0 {
-			style.Success(fmt.Sprintf("All %d workflow(s) are valid", summary.Total))
+			style.Success(w, fmt.Sprintf("All %d workflow(s) are valid", summary.Total))
 		} else {
-			style.Error(fmt.Sprintf("%d of %d workflow(s) failed validation", summary.Invalid, summary.Total))
+			style.Error(w, fmt.Sprintf("%d of %d workflow(s) failed validation", summary.Invalid, summary.Total))
 		}
 
 		// Show detailed error information for failed files
 		for _, result := range summary.Results {
 			if !result.Valid {
-				printValidationResultStyled(result)
+				printValidationResultStyled(w, result)
 			}
 		}
 	}
 }
 
 // printValidationResultStyled prints detailed information about a validation result with styling
-func printValidationResultStyled(result ValidationResult) {
+func printValidationResultStyled(w io.Writer, result ValidationResult) {
 	if result.Valid {
 		return // Don't print valid results in summary
 	}
@@ -317,22 +325,22 @@ func printValidationResultStyled(result ValidationResult) {
 	// Print enhanced error details if available
 	if result.EnhancedError != nil {
 		for _, issue := range result.EnhancedError.GetAllIssues() {
-			printEnhancedIssueStyled(result, issue)
+			printEnhancedIssueStyled(w, result, issue)
 		}
 	} else if len(result.Issues) > 0 {
 		for _, issue := range result.Issues {
-			printValidationIssueStyled(result, issue)
+			printValidationIssueStyled(w, result, issue)
 		}
 	} else {
 		// Fallback to simple error messages
 		for _, errMsg := range result.Errors {
-			fmt.Printf("  %s\n", style.ErrorStyle.Render(errMsg))
+			fmt.Fprintf(w, "  %s\n", style.ErrorStyle.Render(errMsg))
 		}
 	}
 }
 
 // printValidationIssueStyled prints a detailed validation issue with styling
-func printValidationIssueStyled(result ValidationResult, issue *ValidationIssue) {
+func printValidationIssueStyled(w io.Writer, result ValidationResult, issue *ValidationIssue) {
 	var output strings.Builder
 
 	// Build the header
@@ -368,11 +376,11 @@ func printValidationIssueStyled(result ValidationResult, issue *ValidationIssue)
 		boxStyle = style.InfoBoxStyle
 	}
 
-	fmt.Print(boxStyle.Render(output.String()))
+	fmt.Fprint(w, boxStyle.Render(output.String()))
 }
 
 // printEnhancedIssueStyled prints a detailed enhanced error with full context and styling
-func printEnhancedIssueStyled(result ValidationResult, issue *parser.EnhancedError) {
+func printEnhancedIssueStyled(w io.Writer, result ValidationResult, issue *parser.EnhancedError) {
 	var output strings.Builder
 
 	// Build the header
@@ -427,5 +435,5 @@ func printEnhancedIssueStyled(result ValidationResult, issue *parser.EnhancedErr
 		boxStyle = style.InfoBoxStyle
 	}
 
-	fmt.Print(boxStyle.Render(output.String()))
+	fmt.Fprint(w, boxStyle.Render(output.String()))
 }

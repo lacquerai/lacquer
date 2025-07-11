@@ -1,170 +1,357 @@
 package cli
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/execcontext"
-	"github.com/lacquerai/lacquer/internal/provider"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestRunCommandExists(t *testing.T) {
-	// Test that the run command is properly registered
-	cmd := rootCmd.Commands()
+const ansi = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
 
-	var runCmdFound bool
-	for _, cmd := range cmd {
-		if cmd.Name() == "run" {
-			runCmdFound = true
-			break
+var (
+	// use the capture-response flag to capture the response from the model
+	// and save it to the model_response.json file. This can be used to update the
+	// mocked responses for the aws client calls.
+	captureResponse = flag.Bool("capture-response", false, "capture the response from the model")
+
+	re     = regexp.MustCompile(ansi)
+	timeRe = regexp.MustCompile(`\(\d+\.?\d*[a-zA-Z]+\)`) // matches patterns like (6.81s), (123ms), etc.
+)
+
+type TestServer struct {
+	provider          string
+	captureResponse   bool
+	server            *httptest.Server
+	responses         map[string][]json.RawMessage // path -> list of responses
+	callIndex         map[string]int               // path -> current call index
+	mutex             sync.RWMutex                 // for concurrent safety
+	capturedResponses map[string][]json.RawMessage // for capture mode
+	capturedRequests  map[string][]json.RawMessage // for capture mode
+	proxyURL          string                       // target URL for reverse proxy
+	responseDir       string                       // directory to load responses from
+}
+
+// NewTestServer creates a new test server
+func NewTestServer(provider string, responseDir string, captureResponse bool, proxyURL ...string) *TestServer {
+	ts := &TestServer{
+		provider:          provider,
+		captureResponse:   captureResponse,
+		responses:         make(map[string][]json.RawMessage),
+		callIndex:         make(map[string]int),
+		capturedResponses: make(map[string][]json.RawMessage),
+		capturedRequests:  make(map[string][]json.RawMessage),
+		responseDir:       responseDir,
+	}
+
+	if len(proxyURL) > 0 {
+		ts.proxyURL = proxyURL[0]
+	}
+
+	// Load responses from directory if not in capture mode
+	if !ts.captureResponse {
+		ts.loadResponses()
+	}
+
+	ts.server = httptest.NewServer(http.HandlerFunc(ts.handler))
+	return ts
+}
+
+// loadResponses loads response files from the specified directory
+func (ts *TestServer) loadResponses() {
+	if ts.responseDir == "" {
+		return
+	}
+
+	err := filepath.Walk(ts.responseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		name := info.Name()
+		if !info.IsDir() && strings.HasSuffix(name, "_responses.json") && strings.HasPrefix(name, ts.provider) {
+			// Get relative path from response directory
+			relPath, err := filepath.Rel(ts.responseDir, path)
+			if err != nil {
+				return err
+			}
+
+			// Convert file path to URL path (remove .json extension)
+
+			relPath = strings.TrimSuffix(relPath, "_responses.json")
+			relPath = strings.TrimPrefix(relPath, ts.provider+"_")
+			relPath = strings.Trim(relPath, "_")
+
+			urlPath := "/" + relPath
+			urlPath = strings.ReplaceAll(urlPath, "_", "/") // normalize path separators
+
+			// Read and parse the JSON file
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			var responses []json.RawMessage
+			if err := json.Unmarshal(data, &responses); err != nil {
+				// If it's not an array, treat it as a single response
+				responses = []json.RawMessage{data}
+			}
+
+			ts.responses[urlPath] = responses
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		fmt.Printf("Warning: failed to load responses from %s: %v\n", ts.responseDir, err)
+	}
+}
+
+// handler handles HTTP requests in both normal and capture modes
+func (ts *TestServer) handler(w http.ResponseWriter, r *http.Request) {
+	if ts.captureResponse {
+		ts.handleCaptureMode(w, r)
+	} else {
+		ts.handleNormalMode(w, r)
+	}
+}
+
+// handleNormalMode serves pre-loaded responses
+func (ts *TestServer) handleNormalMode(w http.ResponseWriter, r *http.Request) {
+	ts.mutex.Lock()
+	defer ts.mutex.Unlock()
+
+	path := r.URL.Path
+	responses, exists := ts.responses[path]
+
+	if !exists {
+		http.NotFound(w, r)
+		return
+	}
+
+	index := ts.callIndex[path]
+	if index >= len(responses) {
+		// If we've exhausted responses, use the last one
+		index = len(responses) - 1
+	}
+
+	response := responses[index]
+	ts.callIndex[path]++
+
+	// Try to determine if response is JSON
+	var jsonData interface{}
+	if json.Unmarshal([]byte(response), &jsonData) == nil {
+		w.Header().Set("Content-Type", "application/json")
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(response))
+}
+
+// handleCaptureMode acts as a reverse proxy and captures responses
+func (ts *TestServer) handleCaptureMode(w http.ResponseWriter, r *http.Request) {
+	if ts.proxyURL == "" {
+		http.Error(w, "Proxy URL not configured for capture mode", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse the target URL
+	targetURL, err := url.Parse(ts.proxyURL)
+	if err != nil {
+		http.Error(w, "Invalid proxy URL", http.StatusInternalServerError)
+		return
+	}
+	targetURL.Path = r.URL.Path
+	targetURL.RawQuery = r.URL.RawQuery
+
+	// Read request body
+	requestBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+		return
+	}
+
+	// Create a new request to the target URL
+	targetReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), bytes.NewBuffer(requestBody))
+	if err != nil {
+		http.Error(w, "Failed to create request", http.StatusInternalServerError)
+		return
+	}
+
+	// Copy headers from original request
+	for key, values := range r.Header {
+		for _, value := range values {
+			targetReq.Header.Add(key, value)
 		}
 	}
 
-	assert.True(t, runCmdFound, "run command should be registered")
+	// Send the request to the target URL
+	client := &http.Client{Timeout: 30 * time.Second}
+	targetResp, err := client.Do(targetReq)
+	if err != nil {
+		http.Error(w, "Failed to proxy request: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer targetResp.Body.Close()
+
+	// Copy response headers
+	for key, values := range targetResp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Read response body
+	responseBody, err := io.ReadAll(targetResp.Body)
+	if err != nil {
+		http.Error(w, "Failed to read response body", http.StatusInternalServerError)
+		return
+	}
+
+	// Store the captured response - decode gzip if needed for storage
+	var capturedResponse []byte
+	if targetResp.Header.Get("Content-Encoding") == "gzip" {
+		// Decompress for storage
+		gzipReader, err := gzip.NewReader(bytes.NewReader(responseBody))
+		if err == nil {
+			decompressed, err := io.ReadAll(gzipReader)
+			if err == nil {
+				capturedResponse = decompressed
+			} else {
+				capturedResponse = responseBody // fallback to raw if decompression fails
+			}
+			gzipReader.Close()
+		} else {
+			capturedResponse = responseBody // fallback to raw if decompression fails
+		}
+	} else {
+		capturedResponse = responseBody
+	}
+
+	// Store captured data
+	ts.mutex.Lock()
+	if len(requestBody) == 0 {
+		requestBody = []byte(`{}`)
+	}
+
+	ts.capturedRequests[r.URL.Path] = append(ts.capturedRequests[r.URL.Path], requestBody)
+	ts.capturedResponses[r.URL.Path] = append(ts.capturedResponses[r.URL.Path], capturedResponse)
+	ts.mutex.Unlock()
+
+	// Write response status and body (keeping original compression)
+	w.WriteHeader(targetResp.StatusCode)
+	w.Write(responseBody)
 }
 
-func TestRunCommandFlags(t *testing.T) {
-	// Test that expected flags are available
-	expectedFlags := []string{
-		"input",
-		"dry-run",
-		"save-state",
-		"max-retries",
-		"timeout",
-		"progress",
-		"show-steps",
-	}
+// Reset clears all stored responses and call indices
+func (ts *TestServer) Reset() {
+	ts.mutex.Lock()
+	defer ts.mutex.Unlock()
 
-	for _, flagName := range expectedFlags {
-		flag := runCmd.Flags().Lookup(flagName)
-		assert.NotNil(t, flag, "Flag %s should be defined", flagName)
+	ts.callIndex = make(map[string]int)
+	if ts.captureResponse {
+		ts.capturedResponses = make(map[string][]json.RawMessage)
+		ts.capturedRequests = make(map[string][]json.RawMessage)
 	}
 }
 
-func TestRunCommandArguments(t *testing.T) {
-	// Test that the command expects exactly one argument
-	assert.Nil(t, runCmd.Args(runCmd, []string{"workflow.laq.yaml"})) // Should return nil for valid args
-	assert.NotNil(t, runCmd.Args(runCmd, []string{}))                 // Should return error for no args
-	assert.NotNil(t, runCmd.Args(runCmd, []string{"file1", "file2"})) // Should return error for too many args
+// Flush writes captured responses to JSON files in the working directory
+func (ts *TestServer) Flush() error {
+	if !ts.captureResponse {
+		return nil // Nothing to flush in normal mode
+	}
+
+	ts.mutex.RLock()
+	defer ts.mutex.RUnlock()
+
+	for path, responses := range ts.capturedResponses {
+		if len(responses) == 0 {
+			continue
+		}
+
+		// Convert path to safe filename
+		filename := strings.ReplaceAll(path, "/", "_")
+		if filename == "" || filename == "_" {
+			filename = "root"
+		}
+
+		filename = filepath.Join(ts.responseDir, ts.provider+"_"+filename) + "_responses.json"
+
+		// Marshal responses to JSON
+		data, err := json.MarshalIndent(responses, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal responses for path %s: %w", path, err)
+		}
+
+		// Write to file
+		if err := os.WriteFile(filename, data, 0644); err != nil {
+			return fmt.Errorf("failed to write responses to %s: %w", filename, err)
+		}
+
+		fmt.Printf("Captured %d responses for path %s -> %s\n", len(responses), path, filename)
+	}
+
+	for path, requests := range ts.capturedRequests {
+		if len(requests) == 0 {
+			continue
+		}
+
+		// Convert path to safe filename
+		filename := strings.ReplaceAll(path, "/", "_")
+		if filename == "" || filename == "_" {
+			filename = "root"
+		}
+
+		filename = filepath.Join(ts.responseDir, ts.provider+"_"+filename) + "_requests.json"
+
+		// Marshal responses to JSON
+		data, err := json.MarshalIndent(requests, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal responses for path %s: %w", path, err)
+		}
+
+		// Write to file
+		if err := os.WriteFile(filename, data, 0644); err != nil {
+			return fmt.Errorf("failed to write responses to %s: %w", filename, err)
+		}
+
+		fmt.Printf("Captured %d requests for path %s -> %s\n", len(requests), path, filename)
+	}
+
+	return nil
 }
 
-func TestExecutionResultStructure(t *testing.T) {
-	// Test that ExecutionResult has the expected structure
-	result := ExecutionResult{
-		WorkflowFile:  "test.laq.yaml",
-		RunID:         "test-run-123",
-		Status:        "completed",
-		StartTime:     time.Now(),
-		EndTime:       time.Now(),
-		Duration:      time.Second,
-		StepsExecuted: 1,
-		StepsTotal:    1,
-		Inputs:        map[string]interface{}{"test": "value"},
-		FinalState:    map[string]interface{}{"result": "success"},
-		StepResults:   []StepExecutionResult{},
-	}
-
-	assert.Equal(t, "test.laq.yaml", result.WorkflowFile)
-	assert.Equal(t, "test-run-123", result.RunID)
-	assert.Equal(t, "completed", result.Status)
-	assert.Equal(t, 1, result.StepsExecuted)
-	assert.Equal(t, 1, result.StepsTotal)
-	assert.NotNil(t, result.Inputs)
-	assert.NotNil(t, result.FinalState)
+// URL returns the test server's URL
+func (ts *TestServer) URL() string {
+	return ts.server.URL
 }
 
-func TestStepExecutionResultStructure(t *testing.T) {
-	// Test that StepExecutionResult has the expected structure
-	tokenUsage := &TokenUsage{
-		PromptTokens:     10,
-		CompletionTokens: 20,
-		TotalTokens:      30,
-		EstimatedCost:    0.001,
-	}
-
-	stepResult := StepExecutionResult{
-		StepID:     "step1",
-		Status:     "completed",
-		Duration:   time.Second,
-		Output:     map[string]interface{}{"output": "Hello World"},
-		Response:   "Hello World",
-		Retries:    0,
-		TokenUsage: tokenUsage,
-	}
-
-	assert.Equal(t, "step1", stepResult.StepID)
-	assert.Equal(t, "completed", stepResult.Status)
-	assert.Equal(t, time.Second, stepResult.Duration)
-	assert.Equal(t, "Hello World", stepResult.Response)
-	assert.Equal(t, 0, stepResult.Retries)
-	assert.NotNil(t, stepResult.TokenUsage)
-	assert.Equal(t, 30, stepResult.TokenUsage.TotalTokens)
-}
-
-func TestTokenUsageSummaryStructure(t *testing.T) {
-	// Test that TokenUsageSummary has the expected structure
-	summary := TokenUsageSummary{
-		TotalTokens:      100,
-		PromptTokens:     30,
-		CompletionTokens: 70,
-		EstimatedCost:    0.005,
-	}
-
-	assert.Equal(t, 100, summary.TotalTokens)
-	assert.Equal(t, 30, summary.PromptTokens)
-	assert.Equal(t, 70, summary.CompletionTokens)
-	assert.Equal(t, 0.005, summary.EstimatedCost)
-}
-
-func TestGetWorkflowName(t *testing.T) {
-	tests := []struct {
-		name     string
-		workflow *ast.Workflow
-		expected string
-	}{
-		{
-			name: "workflow with name",
-			workflow: &ast.Workflow{
-				Metadata: &ast.WorkflowMetadata{
-					Name: "test-workflow",
-				},
-			},
-			expected: "test-workflow",
-		},
-		{
-			name: "workflow without metadata",
-			workflow: &ast.Workflow{
-				Metadata: nil,
-			},
-			expected: "Untitled Workflow",
-		},
-		{
-			name: "workflow with empty name",
-			workflow: &ast.Workflow{
-				Metadata: &ast.WorkflowMetadata{
-					Name: "",
-				},
-			},
-			expected: "Untitled Workflow",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getWorkflowName(tt.workflow)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+// Close shuts down the test server
+func (ts *TestServer) Close() {
+	ts.server.Close()
 }
 
 func TestCollectExecutionResultsIntegration(t *testing.T) {
-	// Test the token aggregation logic
-
-	// Create a mock execution context with step results
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -176,7 +363,12 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	execCtx := execcontext.NewExecutionContext(ctx, workflow, nil)
+	runCtx := execcontext.RunContext{
+		Context: ctx,
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}
+	execCtx := execcontext.NewExecutionContext(runCtx, workflow, nil, "")
 
 	// Add step results with token usage
 	execCtx.SetStepResult("step1", &execcontext.StepResult{
@@ -187,7 +379,7 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 		Duration:  time.Second,
 		Output:    map[string]interface{}{"output": "Result 1"},
 		Response:  "Result 1",
-		TokenUsage: &provider.TokenUsage{
+		TokenUsage: &execcontext.TokenUsage{
 			PromptTokens:     10,
 			CompletionTokens: 15,
 			TotalTokens:      25,
@@ -202,7 +394,7 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 		Duration:  time.Second,
 		Output:    map[string]interface{}{"output": "Result 2"},
 		Response:  "Result 2",
-		TokenUsage: &provider.TokenUsage{
+		TokenUsage: &execcontext.TokenUsage{
 			PromptTokens:     20,
 			CompletionTokens: 30,
 			TotalTokens:      50,
@@ -223,9 +415,85 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 	assert.Equal(t, 75, result.TokenUsage.TotalTokens)
 	assert.Equal(t, 30, result.TokenUsage.PromptTokens)
 	assert.Equal(t, 45, result.TokenUsage.CompletionTokens)
-	assert.Equal(t, 0.003, result.TokenUsage.EstimatedCost)
 
 	assert.Len(t, result.StepResults, 2)
 	assert.Equal(t, "step1", result.StepResults[0].StepID)
 	assert.Equal(t, "step2", result.StepResults[1].StepID)
+}
+
+func TestRunE2EWorkflow(t *testing.T) {
+	_ = godotenv.Load(".env.test")
+	t.Setenv("LACQUER_TEST", "true")
+
+	if os.Getenv("LACQUER_ANTHROPIC_TEST_API_KEY") == "" {
+		t.Skip("Skipping e2e tests as no LACQUER_ANTHROPIC_TEST_API_KEY is set")
+	}
+
+	// if os.Getenv("LACQUER_OPENAI_TEST_API_KEY") == "" {
+	// 	t.Skip("Skipping e2e tests as no LACQUER_OPENAI_TEST_API_KEY is set")
+	// }
+
+	t.Setenv("ANTHROPIC_API_KEY", os.Getenv("LACQUER_ANTHROPIC_TEST_API_KEY"))
+
+	dir, err := os.ReadDir("testdata")
+	require.NoError(t, err)
+	for _, d := range dir {
+		if !d.IsDir() {
+			continue
+		}
+
+		t.Run(d.Name(), func(t *testing.T) {
+			ts := NewTestServer("anthropic", filepath.Join("testdata", d.Name()), *captureResponse, "https://api.anthropic.com")
+			t.Setenv("LACQUER_ANTHROPIC_BASE_URL", ts.URL())
+			defer func() {
+				err := ts.Flush()
+				require.NoError(t, err)
+				ts.Close()
+			}()
+
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			runCtx := execcontext.RunContext{
+				Context: context.Background(),
+				StdOut:  stdout,
+				StdErr:  stderr,
+			}
+
+			var inputs map[string]string
+			if _, err := os.Stat(filepath.Join("testdata", d.Name(), "inputs.json")); err == nil {
+				b, err := os.ReadFile(filepath.Join("testdata", d.Name(), "inputs.json"))
+				require.NoError(t, err)
+
+				err = json.Unmarshal(b, &inputs)
+				require.NoError(t, err)
+			}
+
+			err := runWorkflow(runCtx, filepath.Join("testdata", d.Name(), "workflow.laq.yml"), inputs)
+			require.NoError(t, err, fmt.Sprintf("STDOUT: %s\nSTDERR: %s", stdout.String(), stderr.String()))
+
+			// load golden file
+			goldenFile := filepath.Join("testdata", d.Name(), "golden.txt")
+			golden, err := os.ReadFile(goldenFile)
+
+			// Remove ANSI codes and normalize time strings
+			stdout_clean := re.ReplaceAllString(stdout.String(), "")
+			stderr_clean := re.ReplaceAllString(stderr.String(), "")
+			stdout_normalized := timeRe.ReplaceAllString(stdout_clean, "(TIME)")
+			stderr_normalized := timeRe.ReplaceAllString(stderr_clean, "(TIME)")
+			actual := stdout_normalized + "\nSTDERR:\n" + stderr_normalized
+
+			if os.IsNotExist(err) {
+				golden = []byte(actual)
+				err = os.WriteFile(goldenFile, golden, 0644)
+				require.NoError(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			if !assert.Equal(t, string(golden), actual) {
+				os.WriteFile(filepath.Join("testdata", d.Name(), "actual.txt"), []byte(actual), 0644)
+			}
+		})
+
+	}
 }

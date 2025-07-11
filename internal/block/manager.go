@@ -57,7 +57,7 @@ func (m *Manager) LoadBlock(ctx context.Context, path string) (*Block, error) {
 
 // ExecuteBlock executes a block at the given path with the given inputs
 func (m *Manager) ExecuteBlock(execCtx *execcontext.ExecutionContext, blockPath string, inputs map[string]interface{}) (map[string]interface{}, error) {
-	block, err := m.LoadBlock(execCtx.Context, blockPath)
+	block, err := m.LoadBlock(execCtx.Context.Context, blockPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load block: %w", err)
 	}

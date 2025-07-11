@@ -27,7 +27,7 @@ Examples:
   laq version              # Show basic version info
   laq version --output json # Show version info as JSON`,
 	Run: func(cmd *cobra.Command, args []string) {
-		showVersion()
+		showVersion(cmd)
 	},
 }
 
@@ -52,7 +52,7 @@ type ComponentVersions struct {
 	CLI     string `json:"cli" yaml:"cli"`
 }
 
-func showVersion() {
+func showVersion(cmd *cobra.Command) {
 	versionInfo := VersionInfo{
 		Version:   Version,
 		Commit:    Commit,
@@ -70,9 +70,9 @@ func showVersion() {
 
 	switch outputFormat {
 	case "json":
-		style.PrintJSON(versionInfo)
+		style.PrintJSON(cmd.OutOrStdout(), versionInfo)
 	case "yaml":
-		style.PrintYAML(versionInfo)
+		style.PrintYAML(cmd.OutOrStdout(), versionInfo)
 	default:
 		printText(versionInfo)
 	}

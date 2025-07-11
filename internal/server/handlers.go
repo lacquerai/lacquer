@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -96,7 +97,13 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 	// TODO: get the workflow file path
 	wd := ""
 	panic("not implemented")
-	execCtx := execcontext.NewExecutionContext(ctx, workflow, processedInputs, wd)
+
+	runCtx := execcontext.RunContext{
+		Context: ctx,
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}
+	execCtx := execcontext.NewExecutionContext(runCtx, workflow, processedInputs, wd)
 	runID := execCtx.RunID
 
 	// Start execution tracking
@@ -127,7 +134,7 @@ func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflo
 		EnableStateSnapshots: false,
 	}
 
-	executor, err := engine.NewExecutor(ctx, executorConfig, workflow, nil)
+	executor, err := engine.NewExecutor(execCtx.Context, executorConfig, workflow, nil)
 	if err != nil {
 		s.manager.FinishExecution(runID, nil, fmt.Errorf("failed to create executor: %w", err))
 		return
@@ -145,7 +152,7 @@ func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflo
 	}()
 
 	// Execute workflow
-	err = executor.ExecuteWorkflow(ctx, execCtx, progressChan)
+	err = executor.ExecuteWorkflow(execCtx, progressChan)
 	close(progressChan)
 
 	// Get outputs

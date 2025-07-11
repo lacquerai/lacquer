@@ -2,6 +2,8 @@ package execcontext
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -34,12 +36,15 @@ type ExecutionContext struct {
 	Matrix      map[string]interface{}
 
 	// Execution control
-	Context context.Context
-	Cancel  context.CancelFunc
+	Context RunContext
 	Logger  zerolog.Logger
 
 	// Thread safety
 	mu sync.RWMutex
+}
+
+func (ec ExecutionContext) Write(p []byte) (n int, err error) {
+	return ec.Context.Write(p)
 }
 
 // StepResult represents the result of executing a single step
@@ -68,16 +73,15 @@ const (
 )
 
 // NewExecutionContext creates a new execution context for a workflow
-func NewExecutionContext(ctx context.Context, workflow *ast.Workflow, inputs map[string]interface{}, wd string) *ExecutionContext {
+func NewExecutionContext(ctx RunContext, workflow *ast.Workflow, inputs map[string]interface{}, wd string) *ExecutionContext {
 	runID := utils.GenerateRunID()
-	execCtx, cancel := context.WithCancel(ctx)
 
 	workflowName := ""
 	if workflow.Metadata != nil {
 		workflowName = workflow.Metadata.Name
 	}
 
-	logger := zerolog.Ctx(ctx).With().
+	logger := zerolog.Ctx(ctx.Context).With().
 		Str("workflow", workflowName).
 		Str("run_id", runID).
 		Logger()
@@ -94,8 +98,7 @@ func NewExecutionContext(ctx context.Context, workflow *ast.Workflow, inputs map
 		Environment: utils.GetEnvironmentVars(),
 		Metadata:    utils.BuildMetadata(workflow),
 		Matrix:      make(map[string]interface{}),
-		Context:     execCtx,
-		Cancel:      cancel,
+		Context:     ctx,
 		Logger:      logger,
 		TotalSteps:  len(workflow.Workflow.Steps),
 	}
@@ -249,7 +252,7 @@ func (ec *ExecutionContext) IsCompleted() bool {
 // IsCancelled returns true if the execution context has been cancelled
 func (ec *ExecutionContext) IsCancelled() bool {
 	select {
-	case <-ec.Context.Done():
+	case <-ec.Context.Context.Done():
 		return true
 	default:
 		return false
@@ -367,4 +370,18 @@ type TokenUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+type RunContext struct {
+	Context context.Context
+	StdOut  io.Writer
+	StdErr  io.Writer
+}
+
+func (rc RunContext) Write(p []byte) (n int, err error) {
+	return rc.StdOut.Write(p)
+}
+
+func (rc RunContext) Printf(format string, v ...any) {
+	fmt.Fprintf(rc.StdOut, format, v...)
 }

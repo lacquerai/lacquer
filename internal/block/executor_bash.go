@@ -2,7 +2,6 @@ package block
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -44,7 +43,7 @@ func (e *BashExecutor) Validate(block *Block) error {
 
 func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *Block, inputJSON json.RawMessage) (map[string]interface{}, error) {
 	// Get or prepare the script
-	scriptPath, err := e.getOrPrepare(execCtx.Context, block)
+	scriptPath, err := e.getOrPrepare(block)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare bash script: %w", err)
 	}
@@ -66,7 +65,7 @@ func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *
 	execInput.Env["LACQUER_INPUTS"] = string(inputJSON)
 
 	// Execute the script
-	cmd := exec.CommandContext(execCtx.Context, "bash", scriptPath)
+	cmd := exec.CommandContext(execCtx.Context.Context, "bash", scriptPath)
 
 	jsonInput, err := json.Marshal(execInput)
 	if err != nil {
@@ -107,7 +106,7 @@ func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *
 			}
 			return nil, fmt.Errorf("block execution failed: %w", err)
 		}
-	case <-execCtx.Context.Done():
+	case <-execCtx.Context.Context.Done():
 		if cmd.Process != nil {
 			cmd.Process.Kill()
 		}
@@ -135,7 +134,7 @@ func (e *BashExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Blo
 	return e.ExecuteRaw(execCtx, block, jsonInput)
 }
 
-func (e *BashExecutor) getOrPrepare(ctx context.Context, block *Block) (string, error) {
+func (e *BashExecutor) getOrPrepare(block *Block) (string, error) {
 	// Generate cache key based on script content
 	hash := sha256.Sum256([]byte(block.Script))
 	cacheKey := hex.EncodeToString(hash[:])

@@ -35,7 +35,7 @@ func (e *RuntimeWorkflowEngine) Execute(execCtx *execcontext.ExecutionContext, w
 	childExecCtx := execcontext.NewExecutionContext(execCtx.Context, workflow, inputs, filepath.Dir(workflow.SourceFile))
 
 	// Execute the workflow
-	err = executor.ExecuteWorkflow(execCtx.Context, childExecCtx, nil) // nil progress channel for now
+	err = executor.ExecuteWorkflow(childExecCtx, nil) // nil progress channel for now
 	if err != nil {
 		return nil, fmt.Errorf("workflow execution failed: %w", err)
 	}

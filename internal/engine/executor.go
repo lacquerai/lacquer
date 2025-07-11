@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -65,7 +64,7 @@ func DefaultExecutorConfig() *ExecutorConfig {
 }
 
 // NewExecutor creates a new workflow executor with only required providers
-func NewExecutor(ctx context.Context, config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry) (*Executor, error) {
+func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry) (*Executor, error) {
 	if config == nil {
 		config = DefaultExecutorConfig()
 	}
@@ -97,14 +96,14 @@ func NewExecutor(ctx context.Context, config *ExecutorConfig, workflow *ast.Work
 
 		for _, runtime := range workflow.Requirements.Runtimes {
 			if runtime.Version != "" {
-				_, err := runtimeManager.Get(ctx, string(runtime.Name), runtime.Version)
+				_, err := runtimeManager.Get(ctx.Context, string(runtime.Name), runtime.Version)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get runtime %s: %w", runtime.Name, err)
 				}
 				continue
 			}
 
-			_, err := runtimeManager.GetLatest(ctx, string(runtime.Name))
+			_, err := runtimeManager.GetLatest(ctx.Context, string(runtime.Name))
 			if err != nil {
 				return nil, fmt.Errorf("failed to get latest runtime %s: %w", runtime.Name, err)
 			}
@@ -134,7 +133,7 @@ func NewExecutor(ctx context.Context, config *ExecutorConfig, workflow *ast.Work
 }
 
 // ExecuteWorkflow runs a workflow with progress events sent to the given channel
-func (e *Executor) ExecuteWorkflow(ctx context.Context, execCtx *execcontext.ExecutionContext, progressChan chan<- events.ExecutionEvent) error {
+func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progressChan chan<- events.ExecutionEvent) error {
 	e.progressChan = progressChan
 	log.Info().
 		Str("workflow", getWorkflowNameFromContext(execCtx)).
@@ -311,19 +310,7 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 	case step.IsAgentStep():
 		stepResponse, tokenUsage, err = e.executeAgentStep(execCtx, step)
 		if err == nil {
-			// Parse the agent response according to output definitions
-			var parseErr error
-			stepOutput, parseErr = e.outputParser.ParseStepOutput(step, stepResponse)
-			if parseErr != nil {
-				log.Warn().
-					Err(parseErr).
-					Str("step_id", step.ID).
-					Msg("Failed to parse agent output, using raw response")
-				// Fallback to raw response
-				stepOutput = map[string]interface{}{
-					"response": stepResponse,
-				}
-			}
+			stepOutput, err = e.parseAgentOutput(step, stepResponse)
 		}
 
 	case step.IsBlockStep():
@@ -388,6 +375,30 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 	return err
 }
 
+func (e *Executor) parseAgentOutput(step *ast.Step, response string) (map[string]interface{}, error) {
+	// if there is no output schema, return the raw response as there is nothing to parse
+	if len(step.Outputs) == 0 {
+		return map[string]interface{}{
+			"response": response,
+		}, nil
+	}
+
+	stepOutput, parseErr := e.outputParser.ParseStepOutput(step, response)
+	if parseErr != nil {
+		log.Warn().
+			Err(parseErr).
+			Str("step_id", step.ID).
+			Msg("Failed to parse agent output, using raw response")
+
+		// Fallback to raw response
+		return map[string]interface{}{
+			"response": response,
+		}, nil
+	}
+
+	return stepOutput, nil
+}
+
 // executeStepsWithConcurrency executes steps with support for concurrent execution
 func (e *Executor) executeStepsWithConcurrency(execCtx *execcontext.ExecutionContext, steps []*ast.Step) error {
 	if e.config.MaxConcurrentSteps <= 1 {
@@ -426,7 +437,7 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *execcontext.ExecutionCon
 			break
 		}
 		if execCtx.IsCancelled() {
-			return execCtx.Context.Err()
+			return execCtx.Context.Context.Err()
 		}
 
 		// Find steps that are ready to execute (dependencies satisfied)
@@ -464,8 +475,8 @@ func (e *Executor) executeStepsWithConcurrency(execCtx *execcontext.ExecutionCon
 			case stepID := <-stepDone:
 				// Step completed, continue to next iteration
 				_ = stepID
-			case <-execCtx.Context.Done():
-				return execCtx.Context.Err()
+			case <-execCtx.Context.Context.Done():
+				return execCtx.Context.Context.Err()
 			}
 			continue
 		}
@@ -709,9 +720,9 @@ func (e *Executor) executeAgentStep(execCtx *execcontext.ExecutionContext, step 
 
 // executeAgentStepWithTools executes an agent step with tool support
 func (e *Executor) executeAgentStepWithTools(execCtx *execcontext.ExecutionContext, step *ast.Step, agent *ast.Agent) (string, *execcontext.TokenUsage, error) {
-	prompt, err := e.templateEngine.Render(step.Prompt, execCtx)
+	initialPrompt, err := e.buildInitialPrompt(execCtx, step)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to render prompt template: %w", err)
+		return "", nil, fmt.Errorf("failed to build initial prompt: %w", err)
 	}
 
 	provider, err := e.modelRegistry.GetProviderForModel(agent.Provider, agent.Model)
@@ -719,7 +730,31 @@ func (e *Executor) executeAgentStepWithTools(execCtx *execcontext.ExecutionConte
 		return "", nil, fmt.Errorf("failed to get provider %s for model %s: %w", agent.Provider, agent.Model, err)
 	}
 
-	return e.executeConversationWithTools(execCtx, provider, agent, prompt, step)
+	return e.executeConversationWithTools(execCtx, provider, agent, initialPrompt, step)
+}
+
+func (e *Executor) buildInitialPrompt(execCtx *execcontext.ExecutionContext, step *ast.Step) (string, error) {
+	prompt, err := e.templateEngine.Render(step.Prompt, execCtx)
+	if err != nil {
+		return "", fmt.Errorf("failed to render prompt template: %w", err)
+	}
+
+	if step.Outputs == nil {
+		return prompt, nil
+	}
+
+	prompt += "\n\n"
+	prompt += "IMPORTANT: Respond in JSON using the following schema:\n"
+
+	jsonSchema, err := json.Marshal(step.Outputs)
+	if err != nil {
+		return prompt, fmt.Errorf("failed to marshal step outputs: %w", err)
+	}
+	prompt += "```json\n"
+	prompt += string(jsonSchema)
+	prompt += "\n```"
+
+	return prompt, nil
 }
 
 // executeConversationWithTools handles multi-turn conversation with tool calling
@@ -749,7 +784,7 @@ func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionCo
 		responseMessages, tokenUsage, err := pr.Generate(provider.GenerateContext{
 			StepID:  step.ID,
 			RunID:   execCtx.RunID,
-			Context: execCtx.Context,
+			Context: execCtx.Context.Context,
 		}, request, e.progressChan)
 		if err != nil {
 			return "", tokenUsage, fmt.Errorf("model generation failed: %w", err)
@@ -772,7 +807,7 @@ func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionCo
 		responseMessages, tokenUsage, err := pr.Generate(provider.GenerateContext{
 			StepID:  step.ID,
 			RunID:   execCtx.RunID,
-			Context: execCtx.Context,
+			Context: execCtx.Context.Context,
 		}, request, e.progressChan)
 		if err != nil {
 			e.progressChan <- events.NewAgentFailedEvent(step, actionID, execCtx.RunID)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/execcontext"
+	"github.com/lacquerai/lacquer/internal/schema"
 	"github.com/lacquerai/lacquer/internal/tools"
 )
 
@@ -50,7 +51,7 @@ func (p *MCPToolProvider) AddToolDefinition(tool *ast.Tool) ([]tools.Tool, error
 	toolsList := make([]tools.Tool, len(server.tools))
 	p.mu.Lock()
 	for i, tool := range server.tools {
-		var jsonSchema ast.JSONSchema
+		var jsonSchema schema.JSON
 		err := json.Unmarshal(tool.InputSchema, &jsonSchema)
 		if err != nil {
 			p.mu.Unlock()

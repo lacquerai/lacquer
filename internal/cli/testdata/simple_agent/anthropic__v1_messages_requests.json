@@ -1,0 +1,26 @@
+[
+  {
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Say hello to John Doe in a creative and friendly way.\nMake it warm and welcoming!\n\n\nIMPORTANT: Respond in JSON using the following schema:\n```json\n{\"greeting\":{\"type\":\"string\",\"description\":\"The greeting to the person\"}}\n```",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0,
+    "top_p": 0,
+    "system": [
+      {
+        "text": "You are a friendly assistant who gives warm greetings.",
+        "type": "text"
+      }
+    ],
+    "tools": []
+  }
+]

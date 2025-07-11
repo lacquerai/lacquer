@@ -187,7 +187,7 @@ func (s *Server) ExecuteTool(execCtx *execcontext.ExecutionContext, toolName str
 	}
 
 	// Execute the tool
-	result, err := client.CallTool(execCtx.Context, toolName, parameters)
+	result, err := client.CallTool(execCtx.Context.Context, toolName, parameters)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute tool: %w", err)
 	}

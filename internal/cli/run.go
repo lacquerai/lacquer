@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/briandowns/spinner"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/engine"
@@ -46,21 +46,44 @@ Examples:
   laq run workflow.laq.yaml --save-state      # Persist state for debugging`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runWorkflow(args[0])
+		// Setup signal handling for graceful shutdown
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+		go func() {
+			<-sigChan
+			log.Info().Msg("Received interrupt signal, shutting down gracefully...")
+			cancel()
+		}()
+
+		// Apply timeout if specified
+		if timeout > 0 {
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
+
+		runCtx := execcontext.RunContext{
+			Context: ctx,
+			StdOut:  cmd.OutOrStdout(),
+			StdErr:  cmd.OutOrStderr(),
+		}
+		err := runWorkflow(runCtx, args[0], inputs)
+		if err != nil {
+			os.Exit(1)
+		}
 	},
 }
 
 var (
 	// Input parameters
-	inputs map[string]string
-
-	// Execution options
+	inputs     map[string]string
 	dryRun     bool
 	saveState  bool
 	maxRetries int
 	timeout    time.Duration
-
-	// Removed showProgress and showSteps - using single clean format
 )
 
 func init() {
@@ -112,10 +135,9 @@ type StepExecutionResult struct {
 
 // TokenUsageSummary represents aggregated token usage across all steps
 type TokenUsageSummary struct {
-	TotalTokens      int     `json:"total_tokens" yaml:"total_tokens"`
-	PromptTokens     int     `json:"prompt_tokens" yaml:"prompt_tokens"`
-	CompletionTokens int     `json:"completion_tokens" yaml:"completion_tokens"`
-	EstimatedCost    float64 `json:"estimated_cost" yaml:"estimated_cost"`
+	TotalTokens      int `json:"total_tokens" yaml:"total_tokens"`
+	PromptTokens     int `json:"prompt_tokens" yaml:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens" yaml:"completion_tokens"`
 }
 
 // TokenUsage represents token usage for a single step
@@ -135,7 +157,7 @@ type StepProgressState struct {
 	startTime  time.Time
 	endTime    time.Time
 	title      string
-	spinner    *spinner.Spinner
+	spinner    style.Spinner
 	actions    ActionStates
 	mu         sync.RWMutex
 }
@@ -177,38 +199,19 @@ type ActionState struct {
 
 // ProgressTracker manages the visual progress display for all steps
 type ProgressTracker struct {
-	steps map[string]*StepProgressState
-	mu    sync.RWMutex
-	done  chan struct{}
+	steps  map[string]*StepProgressState
+	mu     sync.RWMutex
+	writer io.Writer
+	done   chan struct{}
 }
 
-func runWorkflow(workflowFile string) {
+func runWorkflow(ctx execcontext.RunContext, workflowFile string, inputs map[string]string) error {
 	startTime := time.Now()
-
-	// Setup signal handling for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		log.Info().Msg("Received interrupt signal, shutting down gracefully...")
-		cancel()
-	}()
-
-	// Apply timeout if specified
-	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
 
 	// Parse workflow
 	yamlParser, err := parser.NewYAMLParser()
 	if err != nil {
-		style.Error(fmt.Sprintf("Failed to create parser: %v", err))
-		os.Exit(1)
+		style.Error(ctx, fmt.Sprintf("Failed to create parser: %v", err))
 	}
 
 	workflow, err := yamlParser.ParseFile(workflowFile)
@@ -224,9 +227,9 @@ func runWorkflow(workflowFile string) {
 				Invalid: 1,
 			}
 
-			printValidationSummary(summary)
+			printValidationSummary(ctx, summary)
 		} else {
-			style.Error(fmt.Sprintf("Failed to parse workflow: %v", err))
+			style.Error(ctx, fmt.Sprintf("Failed to parse workflow: %v", err))
 		}
 
 		os.Exit(1)
@@ -251,21 +254,21 @@ func runWorkflow(workflowFile string) {
 
 	validationResult := engine.ValidateWorkflowInputs(workflow, workflowInputs)
 	if !validationResult.Valid {
-		printValidationErrors(validationResult)
-		os.Exit(1)
+		printValidationErrors(ctx, validationResult)
+		return fmt.Errorf("workflow inputs are invalid")
 	}
 
 	// Show workflow info
 	if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
-		printWorkflowInfo(workflow)
+		printWorkflowInfo(ctx, workflow)
 	}
 
 	// Dry run mode
 	if dryRun {
 		if !viper.GetBool("quiet") {
-			style.Success("Workflow validation completed (dry-run mode)")
+			style.Success(ctx, "Workflow validation completed (dry-run mode)")
 		}
-		return
+		return nil
 	}
 
 	// Create executor with configuration
@@ -279,8 +282,7 @@ func runWorkflow(workflowFile string) {
 
 	executor, err := engine.NewExecutor(ctx, executorConfig, workflow, nil)
 	if err != nil {
-		style.Error(fmt.Sprintf("Failed to create executor: %v", err))
-		return
+		return fmt.Errorf("failed to create executor: %w", err)
 	}
 
 	// Create execution context
@@ -298,7 +300,7 @@ func runWorkflow(workflowFile string) {
 	}
 
 	// Execute with progress reporting
-	err = executeWithProgress(ctx, executor, execCtx, &result)
+	err = executeWithProgress(executor, execCtx, &result)
 	if err != nil {
 		result.Status = "failed"
 		result.Error = err.Error()
@@ -326,37 +328,40 @@ func runWorkflow(workflowFile string) {
 	collectExecutionResults(execCtx, &result)
 
 	// Output results
-	outputResults(result)
+	outputResults(ctx, result)
 
 	// Exit with appropriate code
 	if result.Status == "failed" {
-		os.Exit(1)
+		return fmt.Errorf("workflow execution failed")
 	}
+
+	return nil
 }
 
-func executeWithProgress(ctx context.Context, executor *engine.Executor, execCtx *execcontext.ExecutionContext, result *ExecutionResult) error {
+func executeWithProgress(executor *engine.Executor, execCtx *execcontext.ExecutionContext, result *ExecutionResult) error {
 	// Create a progress channel for real-time updates
 	progressChan := make(chan events.ExecutionEvent, 100)
 	defer close(progressChan)
 
 	// Start progress reporter if not quiet and text output
 	if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
-		tracker := NewProgressTracker()
+		tracker := NewProgressTracker(execCtx)
 		go tracker.Start(progressChan, result)
 		defer tracker.Stop()
 	}
 
 	// Execute the workflow
-	err := executor.ExecuteWorkflow(ctx, execCtx, progressChan)
+	err := executor.ExecuteWorkflow(execCtx, progressChan)
 
 	return err
 }
 
 // NewProgressTracker creates a new progress tracker
-func NewProgressTracker() *ProgressTracker {
+func NewProgressTracker(writer io.Writer) *ProgressTracker {
 	return &ProgressTracker{
-		steps: make(map[string]*StepProgressState),
-		done:  make(chan struct{}),
+		steps:  make(map[string]*StepProgressState),
+		writer: writer,
+		done:   make(chan struct{}),
 	}
 }
 
@@ -414,9 +419,9 @@ func (pt *ProgressTracker) startStep(stepID string, stepIndex, totalSteps int) {
 	defer pt.mu.Unlock()
 
 	// Create and configure spinner
-	s := spinner.New(spinner.CharSets[9], 100*time.Millisecond) // Dots spinner with 100ms delay
+	s := style.NewSpinner(pt.writer)
 	title := fmt.Sprintf(" Running step %s (%d/%d)", style.AccentStyle.Render(stepID), stepIndex, totalSteps)
-	s.Suffix = title
+	s.SetSuffix(title)
 
 	state := &StepProgressState{
 		stepID:     stepID,
@@ -441,7 +446,7 @@ func (pt *ProgressTracker) updateStepProgress(stepID string, actionID string, te
 
 	if state, exists := pt.steps[stepID]; exists {
 		state.mu.Lock()
-		state.spinner.Suffix = fmt.Sprintf(" %s", text)
+		state.spinner.SetSuffix(fmt.Sprintf(" %s", text))
 		state.mu.Unlock()
 	}
 }
@@ -458,7 +463,7 @@ func (pt *ProgressTracker) createActionSpinner(stepID string, actionID string, t
 			text: text,
 		})
 
-		state.spinner.Suffix = state.String()
+		state.spinner.SetSuffix(state.String())
 		state.mu.Unlock()
 	}
 }
@@ -476,7 +481,7 @@ func (pt *ProgressTracker) completeActionSpinner(stepID string, actionID string)
 			}
 		}
 
-		state.spinner.Suffix = state.String()
+		state.spinner.SetSuffix(state.String())
 		state.mu.Unlock()
 	}
 }
@@ -494,7 +499,7 @@ func (pt *ProgressTracker) failActionSpinner(stepID string, actionID string) {
 			}
 		}
 
-		state.spinner.Suffix = state.String()
+		state.spinner.SetSuffix(state.String())
 		state.mu.Unlock()
 	}
 }
@@ -508,7 +513,7 @@ func (pt *ProgressTracker) completeStep(stepID string, duration time.Duration) {
 		state.mu.Lock()
 		state.status = "completed"
 		state.endTime = time.Now()
-		state.spinner.FinalMSG = style.SuccessIcon() + state.String()
+		state.spinner.SetFinalMSG(style.SuccessIcon() + state.String())
 		state.spinner.Stop()
 		state.mu.Unlock()
 	}
@@ -523,7 +528,7 @@ func (pt *ProgressTracker) failStep(stepID string, duration time.Duration, _ str
 		state.mu.Lock()
 		state.status = "failed"
 		state.endTime = time.Now()
-		state.spinner.FinalMSG = style.ErrorIcon() + " " + state.String()
+		state.spinner.SetFinalMSG(style.ErrorIcon() + " " + state.String())
 		state.spinner.Stop()
 		state.mu.Unlock()
 	}
@@ -537,8 +542,7 @@ func (pt *ProgressTracker) retryStep(stepID string, attempt int) {
 	if state, exists := pt.steps[stepID]; exists {
 		// Stop current spinner and update suffix to show retry
 		state.spinner.Stop()
-		state.spinner.Suffix = fmt.Sprintf(" Step %d/%d: %s (retry %d)",
-			state.stepIndex, state.totalSteps, stepID, attempt)
+		state.spinner.SetSuffix(fmt.Sprintf(" Step %d/%d: %s (retry %d)", state.stepIndex, state.totalSteps, stepID, attempt))
 		state.spinner.Start()
 	}
 }
@@ -589,11 +593,11 @@ func collectExecutionResults(execCtx *execcontext.ExecutionContext, result *Exec
 	}
 }
 
-func printWorkflowInfo(workflow *ast.Workflow) {
+func printWorkflowInfo(w io.Writer, workflow *ast.Workflow) {
 	name := getWorkflowName(workflow)
 	stepCount := len(workflow.Workflow.Steps)
 
-	fmt.Printf("\nRunning %s workflow (%d steps)\n\n", style.InfoStyle.Render(name), stepCount)
+	fmt.Fprintf(w, "\nRunning %s workflow (%d steps)\n\n", style.InfoStyle.Render(name), stepCount)
 
 }
 
@@ -604,35 +608,35 @@ func getWorkflowName(workflow *ast.Workflow) string {
 	return "Untitled Workflow"
 }
 
-func outputResults(result ExecutionResult) {
+func outputResults(w io.Writer, result ExecutionResult) {
 	outputFormat := viper.GetString("output")
 
 	switch outputFormat {
 	case "json":
-		style.PrintJSON(result)
+		style.PrintJSON(w, result)
 	case "yaml":
-		style.PrintYAML(result)
+		style.PrintYAML(w, result)
 	default:
-		printExecutionSummary(result)
+		printExecutionSummary(w, result)
 	}
 }
 
-func printExecutionSummary(result ExecutionResult) {
+func printExecutionSummary(w io.Writer, result ExecutionResult) {
 	if viper.GetBool("quiet") {
 		return
 	}
 
-	fmt.Printf("\n")
+	fmt.Fprintf(w, "\n")
 
 	// Show success or failure with duration
 	if result.Status == "completed" {
-		fmt.Printf("%s Workflow completed %s (%s)\n", style.SuccessIcon(), style.SuccessStyle.Render("successfully"), formatDuration(result.Duration))
+		fmt.Fprintf(w, "%s Workflow completed %s (%s)\n", style.SuccessIcon(), style.SuccessStyle.Render("successfully"), formatDuration(result.Duration))
 
 	} else {
-		fmt.Printf("%s Workflow failed\n\n", style.ErrorIcon())
+		fmt.Fprintf(w, "%s Workflow failed\n\n", style.ErrorIcon())
 		// Show error details for failures
 		if result.Error != "" {
-			fmt.Printf("%s\n", style.ErrorStyle.Render(result.Error))
+			fmt.Fprintf(w, "%s\n", style.ErrorStyle.Render(result.Error))
 		}
 	}
 
@@ -650,31 +654,31 @@ func printExecutionSummary(result ExecutionResult) {
 			}
 			i++
 		}
-		fmt.Printf("%s\n", outputContent.String())
+		fmt.Fprintf(w, "%s\n", outputContent.String())
 	}
 
 }
 
-func printValidationErrors(validationResult *engine.InputValidationResult) {
-	fmt.Printf("\n❌ Input validation failed:\n\n")
+func printValidationErrors(w io.Writer, validationResult *engine.InputValidationResult) {
+	fmt.Fprintf(w, "\n❌ Input validation failed:\n\n")
 
 	for i, err := range validationResult.Errors {
 		// Add spacing between errors for better readability
 		if i > 0 {
-			fmt.Println()
+			fmt.Fprintln(w)
 		}
 
 		// Format field name with color/emphasis
-		fmt.Printf("   Field: %s\n", err.Field)
-		fmt.Printf("   Error: %s\n", err.Message)
+		fmt.Fprintf(w, "   Field: %s\n", err.Field)
+		fmt.Fprintf(w, "   Error: %s\n", err.Message)
 
 		// Show the actual value if provided
 		if err.Value != nil {
-			fmt.Printf("   Value: %v\n", err.Value)
+			fmt.Fprintf(w, "   Value: %v\n", err.Value)
 		}
 	}
 
-	fmt.Printf("\n💡 Please check your input parameters and try again.\n")
+	fmt.Fprintf(w, "\n💡 Please check your input parameters and try again.\n")
 }
 
 func formatDuration(duration time.Duration) string {

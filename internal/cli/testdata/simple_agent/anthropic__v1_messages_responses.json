@@ -1,0 +1,23 @@
+[
+  {
+    "id": "msg_01229StRsaAqa5DXTuf9KjWF",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-sonnet-20241022",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"greeting\": \"Hey there John Doe! 🌟 What a wonderful surprise to see you! I hope your day is as bright as your smile. Welcome, welcome - make yourself at home and let's make this moment a delightful one! ✨\"\n}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 76,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 66,
+      "service_tier": "standard"
+    }
+  }
+]

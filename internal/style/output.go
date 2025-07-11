@@ -3,7 +3,7 @@ package style
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss/v2"
@@ -231,77 +231,29 @@ func FormatPosition(line int) string {
 }
 
 // printJSON outputs data as formatted JSON
-func PrintJSON(data interface{}) {
-	encoder := json.NewEncoder(os.Stdout)
+func PrintJSON(w io.Writer, data interface{}) {
+	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(data); err != nil {
-		fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(w, "Error encoding JSON: %v\n", err)
 	}
 }
 
 // printYAML outputs data as YAML
-func PrintYAML(data interface{}) {
-	encoder := yaml.NewEncoder(os.Stdout)
+func PrintYAML(w io.Writer, data interface{}) {
+	encoder := yaml.NewEncoder(w)
 	encoder.SetIndent(2)
 	if err := encoder.Encode(data); err != nil {
-		fmt.Fprintf(os.Stderr, "Error encoding YAML: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(w, "Error encoding YAML: %v\n", err)
 	}
 	encoder.Close()
 }
 
-// printTable outputs data in a human-readable table format
-func PrintTable(headers []string, rows [][]string) {
-	if len(rows) == 0 {
-		return
-	}
-
-	// Calculate column widths
-	widths := make([]int, len(headers))
-	for i, header := range headers {
-		widths[i] = len(header)
-	}
-
-	for _, row := range rows {
-		for i, cell := range row {
-			if i < len(widths) && len(cell) > widths[i] {
-				widths[i] = len(cell)
-			}
-		}
-	}
-
-	// Print header
-	for i, header := range headers {
-		fmt.Printf("%-*s  ", widths[i], header)
-	}
-	fmt.Println()
-
-	// Print separator
-	for i := range headers {
-		for j := 0; j < widths[i]; j++ {
-			fmt.Print("-")
-		}
-		fmt.Print("  ")
-	}
-	fmt.Println()
-
-	// Print rows
-	for _, row := range rows {
-		for i, cell := range row {
-			if i < len(widths) {
-				fmt.Printf("%-*s  ", widths[i], cell)
-			}
-		}
-		fmt.Println()
-	}
-}
-
 // Success prints a success message with styling
-func Success(message string) {
+func Success(w io.Writer, message string) {
 	icon := lipgloss.NewStyle().Foreground(SuccessColor).Bold(true).Render("✓")
 	msg := lipgloss.NewStyle().Foreground(SuccessColor).Render(message)
-	fmt.Printf("%s %s\n", icon, msg)
+	fmt.Fprintf(w, "%s %s\n", icon, msg)
 }
 
 func SuccessIcon() string {
@@ -319,10 +271,10 @@ func ErrorIcon() string {
 }
 
 // Error prints an error message with styling
-func Error(message string) {
+func Error(w io.Writer, message string) {
 	icon := lipgloss.NewStyle().Foreground(ErrorColor).Bold(true).Render("✗")
 	msg := lipgloss.NewStyle().Foreground(ErrorColor).Render(message)
-	fmt.Fprintf(os.Stderr, "%s %s\n", icon, msg)
+	fmt.Fprintf(w, "%s %s\n", icon, msg)
 }
 
 func WarningIcon() string {
@@ -330,15 +282,15 @@ func WarningIcon() string {
 }
 
 // Warning prints a warning message with styling
-func Warning(message string) {
+func Warning(w io.Writer, message string) {
 	icon := lipgloss.NewStyle().Foreground(WarningColor).Bold(true).Render("⚠")
 	msg := lipgloss.NewStyle().Foreground(WarningColor).Render(message)
-	fmt.Printf("%s %s\n", icon, msg)
+	fmt.Fprintf(w, "%s %s\n", icon, msg)
 }
 
 // Info prints an info message with styling
-func Info(message string) {
+func Info(w io.Writer, message string) {
 	icon := lipgloss.NewStyle().Foreground(InfoColor).Bold(true).Render("ℹ")
 	msg := lipgloss.NewStyle().Foreground(InfoColor).Render(message)
-	fmt.Printf("%s %s\n", icon, msg)
+	fmt.Fprintf(w, "%s %s\n", icon, msg)
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 )
 
 type Input struct {
@@ -27,6 +28,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	time.Sleep(time.Second * 3)
 
 	json.NewEncoder(os.Stdout).Encode(map[string]interface{}{
 		"greeting": fmt.Sprintf("Hello, %s!", input.Inputs.Name),

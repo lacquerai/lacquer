@@ -134,7 +134,7 @@ type ModelInfo struct {
 
 // Default configuration for Anthropic
 func DefaultConfig() *Config {
-	return &Config{
+	config := &Config{
 		BaseURL:          "https://api.anthropic.com",
 		Timeout:          60 * time.Second,
 		MaxRetries:       3,
@@ -142,6 +142,11 @@ func DefaultConfig() *Config {
 		UserAgent:        "lacquer/1.0",
 		AnthropicVersion: "2023-06-01",
 	}
+	if baseURL := os.Getenv("LACQUER_ANTHROPIC_BASE_URL"); baseURL != "" {
+		config.BaseURL = baseURL
+	}
+
+	return config
 }
 
 // NewAnthropicProvider creates a new Anthropic model provider
@@ -151,13 +156,6 @@ func NewProvider(config *Config) (*Provider, error) {
 	} else {
 		// Merge with defaults for missing fields
 		defaults := DefaultConfig()
-		if config.BaseURL == "" {
-			if baseURL := os.Getenv("ANTHROPIC_BASE_URL"); baseURL != "" {
-				config.BaseURL = baseURL
-			} else {
-				config.BaseURL = defaults.BaseURL
-			}
-		}
 		if config.Timeout == 0 {
 			config.Timeout = defaults.Timeout
 		}
@@ -179,7 +177,7 @@ func NewProvider(config *Config) (*Provider, error) {
 	if config.APIKey == "" {
 		config.APIKey = GetAnthropicAPIKeyFromEnv()
 		if config.APIKey == "" {
-			return nil, fmt.Errorf("Anthropic API key is required")
+			return nil, fmt.Errorf("anthropic API key is required")
 		}
 	}
 
