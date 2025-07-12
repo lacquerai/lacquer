@@ -25,22 +25,17 @@ func NewRuntimeWorkflowEngine(config *ExecutorConfig, registry *provider.Registr
 
 // Execute executes a workflow definition with the given inputs
 func (e *RuntimeWorkflowEngine) Execute(execCtx *execcontext.ExecutionContext, workflow *ast.Workflow, inputs map[string]interface{}) (map[string]interface{}, error) {
-	// Create a new executor for this workflow
 	executor, err := NewExecutor(execCtx.Context, e.config, workflow, e.modelRegistry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create executor: %w", err)
 	}
 
-	// Create execution context for the child workflow
 	childExecCtx := execcontext.NewExecutionContext(execCtx.Context, workflow, inputs, filepath.Dir(workflow.SourceFile))
-
-	// Execute the workflow
 	err = executor.ExecuteWorkflow(childExecCtx, nil) // nil progress channel for now
 	if err != nil {
 		return nil, fmt.Errorf("workflow execution failed: %w", err)
 	}
 
-	// Extract the outputs from the execution summary
 	summary := childExecCtx.GetExecutionSummary()
 	if summary.Status != "completed" {
 		return nil, fmt.Errorf("workflow execution did not complete successfully: %s", summary.Status)

@@ -1,0 +1,72 @@
+
+Running hello-world workflow (2 steps)
+
+[SET SUFFIX]  Running step say_hello_anthropic (1/2)
+[SPINNER START]
+[SET SUFFIX]   Running step say_hello_anthropic (1/2)
+   Say hello to John Doe in a creative and friendly way.
+Make it warm and welcoming!
+
+
+IMPORTANT: Respond in JSON using the following schema:
+```json
+{"greeting":{"type":"string","description":"The greet...
+
+[SET SUFFIX]   Running step say_hello_anthropic (1/2)
+   ✓ Say hello to John Doe in a creative and friendly way.
+Make it warm and welcoming!
+
+
+IMPORTANT: Respond in JSON using the following schema:
+```json
+{"greeting":{"type":"string","description":"The greet
+
+[SPINNER STOP]
+[FINAL MSG] ✓  Running step say_hello_anthropic (1/2)
+   ✓ Say hello to John Doe in a creative and friendly way.
+Make it warm and welcoming!
+
+
+IMPORTANT: Respond in JSON using the following schema:
+```json
+{"greeting":{"type":"string","description":"The greet
+
+[SET SUFFIX]  Running step say_hello_openai (2/2)
+[SPINNER START]
+[SET SUFFIX]   Running step say_hello_openai (2/2)
+   Say hello to John Doe in a creative and friendly way.
+Make it warm and welcoming!
+
+
+IMPORTANT: Respond in JSON using the following schema:
+```json
+{"greeting":{"type":"string","description":"The greet...
+
+[SET SUFFIX]   Running step say_hello_openai (2/2)
+   ✓ Say hello to John Doe in a creative and friendly way.
+Make it warm and welcoming!
+
+
+IMPORTANT: Respond in JSON using the following schema:
+```json
+{"greeting":{"type":"string","description":"The greet
+
+[SPINNER STOP]
+[FINAL MSG] ✓  Running step say_hello_openai (2/2)
+   ✓ Say hello to John Doe in a creative and friendly way.
+Make it warm and welcoming!
+
+
+IMPORTANT: Respond in JSON using the following schema:
+```json
+{"greeting":{"type":"string","description":"The greet
+
+
+✓ Workflow completed successfully (TIME)
+
+Outputs
+
+anthropic_greeting: Hey there John Doe! 🌟 What a wonderful surprise to see you! I hope your day is filled with as much warmth and brightness as you bring into any room. Welcome, welcome - it's truly a pleasure to meet you! 🤗
+openai_greeting: Hello John Doe! It's a pleasure to see you. The world seems a bit brighter with you around. Welcome!
+
+STDERR:

@@ -42,13 +42,6 @@ func NewProvider(config *OpenAIConfig) (*OpenAIProvider, error) {
 
 	// Set defaults
 	defaults := getDefaultOpenAIConfig()
-	if config.BaseURL == "" {
-		if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
-			config.BaseURL = baseURL
-		} else {
-			config.BaseURL = defaults.BaseURL
-		}
-	}
 	if config.Timeout == 0 {
 		config.Timeout = defaults.Timeout
 	}
@@ -60,6 +53,9 @@ func NewProvider(config *OpenAIConfig) (*OpenAIProvider, error) {
 	}
 	if config.UserAgent == "" {
 		config.UserAgent = defaults.UserAgent
+	}
+	if config.BaseURL == "" {
+		config.BaseURL = defaults.BaseURL
 	}
 
 	// Get API key from config or environment
@@ -111,7 +107,7 @@ func (p *OpenAIProvider) Generate(ctx provider.GenerateContext, request *provide
 		})
 	}
 
-	var maxTokens int64
+	maxTokens := int64(4096)
 	if request.MaxTokens != nil {
 		maxTokens = int64(*request.MaxTokens)
 	}
@@ -254,13 +250,19 @@ func (p *OpenAIProvider) extractResponseContent(response *openai.ChatCompletion)
 
 // getDefaultOpenAIConfig returns default configuration values
 func getDefaultOpenAIConfig() *OpenAIConfig {
-	return &OpenAIConfig{
+	config := &OpenAIConfig{
 		BaseURL:    "https://api.openai.com/v1",
 		Timeout:    30 * time.Second,
 		MaxRetries: 3,
 		RetryDelay: 1 * time.Second,
 		UserAgent:  "lacquer/1.0",
 	}
+
+	if baseURL := os.Getenv("LACQUER_OPENAI_BASE_URL"); baseURL != "" {
+		config.BaseURL = baseURL
+	}
+
+	return config
 }
 
 // GetOpenAIAPIKeyFromEnv retrieves the OpenAI API key from environment variables

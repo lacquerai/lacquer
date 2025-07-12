@@ -1,11 +1,44 @@
 package ast
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
+
+var (
+	ValidProviders = []string{"anthropic", "openai", "local"}
+	ValidRuntimes  = []string{"go", "node"}
+	ValidStepTypes = []string{"agent", "uses", "run", "container", "action"}
+	ValidToolTypes = []string{"uses", "script", "mcp"}
+)
+
+func ListToReadable(list []string) string {
+	if len(list) == 0 {
+		return ""
+	}
+
+	if len(list) == 1 {
+		return list[0]
+	}
+
+	builder := strings.Builder{}
+	for i, v := range list {
+		builder.WriteString(v)
+		if len(list)-2 == i {
+			builder.WriteString("or ")
+		} else {
+			builder.WriteString(", ")
+		}
+	}
+
+	return builder.String()
+}
 
 // ValidationError represents a validation error
 type ValidationError struct {
@@ -68,223 +101,215 @@ func (vr *ValidationResult) ToError() error {
 
 // Validator provides comprehensive validation for AST structures
 type Validator struct {
+	wd       string
+	workflow *Workflow
+	result   *ValidationResult
 }
 
 // NewValidator creates a new AST validator
-func NewValidator() *Validator {
-	return &Validator{}
+func NewValidator(w *Workflow) *Validator {
+	wd := filepath.Dir(w.SourceFile)
+	return &Validator{
+		wd:       wd,
+		workflow: w,
+		result:   &ValidationResult{Valid: true},
+	}
 }
 
 // ValidateWorkflow performs comprehensive validation of a workflow
-func (v *Validator) ValidateWorkflow(w *Workflow) *ValidationResult {
-	result := &ValidationResult{Valid: true}
+func (v *Validator) ValidateWorkflow() *ValidationResult {
+	w := v.workflow
 
 	// Basic structure validation
 	if w.Version != "1.0" {
-		result.AddFieldError("", "version", fmt.Sprintf("unsupported version: %s", w.Version))
+		v.result.AddFieldError("", "version", fmt.Sprintf("unsupported version: %s", w.Version))
 	}
 
 	if w.Workflow == nil {
-		result.AddError("", "workflow section is required")
-		return result
-	}
-
-	// Validate metadata
-	if w.Metadata != nil {
-		v.validateMetadata(w.Metadata, "metadata", result)
+		v.result.AddError("", "workflow section is required")
+		return v.result
 	}
 
 	// Validate agents
 	if w.Agents != nil {
-		v.validateAgents(w.Agents, "agents", result)
+		v.validateAgents()
 	}
 
-	// Validate workflow definition
-	v.validateWorkflowDef(w.Workflow, "workflow", result)
+	if w.Requirements != nil {
+		v.validateRequirements()
+	}
 
-	// Cross-reference validation
-	v.validateCrossReferences(w, result)
+	v.validateWorkflowDef()
 
-	return result
+	return v.result
 }
 
-// validateMetadata validates workflow metadata
-func (v *Validator) validateMetadata(metadata *WorkflowMetadata, path string, result *ValidationResult) {
-	if metadata.Name == "" {
-		result.AddFieldError(path, "name", "name is required")
-		return
-	}
+func (v *Validator) validateRequirements() {
+	for _, rr := range v.workflow.Requirements.Runtimes {
+		isValidRuntime := false
+		for _, v := range ValidRuntimes {
+			if string(rr.Name) == v {
+				isValidRuntime = true
+				break
+			}
+		}
 
-	// Validate name format (kebab-case)
-	if !isValidKebabCase(metadata.Name) {
-		result.AddFieldError(path, "name", "name must be in kebab-case format")
-	}
-
-	// Validate version format if specified
-	if metadata.Version != "" && !isValidSemVer(metadata.Version) {
-		result.AddFieldError(path, "version", "version must follow semantic versioning")
+		if !isValidRuntime {
+			v.result.AddFieldError("requirements", "runtimes", fmt.Sprintf("rutimes must be one of: %s", ListToReadable(ValidRuntimes)))
+		}
 	}
 }
 
 // validateAgents validates all agent definitions
-func (v *Validator) validateAgents(agents map[string]*Agent, path string, result *ValidationResult) {
-	for name, agent := range agents {
+func (v *Validator) validateAgents() {
+	path := "agents"
+
+	for name, agent := range v.workflow.Agents {
 		agentPath := fmt.Sprintf("%s.%s", path, name)
 
-		// Validate agent name
 		if !isValidIdentifier(name) {
-			result.AddError(agentPath, "agent name must be a valid identifier")
+			v.result.AddError(agentPath, "agent name must be a valid identifier")
 		}
 
-		// Validate agent configuration
-		v.validateAgent(agent, agentPath, result)
+		v.validateAgent(agent, agentPath)
 	}
 }
 
 // validateAgent validates a single agent
-func (v *Validator) validateAgent(agent *Agent, path string, result *ValidationResult) {
-	// Must specify either model or uses
+func (v *Validator) validateAgent(agent *Agent, path string) {
 	if agent.Model == "" && agent.Uses == "" {
-		result.AddError(path, "agent must specify either 'model' or 'uses'")
+		v.result.AddError(path, "agent must specify either 'model' or 'uses'")
 		return
 	}
 
 	if agent.Model != "" && agent.Uses != "" {
-		result.AddError(path, "agent cannot specify both 'model' and 'uses'")
+		v.result.AddError(path, "agent cannot specify both 'model' and 'uses'")
 		return
 	}
 
-	// Validate model and provider if specified
 	if agent.Model != "" {
-		// Provider is required when using a model
 		if agent.Provider == "" {
-			result.AddFieldError(path, "provider", "provider is required when using a model")
+			v.result.AddFieldError(path, "provider", "provider is required when using a model")
 		} else {
-			// Validate provider value
-			validProviders := []string{"anthropic", "openai", "google", "local"}
 			isValidProvider := false
-			for _, provider := range validProviders {
+			for _, provider := range ValidProviders {
 				if agent.Provider == provider {
 					isValidProvider = true
 					break
 				}
 			}
+
 			if !isValidProvider {
-				result.AddFieldError(path, "provider", fmt.Sprintf("provider must be one of: %v", validProviders))
+				v.result.AddFieldError(path, "provider", fmt.Sprintf("provider must be one of: %v", ValidProviders))
 			}
 		}
-
-		// Note: Model validation will now be done dynamically against provider's available models
-		// We'll remove the static isValidModel check in favor of runtime validation
 	}
 
-	// Validate uses reference if specified
 	if agent.Uses != "" {
-		if !isValidBlockReference(agent.Uses) {
-			result.AddFieldError(path, "uses", "invalid block reference format")
+		if err := isValidBlockReference(v.wd, agent.Uses); err != nil {
+			v.result.AddFieldError(path, "uses", err.Error())
 		}
 	}
 
-	// Validate numeric parameters
 	if agent.Temperature != nil && (*agent.Temperature < 0 || *agent.Temperature > 2) {
-		result.AddFieldError(path, "temperature", "temperature must be between 0 and 2")
+		v.result.AddFieldError(path, "temperature", "temperature must be between 0 and 2")
 	}
 
 	if agent.TopP != nil && (*agent.TopP < 0 || *agent.TopP > 1) {
-		result.AddFieldError(path, "top_p", "top_p must be between 0 and 1")
+		v.result.AddFieldError(path, "top_p", "top_p must be between 0 and 1")
 	}
 
 	if agent.MaxTokens != nil && *agent.MaxTokens < 1 {
-		result.AddFieldError(path, "max_tokens", "max_tokens must be positive")
+		v.result.AddFieldError(path, "max_tokens", "max_tokens must be positive")
 	}
 
-	// Validate tools
-	v.validateTools(agent.Tools, fmt.Sprintf("%s.tools", path), result)
+	v.validateTools(agent.Tools, fmt.Sprintf("%s.tools", path))
 }
 
 // validateTools validates agent tools
-func (v *Validator) validateTools(tools []*Tool, path string, result *ValidationResult) {
+func (v *Validator) validateTools(tools []*Tool, path string) {
 	toolNames := make(map[string]bool)
 
 	for i, tool := range tools {
 		toolPath := fmt.Sprintf("%s[%d]", path, i)
 
-		// Check for duplicate tool names
 		if toolNames[tool.Name] {
-			result.AddError(toolPath, fmt.Sprintf("duplicate tool name: %s", tool.Name))
+			v.result.AddError(toolPath, fmt.Sprintf("duplicate tool name: %s", tool.Name))
 		}
 		toolNames[tool.Name] = true
 
-		v.validateTool(tool, toolPath, result)
+		v.validateTool(tool, toolPath)
 	}
 }
 
 // validateTool validates a single tool
-func (v *Validator) validateTool(tool *Tool, path string, result *ValidationResult) {
+func (v *Validator) validateTool(tool *Tool, path string) {
 	if tool.Name == "" {
-		result.AddFieldError(path, "name", "tool name is required")
+		v.result.AddFieldError(path, "name", "tool name is required")
 		return
 	}
 
 	if !isValidIdentifier(tool.Name) {
-		result.AddFieldError(path, "name", "tool name must be a valid identifier")
+		v.result.AddFieldError(path, "name", "tool name must be a valid identifier")
 	}
 
-	// Must specify exactly one tool type
-	toolTypes := 0
+	toolTypes := make(map[string]bool)
 	if tool.Uses != "" {
-		toolTypes++
+		toolTypes["uses"] = true
 	}
 	if tool.Script != "" {
-		toolTypes++
+		toolTypes["script"] = true
 	}
 	if tool.MCPServer != nil {
-		toolTypes++
+		toolTypes["mcp"] = true
 	}
 
-	if toolTypes == 0 {
-		result.AddError(path, "tool must specify one of: uses, script, or mcp_server")
-	} else if toolTypes > 1 {
-		result.AddError(path, "tool cannot specify multiple tool types")
+	if len(toolTypes) == 0 {
+		v.result.AddError(path, fmt.Sprintf("tool must specify one of: %s", ListToReadable(ValidToolTypes)))
+	} else if len(toolTypes) > 1 {
+		names := make([]string, len(toolTypes), 0)
+		for v := range toolTypes {
+			names = append(names, v)
+		}
+		sort.Strings(names)
+
+		v.result.AddError(path, fmt.Sprintf("tool cannot specify multiple tool types, please choose one of %s", ListToReadable(names)))
 	}
 
-	// Validate tool references
-	if tool.Uses != "" && !isValidBlockReference(tool.Uses) {
-		result.AddFieldError(path, "uses", "invalid tool reference format")
+	if tool.Uses != "" {
+		if err := isValidBlockReference(v.wd, tool.Uses); err != nil {
+			v.result.AddFieldError(path, "uses", err.Error())
+		}
 	}
 
-	// Validate script tools
 	if tool.Script != "" {
-		v.validateScriptTool(tool, path, result)
+		v.validateScriptTool(tool, path)
 	}
 
 	// Validate MCP server tools
 	if tool.MCPServer != nil {
-		v.validateMCPTool(tool, path, result)
+		v.validateMCPTool(tool, path)
 	}
 
 	// Validate tool configuration
-	v.validateToolConfig(tool, path, result)
+	v.validateToolConfig(tool, path)
 }
 
 // validateScriptTool validates script-specific configuration
-func (v *Validator) validateScriptTool(tool *Tool, path string, result *ValidationResult) {
-	// Check if script appears to be a file path or inline code
+func (v *Validator) validateScriptTool(tool *Tool, path string) {
 	if strings.HasPrefix(tool.Script, "./") || strings.HasPrefix(tool.Script, "/") {
-		// File path - validate basic format
 		if !isValidFilePath(tool.Script) {
-			result.AddFieldError(path, "script", "invalid script file path")
+			v.result.AddFieldError(path, "script", "invalid script file path")
 		}
 	} else {
-		// Inline script - basic validation
 		if strings.TrimSpace(tool.Script) == "" {
-			result.AddFieldError(path, "script", "script content cannot be empty")
+			v.result.AddFieldError(path, "script", "script content cannot be empty")
 		}
 	}
 }
 
 // validateMCPTool validates MCP server-specific configuration
-func (v *Validator) validateMCPTool(tool *Tool, path string, result *ValidationResult) {
+func (v *Validator) validateMCPTool(tool *Tool, path string) {
 	if tool.MCPServer == nil {
 		return
 	}
@@ -293,82 +318,80 @@ func (v *Validator) validateMCPTool(tool *Tool, path string, result *ValidationR
 	switch tool.MCPServer.Type {
 	case "local", "":
 		if tool.MCPServer.Command == "" {
-			result.AddFieldError(path, "mcp_server.command", "command is required for local MCP servers")
+			v.result.AddFieldError(path, "mcp_server.command", "command is required for local MCP servers")
 		}
 	case "remote":
 		if tool.MCPServer.URL == "" {
-			result.AddFieldError(path, "mcp_server.url", "URL is required for remote MCP servers")
+			v.result.AddFieldError(path, "mcp_server.url", "URL is required for remote MCP servers")
 		} else if !isValidURL(tool.MCPServer.URL) {
-			result.AddFieldError(path, "mcp_server.url", "invalid MCP server URL format")
+			v.result.AddFieldError(path, "mcp_server.url", "invalid MCP server URL format")
 		}
 	default:
-		result.AddFieldError(path, "mcp_server.type", "invalid MCP server type: must be 'local' or 'remote'")
+		v.result.AddFieldError(path, "mcp_server.type", "invalid MCP server type: must be 'local' or 'remote'")
 	}
 
-	// Validate auth if present
 	if tool.MCPServer.Auth != nil {
-		v.validateMCPAuth(tool.MCPServer.Auth, path+".auth", result)
+		v.validateMCPAuth(tool.MCPServer.Auth, path+".auth")
 	}
 }
 
 // validateMCPAuth validates MCP authentication configuration
-func (v *Validator) validateMCPAuth(auth *MCPAuthConfig, path string, result *ValidationResult) {
+func (v *Validator) validateMCPAuth(auth *MCPAuthConfig, path string) {
 	switch auth.Type {
 	case "oauth2":
 		if auth.ClientID == "" {
-			result.AddFieldError(path, "client_id", "client_id is required for OAuth2 authentication")
+			v.result.AddFieldError(path, "client_id", "client_id is required for OAuth2 authentication")
 		}
 		if auth.ClientSecret == "" {
-			result.AddFieldError(path, "client_secret", "client_secret is required for OAuth2 authentication")
+			v.result.AddFieldError(path, "client_secret", "client_secret is required for OAuth2 authentication")
 		}
 		if auth.TokenURL == "" {
-			result.AddFieldError(path, "token_url", "token_url is required for OAuth2 authentication")
+			v.result.AddFieldError(path, "token_url", "token_url is required for OAuth2 authentication")
 		} else if !isValidURL(auth.TokenURL) {
-			result.AddFieldError(path, "token_url", "invalid token URL format")
+			v.result.AddFieldError(path, "token_url", "invalid token URL format")
 		}
 	case "api_key":
 		if auth.APIKey == "" {
-			result.AddFieldError(path, "api_key", "api_key is required for API key authentication")
+			v.result.AddFieldError(path, "api_key", "api_key is required for API key authentication")
 		}
 	case "basic":
 		if auth.Username == "" {
-			result.AddFieldError(path, "username", "username is required for basic authentication")
+			v.result.AddFieldError(path, "username", "username is required for basic authentication")
 		}
 		if auth.Password == "" {
-			result.AddFieldError(path, "password", "password is required for basic authentication")
+			v.result.AddFieldError(path, "password", "password is required for basic authentication")
 		}
 	case "none":
 		// No validation needed
 	default:
-		result.AddFieldError(path, "type", "invalid authentication type: must be 'oauth2', 'api_key', 'basic', or 'none'")
+		v.result.AddFieldError(path, "type", "invalid authentication type: must be 'oauth2', 'api_key', 'basic', or 'none'")
 	}
 }
 
 // validateToolConfig validates tool configuration parameters
-func (v *Validator) validateToolConfig(tool *Tool, path string, result *ValidationResult) {
+func (v *Validator) validateToolConfig(tool *Tool, path string) {
 	if tool.Config == nil {
 		return
 	}
 
-	// Validate common configuration parameters
 	for key, value := range tool.Config {
 		switch key {
 		case "timeout":
 			if timeoutStr, ok := value.(string); ok {
 				if !isValidDuration(timeoutStr) {
-					result.AddFieldError(path, "config.timeout", "invalid timeout duration format")
+					v.result.AddFieldError(path, "config.timeout", "invalid timeout duration format")
 				}
 			}
 		case "retries":
 			if retries, ok := value.(int); ok {
 				if retries < 0 {
-					result.AddFieldError(path, "config.retries", "retries must be non-negative")
+					v.result.AddFieldError(path, "config.retries", "retries must be non-negative")
 				}
 			}
 		case "max_retries":
 			if maxRetries, ok := value.(int); ok {
 				if maxRetries < 0 {
-					result.AddFieldError(path, "config.max_retries", "max_retries must be non-negative")
+					v.result.AddFieldError(path, "config.max_retries", "max_retries must be non-negative")
 				}
 			}
 		}
@@ -376,156 +399,187 @@ func (v *Validator) validateToolConfig(tool *Tool, path string, result *Validati
 }
 
 // validateWorkflowDef validates the workflow definition
-func (v *Validator) validateWorkflowDef(workflow *WorkflowDef, path string, result *ValidationResult) {
+func (v *Validator) validateWorkflowDef() {
+	path := "workflow"
+	workflow := v.workflow.Workflow
 	if len(workflow.Steps) == 0 {
-		result.AddFieldError(path, "steps", "workflow must have at least one step")
+		v.result.AddFieldError(path, "steps", "workflow must have at least one step")
 		return
 	}
 
-	// Validate inputs
 	if workflow.Inputs != nil {
-		v.validateInputs(workflow.Inputs, fmt.Sprintf("%s.inputs", path), result)
+		v.validateInputs(workflow.Inputs, fmt.Sprintf("%s.inputs", path))
 	}
 
-	// Validate steps
-	v.validateSteps(workflow.Steps, fmt.Sprintf("%s.steps", path), result)
+	v.validateSteps()
 }
 
 // validateInputs validates workflow input parameters
-func (v *Validator) validateInputs(inputs map[string]*InputParam, path string, result *ValidationResult) {
+func (v *Validator) validateInputs(inputs map[string]*InputParam, path string) {
 	for name, param := range inputs {
 		paramPath := fmt.Sprintf("%s.%s", path, name)
 
 		if !isValidIdentifier(name) {
-			result.AddError(paramPath, "input parameter name must be a valid identifier")
+			v.result.AddError(paramPath, "input parameter name must be a valid identifier")
 		}
 
-		v.validateInputParam(param, paramPath, result)
+		v.validateInputParam(param, paramPath)
 	}
 }
 
 // validateInputParam validates a single input parameter
-func (v *Validator) validateInputParam(param *InputParam, path string, result *ValidationResult) {
+func (v *Validator) validateInputParam(param *InputParam, path string) {
 	// Validate type
 	if param.Type != "" {
 		validTypes := []string{"string", "integer", "boolean", "array", "object"}
 		if !contains(validTypes, param.Type) {
-			result.AddFieldError(path, "type", fmt.Sprintf("invalid type: %s", param.Type))
+			v.result.AddFieldError(path, "type", fmt.Sprintf("invalid type: %s", param.Type))
 		}
 	}
 
 	// Validate numeric constraints
 	if param.Minimum != nil && param.Maximum != nil && *param.Minimum > *param.Maximum {
-		result.AddError(path, "minimum cannot be greater than maximum")
+		v.result.AddError(path, "minimum cannot be greater than maximum")
 	}
 
 	if param.MinItems != nil && *param.MinItems < 0 {
-		result.AddFieldError(path, "min_items", "min_items cannot be negative")
+		v.result.AddFieldError(path, "min_items", "min_items cannot be negative")
 	}
 
 	if param.MaxItems != nil && *param.MaxItems < 0 {
-		result.AddFieldError(path, "max_items", "max_items cannot be negative")
+		v.result.AddFieldError(path, "max_items", "max_items cannot be negative")
 	}
 
 	if param.MinItems != nil && param.MaxItems != nil && *param.MinItems > *param.MaxItems {
-		result.AddError(path, "min_items cannot be greater than max_items")
+		v.result.AddError(path, "min_items cannot be greater than max_items")
 	}
 }
 
 // validateSteps validates all workflow steps
-func (v *Validator) validateSteps(steps []*Step, path string, result *ValidationResult) {
+func (v *Validator) validateSteps() {
+	path := "workflow.steps"
 	stepIDs := make(map[string]bool)
 
-	for i, step := range steps {
+	for i, step := range v.workflow.Workflow.Steps {
 		stepPath := fmt.Sprintf("%s[%d]", path, i)
 
-		// Check for duplicate step IDs
-		if stepIDs[step.ID] {
-			result.AddError(stepPath, fmt.Sprintf("duplicate step ID: %s", step.ID))
-		}
-		stepIDs[step.ID] = true
+		v.validateStep(step, stepPath)
 
-		v.validateStep(step, stepPath, result)
+		if stepIDs[step.ID] {
+			v.result.AddError(stepPath, fmt.Sprintf("duplicate step ID: %s", step.ID))
+		}
+
+		stepIDs[step.ID] = true
 	}
 }
 
 // validateStep validates a single step
-func (v *Validator) validateStep(step *Step, path string, result *ValidationResult) {
+func (v *Validator) validateStep(step *Step, path string) {
 	if step.ID == "" {
-		result.AddFieldError(path, "id", "step ID is required")
+		v.result.AddFieldError(path, "id", "step ID is required")
 		return
 	}
 
 	if !isValidIdentifier(step.ID) {
-		result.AddFieldError(path, "id", "step ID must be a valid identifier")
+		v.result.AddFieldError(path, "id", "step ID must be a valid identifier")
 	}
 
-	// Validate step type
-	stepTypes := 0
-	if step.Agent != "" && step.Prompt != "" {
-		stepTypes++
+	stepTypes := make(map[string]bool)
+	if step.Agent != "" {
+		stepTypes["agent"] = true
 	}
+
 	if step.Uses != "" {
-		stepTypes++
+		stepTypes["uses"] = true
 	}
+
 	if step.Action != "" {
-		stepTypes++
+		stepTypes["action"] = true
 	}
+
 	if step.Run != "" {
-		stepTypes++
+		stepTypes["run"] = true
 	}
+
 	if step.Container != "" {
-		stepTypes++
+		stepTypes["containter"] = true
 	}
 
-	if stepTypes == 0 {
-		result.AddError(path, "step must specify either agent+prompt, uses, or action")
-	} else if stepTypes > 1 {
-		result.AddError(path, "step cannot specify multiple execution methods")
+	if len(stepTypes) == 0 {
+		v.result.AddError(path, fmt.Sprintf("step must specify either %s", ListToReadable(ValidStepTypes)))
+	} else if len(stepTypes) > 1 {
+		types := make([]string, len(stepTypes), 0)
+		for v := range stepTypes {
+			types = append(types, v)
+		}
+		sort.Strings(types)
+
+		v.result.AddError(path, fmt.Sprintf("step cannot specify multiple execution methods, please choose one of %s", ListToReadable(types)))
 	}
 
-	// Validate agent steps
 	if step.Agent != "" || step.Prompt != "" {
-		if step.Agent == "" {
-			result.AddFieldError(path, "agent", "agent is required when prompt is specified")
-		}
-		if step.Prompt == "" {
-			result.AddFieldError(path, "prompt", "prompt is required when agent is specified")
-		}
+		v.validateAgentStep(path, step)
 	}
 
-	// Validate action steps
 	if step.Action != "" {
 		validActions := []string{"human_input", "update_state"}
 		if !contains(validActions, step.Action) {
-			result.AddFieldError(path, "action", fmt.Sprintf("invalid action: %s", step.Action))
+			v.result.AddFieldError(path, "action", fmt.Sprintf("invalid action: %s", step.Action))
 		}
 
 		if step.Action == "update_state" && len(step.Updates) == 0 {
-			result.AddFieldError(path, "updates", "update_state action requires updates field")
+			v.result.AddFieldError(path, "updates", "update_state action requires updates field")
 		}
 	}
 
-	// Validate block references
-	if step.Uses != "" && !isValidBlockReference(step.Uses) {
-		result.AddFieldError(path, "uses", "invalid block reference format")
-	}
-}
-
-// validateCrossReferences validates references between workflow elements
-func (v *Validator) validateCrossReferences(w *Workflow, result *ValidationResult) {
-	// Collect available agents
-	agentNames := make(map[string]bool)
-	if w.Agents != nil {
-		for name := range w.Agents {
-			agentNames[name] = true
+	if step.Uses != "" {
+		if err := isValidBlockReference(v.wd, step.Uses); err != nil {
+			v.result.AddFieldError(path, "uses", err.Error())
 		}
 	}
 
-	// Agent references are validated by the semantic validator with better positioning
+	if step.Run != "" {
+		if strings.HasPrefix(step.Run, "./") {
+			if err := isValidLocalPath(v.wd, step.Run); err != nil {
+				v.result.AddFieldError(path, "run", err.Error())
+			}
+		}
+	}
+
+	if step.Container != "" {
+		if strings.HasPrefix(step.Run, "./") {
+			if err := isValidLocalPath(v.wd, step.Run); err != nil {
+				v.result.AddFieldError(path, "container", err.Error())
+			}
+		}
+	}
 }
 
-// Validation helper functions
+func (v *Validator) validateAgentStep(path string, step *Step) {
+	valid := true
+
+	if step.Agent == "" {
+		v.result.AddFieldError(path, "agent", "agent is required when prompt is specified")
+		valid = false
+	}
+
+	if step.Prompt == "" {
+		v.result.AddFieldError(path, "prompt", "prompt is required when agent is specified")
+		valid = false
+	}
+
+	if !valid {
+		return
+	}
+
+	if v.workflow.Agents == nil {
+		v.result.AddFieldError(path, "agent", fmt.Sprintf("please define an agents section with valid configuration for agent %s", step.Agent))
+	}
+
+	if _, ok := v.workflow.Agents[step.Agent]; !ok {
+		v.result.AddFieldError(path, "agent", fmt.Sprintf("agent %s specified must exist in the agents section", step.Agent))
+	}
+}
 
 // isValidIdentifier checks if a string is a valid identifier
 func isValidIdentifier(s string) bool {
@@ -537,54 +591,49 @@ func isValidIdentifier(s string) bool {
 	return matched
 }
 
-// isValidKebabCase checks if a string is valid kebab-case
-func isValidKebabCase(s string) bool {
-	if s == "" {
-		return false
-	}
-	matched, _ := regexp.MatchString(`^[a-z0-9]+(-[a-z0-9]+)*$`, s)
-	return matched
-}
-
-// isValidSemVer checks if a string is a valid semantic version
-func isValidSemVer(s string) bool {
-	// Simple semantic version regex (basic validation)
-	matched, _ := regexp.MatchString(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[a-zA-Z0-9-]+)?(\+[a-zA-Z0-9-]+)?$`, s)
-	return matched
-}
-
-// isValidModel checks if a model name is supported
-func isValidModel(model string) bool {
-	// TODO: Implement model validation
-	// this should run through all supported models
-
-	return true
-}
-
 // isValidBlockReference checks if a block reference is valid
-func isValidBlockReference(ref string) bool {
+func isValidBlockReference(wd, ref string) error {
 	if ref == "" {
-		return false
+		return fmt.Errorf("reference cannot be empty")
 	}
 
-	// Check for official lacquer blocks
 	if strings.HasPrefix(ref, "lacquer/") {
 		matched, _ := regexp.MatchString(`^lacquer/[a-z0-9-]+(@v[0-9]+(\.[0-9]+)*)?$`, ref)
-		return matched
+		if matched {
+			return nil
+		}
+
+		return fmt.Errorf("lacquer ref must be in the format lacquer/package@v1 where v1 is a valid version number")
 	}
 
-	// Check for GitHub references
 	if strings.HasPrefix(ref, "github.com/") {
 		matched, _ := regexp.MatchString(`^github\.com/[^/]+/[^/]+(@[^/]+)?$`, ref)
-		return matched
+		if matched {
+			return nil
+		}
+
+		return fmt.Errorf("github ref must be in the format github.com/user/repo@v1 where v1 is a valid version number")
 	}
 
-	// Check for local references
 	if strings.HasPrefix(ref, "./") {
-		return len(ref) > 2
+		return isValidLocalPath(wd, ref)
 	}
 
-	return false
+	return fmt.Errorf("ref %s is not a valid ref, must be either a valid lacquer ref, github ref or local path", ref)
+}
+
+func isValidLocalPath(wd, ref string) error {
+	rel, err := filepath.Rel(wd, ref)
+	if err != nil {
+		return fmt.Errorf("ref %s cannot be made relative to the current working directory %s", ref, wd)
+	}
+
+	_, err = os.Stat(rel)
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("ref %s does not exist, please ensure that this is a valid path", ref)
+	}
+
+	return nil
 }
 
 // isValidFilePath checks if a file path is valid

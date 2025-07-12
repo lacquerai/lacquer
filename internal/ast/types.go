@@ -114,6 +114,8 @@ type Workflow struct {
 // Requirements represents the requirements for the workflow
 type Requirements struct {
 	Runtimes []Runtime `yaml:"runtimes" json:"runtimes" validate:"required"`
+
+	Position Position `yaml:"-" json:"-"`
 }
 
 // RuntimeType represents a runtime type, e.g. "node" or "go"

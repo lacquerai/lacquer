@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -646,7 +647,13 @@ func printExecutionSummary(w io.Writer, result ExecutionResult) {
 		outputContent.WriteString(lipgloss.NewStyle().Bold(true).Underline(true).Render("Outputs"))
 		outputContent.WriteString("\n\n")
 		var i int
-		for k, v := range result.Outputs {
+		keys := make([]string, 0, len(result.Outputs))
+		for k := range result.Outputs {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			v := result.Outputs[k]
 			outputContent.WriteString(lipgloss.NewStyle().Bold(true).Underline(true).Render(k))
 			outputContent.WriteString(fmt.Sprintf(": %v", v))
 			if i < len(result.Outputs)-1 {

@@ -424,18 +424,21 @@ func TestCollectExecutionResultsIntegration(t *testing.T) {
 func TestRunE2EWorkflow(t *testing.T) {
 	_ = godotenv.Load(".env.test")
 	t.Setenv("LACQUER_TEST", "true")
+	// *captureResponse = true
 
 	if os.Getenv("LACQUER_ANTHROPIC_TEST_API_KEY") == "" {
 		t.Skip("Skipping e2e tests as no LACQUER_ANTHROPIC_TEST_API_KEY is set")
 	}
 
-	// if os.Getenv("LACQUER_OPENAI_TEST_API_KEY") == "" {
-	// 	t.Skip("Skipping e2e tests as no LACQUER_OPENAI_TEST_API_KEY is set")
-	// }
+	if os.Getenv("LACQUER_OPENAI_TEST_API_KEY") == "" {
+		t.Skip("Skipping e2e tests as no LACQUER_OPENAI_TEST_API_KEY is set")
+	}
 
 	t.Setenv("ANTHROPIC_API_KEY", os.Getenv("LACQUER_ANTHROPIC_TEST_API_KEY"))
+	t.Setenv("OPENAI_API_KEY", os.Getenv("LACQUER_OPENAI_TEST_API_KEY"))
 
-	dir, err := os.ReadDir("testdata")
+	directory := "testdata/run"
+	dir, err := os.ReadDir(directory)
 	require.NoError(t, err)
 	for _, d := range dir {
 		if !d.IsDir() {
@@ -443,12 +446,19 @@ func TestRunE2EWorkflow(t *testing.T) {
 		}
 
 		t.Run(d.Name(), func(t *testing.T) {
-			ts := NewTestServer("anthropic", filepath.Join("testdata", d.Name()), *captureResponse, "https://api.anthropic.com")
-			t.Setenv("LACQUER_ANTHROPIC_BASE_URL", ts.URL())
+			ats := NewTestServer("anthropic", filepath.Join(directory, d.Name()), *captureResponse, "https://api.anthropic.com")
+			t.Setenv("LACQUER_ANTHROPIC_BASE_URL", ats.URL())
+
+			ots := NewTestServer("openai", filepath.Join(directory, d.Name()), *captureResponse, "https://api.openai.com/v1")
+			t.Setenv("LACQUER_OPENAI_BASE_URL", ots.URL()+"/v1")
 			defer func() {
-				err := ts.Flush()
+				err := ats.Flush()
 				require.NoError(t, err)
-				ts.Close()
+				ats.Close()
+
+				err = ots.Flush()
+				require.NoError(t, err)
+				ots.Close()
 			}()
 
 			stdout := &bytes.Buffer{}
@@ -460,19 +470,19 @@ func TestRunE2EWorkflow(t *testing.T) {
 			}
 
 			var inputs map[string]string
-			if _, err := os.Stat(filepath.Join("testdata", d.Name(), "inputs.json")); err == nil {
-				b, err := os.ReadFile(filepath.Join("testdata", d.Name(), "inputs.json"))
+			if _, err := os.Stat(filepath.Join(directory, d.Name(), "inputs.json")); err == nil {
+				b, err := os.ReadFile(filepath.Join(directory, d.Name(), "inputs.json"))
 				require.NoError(t, err)
 
 				err = json.Unmarshal(b, &inputs)
 				require.NoError(t, err)
 			}
 
-			err := runWorkflow(runCtx, filepath.Join("testdata", d.Name(), "workflow.laq.yml"), inputs)
+			err := runWorkflow(runCtx, filepath.Join(directory, d.Name(), "workflow.laq.yml"), inputs)
 			require.NoError(t, err, fmt.Sprintf("STDOUT: %s\nSTDERR: %s", stdout.String(), stderr.String()))
 
 			// load golden file
-			goldenFile := filepath.Join("testdata", d.Name(), "golden.txt")
+			goldenFile := filepath.Join(directory, d.Name(), "golden.txt")
 			golden, err := os.ReadFile(goldenFile)
 
 			// Remove ANSI codes and normalize time strings
@@ -491,7 +501,7 @@ func TestRunE2EWorkflow(t *testing.T) {
 			}
 
 			if !assert.Equal(t, string(golden), actual) {
-				os.WriteFile(filepath.Join("testdata", d.Name(), "actual.txt"), []byte(actual), 0644)
+				os.WriteFile(filepath.Join(directory, d.Name(), "actual.txt"), []byte(actual), 0644)
 			}
 		})
 

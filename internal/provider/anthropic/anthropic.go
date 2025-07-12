@@ -276,13 +276,11 @@ func (p *Provider) ListModels(ctx context.Context) ([]provider.Info, error) {
 	modelInfos := make([]provider.Info, len(models.Data))
 	for i, model := range models.Data {
 		modelInfos[i] = provider.Info{
-			ID:          model.ID,
-			Name:        model.DisplayName,
-			Provider:    p.name,
-			CreatedAt:   model.CreatedAt.Format(time.RFC3339),
-			Deprecated:  false, // Anthropic doesn't provide this field directly
-			Description: "",    // Not available in basic response
-			Features:    []string{"text-generation", "chat"},
+			ID:        model.ID,
+			Name:      model.DisplayName,
+			Provider:  p.name,
+			CreatedAt: model.CreatedAt.Format(time.RFC3339),
+			Features:  []string{"text-generation", "chat"},
 		}
 	}
 

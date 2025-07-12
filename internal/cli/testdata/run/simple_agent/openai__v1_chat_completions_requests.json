@@ -1,0 +1,20 @@
+[
+  {
+    "messages": [
+      {
+        "content": "You are a friendly assistant who gives warm greetings.",
+        "role": "system"
+      },
+      {
+        "content": "Say hello to John Doe in a creative and friendly way.\nMake it warm and welcoming!\n\n\nIMPORTANT: Respond in JSON using the following schema:\n```json\n{\"greeting\":{\"type\":\"string\",\"description\":\"The greeting to the person\"}}\n```",
+        "role": "user"
+      }
+    ],
+    "model": "gpt-4",
+    "max_tokens": 4096,
+    "n": 1,
+    "temperature": 0,
+    "top_p": 0,
+    "tools": []
+  }
+]

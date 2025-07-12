@@ -1,0 +1,38 @@
+[
+  {
+    "id": "chatcmpl-BsPa5jxODYTN3mqmrznUT0C3ScCYI",
+    "object": "chat.completion",
+    "created": 1752307745,
+    "model": "gpt-4-0613",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n\"greeting\": \"Hello John Doe! It's a pleasure to see you. The world seems a bit brighter with you around. Welcome!\"\n}",
+          "refusal": null,
+          "annotations": []
+        },
+        "logprobs": null,
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 81,
+      "completion_tokens": 31,
+      "total_tokens": 112,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "audio_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "audio_tokens": 0,
+        "accepted_prediction_tokens": 0,
+        "rejected_prediction_tokens": 0
+      }
+    },
+    "service_tier": "default",
+    "system_fingerprint": null
+  }
+]

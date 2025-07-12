@@ -38,12 +38,10 @@ func WithSemanticValidator(validator *SemanticValidator) ParserOption {
 func NewYAMLParser(opts ...ParserOption) (*YAMLParser, error) {
 	parser := &YAMLParser{}
 
-	// Apply options
 	for _, opt := range opts {
 		opt(parser)
 	}
 
-	// Create semantic validator
 	if parser.semanticValidator == nil {
 		parser.semanticValidator = NewSemanticValidator()
 	}
@@ -92,7 +90,6 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 		return nil, reporter.ToError()
 	}
 
-	// Update reporter with source data
 	reporter.source = data
 
 	// Validate file size (prevent DoS)
@@ -112,13 +109,11 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 		return nil, reporter.ToError()
 	}
 
-	// Parse the workflow
 	workflow, err := p.ParseBytes(data)
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", filename, err)
 	}
 
-	// Set source file
 	workflow.SourceFile = filename
 	workflow.Position.File = filename
 
@@ -201,47 +196,6 @@ func (p *YAMLParser) ParseReader(r io.Reader) (*ast.Workflow, error) {
 	return p.ParseBytes(data)
 }
 
-// validateSemantics performs semantic validation on the parsed workflow
-func (p *YAMLParser) validateSemantics(workflow *ast.Workflow) error {
-	result := p.semanticValidator.ValidateWorkflow(workflow)
-	if result.HasErrors() {
-		var multiErr MultiError
-		for _, validationErr := range result.Errors {
-			parseErr := &ParseError{
-				Message:    validationErr.Message,
-				Position:   ast.Position{Line: 1, Column: 1}, // TODO: Extract position from validation error path
-				Suggestion: generateSemanticSuggestion(validationErr.Message),
-			}
-			multiErr.Add(parseErr)
-		}
-		return multiErr.ToError()
-	}
-	return nil
-}
-
-// generateSemanticSuggestion provides suggestions for semantic validation errors
-func generateSemanticSuggestion(errorMessage string) string {
-	message := strings.ToLower(errorMessage)
-
-	switch {
-	case strings.Contains(message, "circular dependency"):
-		return "Remove the circular reference by reordering steps or using intermediate variables"
-	case strings.Contains(message, "forward reference"):
-		return "Steps can only reference outputs from previous steps. Reorder your steps or use workflow state"
-	case strings.Contains(message, "undefined variable"):
-		return "Check that the variable is defined in inputs, state, or previous step outputs"
-	case strings.Contains(message, "block reference"):
-		return "Use format: lacquer/block-name@version, github.com/owner/repo@tag, or ./local/path"
-	case strings.Contains(message, "parentheses"):
-		return "Ensure all opening parentheses have matching closing parentheses"
-	case strings.Contains(message, "agent"):
-		return "Ensure the agent is defined in the agents section before using it in steps"
-	default:
-		return "Check the workflow structure and refer to the Lacquer documentation"
-	}
-}
-
-// extractPositionFromPath attempts to find position from JSON path
 func extractPositionFromPath(path string, source []byte) ast.Position {
 	if path == "" || path == "/" {
 		return ast.Position{Line: 1, Column: 1}

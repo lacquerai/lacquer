@@ -5,9 +5,14 @@ metadata:
   author: lacquer-team
 
 agents:
-  greeter:
+  anthropic_greeter:
     provider: anthropic
     model: claude-3-5-sonnet-20241022
+    temperature: 0
+    system_prompt: You are a friendly assistant who gives warm greetings.
+  openai_greeter:
+    provider: openai
+    model: gpt-4
     temperature: 0
     system_prompt: You are a friendly assistant who gives warm greetings.
 
@@ -18,8 +23,17 @@ workflow:
       description: Name of the person to greet
   
   steps:
-    - id: say_hello
-      agent: greeter
+    - id: say_hello_anthropic
+      agent: anthropic_greeter
+      prompt: |
+        Say hello to {{ inputs.name }} in a creative and friendly way.
+        Make it warm and welcoming!
+      outputs:
+        greeting:
+          type: string
+          description: The greeting to the person
+    - id: say_hello_openai
+      agent: openai_greeter
       prompt: |
         Say hello to {{ inputs.name }} in a creative and friendly way.
         Make it warm and welcoming!
@@ -28,4 +42,5 @@ workflow:
           type: string
           description: The greeting to the person
   outputs:
-    greeting: "{{ steps.say_hello.outputs.greeting }}"
+    anthropic_greeting: "{{ steps.say_hello_anthropic.outputs.greeting }}"
+    openai_greeting: "{{ steps.say_hello_openai.outputs.greeting }}"

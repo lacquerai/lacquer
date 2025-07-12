@@ -22,8 +22,8 @@ func (sv *SemanticValidator) ValidateWorkflow(w *ast.Workflow) *ast.ValidationRe
 	result := &ast.ValidationResult{Valid: true}
 
 	// First perform basic AST validation
-	astValidator := ast.NewValidator()
-	astResult := astValidator.ValidateWorkflow(w)
+	astValidator := ast.NewValidator(w)
+	astResult := astValidator.ValidateWorkflow()
 	if astResult.HasErrors() {
 		// Merge AST validation errors
 		for _, err := range astResult.Errors {
