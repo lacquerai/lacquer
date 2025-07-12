@@ -1,11 +1,13 @@
 package golang
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -45,12 +47,14 @@ func (g *GoRuntime) Name() string {
 
 // Get downloads and installs the specified Go version
 func (g *GoRuntime) Get(ctx context.Context, version string) (string, error) {
-	// Normalize version (add "go" prefix if not present)
 	if !strings.HasPrefix(version, "go") {
 		version = "go" + version
 	}
 
-	// Check cache first
+	if path, exists := g.checkInstalled(ctx, version); exists {
+		return path, nil
+	}
+
 	if path, exists := g.cache.Get(g.Name(), version); exists {
 		return path, nil
 	}
@@ -218,6 +222,27 @@ func (g *GoRuntime) getDownloadURL(ctx context.Context, version string) (string,
 
 func (g *GoRuntime) getPlatformKey() string {
 	return g.platform.OS + "-" + g.platform.Arch
+}
+
+func (g *GoRuntime) checkInstalled(ctx context.Context, version string) (string, bool) {
+	out := bytes.Buffer{}
+	cmd := exec.CommandContext(ctx, "go", "version")
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	cmd.Run()
+
+	output := out.String()
+	if strings.Contains(output, version) {
+		out := bytes.Buffer{}
+		cmd := exec.CommandContext(ctx, "which", "go")
+		cmd.Stdout = &out
+		cmd.Stderr = &out
+		cmd.Run()
+
+		return strings.Trim(out.String(), "\n"), true
+	}
+
+	return "", false
 }
 
 // goRelease represents a Go release from the API

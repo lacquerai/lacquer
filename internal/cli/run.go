@@ -233,7 +233,7 @@ func runWorkflow(ctx execcontext.RunContext, workflowFile string, inputs map[str
 			style.Error(ctx, fmt.Sprintf("Failed to parse workflow: %v", err))
 		}
 
-		os.Exit(1)
+		return err
 	}
 	log.Info().
 		Str("workflow", workflowFile).

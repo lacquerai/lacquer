@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -446,6 +447,12 @@ func TestRunE2EWorkflow(t *testing.T) {
 		}
 
 		t.Run(d.Name(), func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					stack := debug.Stack()
+					t.Fatalf("panic in run execution: %s\n%s", r, stack)
+				}
+			}()
 			ats := NewTestServer("anthropic", filepath.Join(directory, d.Name()), *captureResponse, "https://api.anthropic.com")
 			t.Setenv("LACQUER_ANTHROPIC_BASE_URL", ats.URL())
 
