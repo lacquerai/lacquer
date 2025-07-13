@@ -23,7 +23,6 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/lacquerai/lacquer/internal/execcontext"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -429,28 +428,7 @@ func newSingleDirectoryRunTest(t *testing.T) {
 
 	err := runWorkflow(runCtx, filepath.Join(directory, "workflow.laq.yml"), inputs)
 	require.NoError(t, err, fmt.Sprintf("STDOUT: %s\nSTDERR: %s", stdout.String(), stderr.String()))
-
-	goldenFile := filepath.Join(directory, "golden.txt")
-	golden, err := os.ReadFile(goldenFile)
-
-	// Remove ANSI codes and normalize time strings
-	stdout_clean := re.ReplaceAllString(stdout.String(), "")
-	stderr_clean := re.ReplaceAllString(stderr.String(), "")
-	stdout_normalized := timeRe.ReplaceAllString(stdout_clean, "(TIME)")
-	stderr_normalized := timeRe.ReplaceAllString(stderr_clean, "(TIME)")
-	actual := stdout_normalized + "\nSTDERR:\n" + stderr_normalized
-
-	if os.IsNotExist(err) {
-		golden = []byte(actual)
-		err = os.WriteFile(goldenFile, golden, 0644)
-		require.NoError(t, err)
-	} else {
-		require.NoError(t, err)
-	}
-
-	if !assert.Equal(t, string(golden), actual) {
-		os.WriteFile(filepath.Join(directory, "actual.txt"), []byte(actual), 0644)
-	}
+	assertGoldenFile(t, directory, stdout, stderr)
 }
 
 // camelToSnake converts a camelCase string to snake_case

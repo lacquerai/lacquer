@@ -44,7 +44,10 @@ Examples:
 			StdOut:  cmd.OutOrStdout(),
 			StdErr:  cmd.OutOrStderr(),
 		}
-		validateWorkflows(runCtx, args)
+		err := validateWorkflows(runCtx, args)
+		if err != nil {
+			os.Exit(1)
+		}
 	},
 }
 
@@ -137,47 +140,41 @@ type ValidationSummary struct {
 	Results  []ValidationResult `json:"results" yaml:"results"`
 }
 
-func validateWorkflows(runCtx execcontext.RunContext, args []string) {
+func validateWorkflows(runCtx execcontext.RunContext, args []string) error {
 	start := time.Now()
 
-	// Collect files to validate
 	files, err := collectFiles(args, recursive)
 	if err != nil {
 		style.Error(runCtx, fmt.Sprintf("Failed to collect files: %v", err))
-		os.Exit(1)
+		return err
 	}
 
 	if len(files) == 0 {
 		style.Warning(runCtx, "No workflow files found to validate")
-		return
+		return nil
 	}
 
-	// Create parser
 	yamlParser, err := parser.NewYAMLParser()
 	if err != nil {
 		style.Error(runCtx, fmt.Sprintf("Failed to create parser: %v", err))
-		os.Exit(1)
+		return err
 	}
 
-	// Validate each file
 	results := make([]ValidationResult, 0, len(files))
 
 	for _, file := range files {
 		result := validateSingleFile(yamlParser, file)
 		results = append(results, *result)
 
-		// Show progress if not quiet and not JSON/YAML output
 		if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
 			if result.Valid {
 				if showAll {
 					style.Success(runCtx, fmt.Sprintf("%s (%v)", file, result.Duration))
 				}
 			}
-			// Invalid results will be shown in the detailed summary section
 		}
 	}
 
-	// Create summary
 	summary := ValidationSummary{
 		Total:    len(results),
 		Duration: time.Since(start),
@@ -203,10 +200,11 @@ func validateWorkflows(runCtx execcontext.RunContext, args []string) {
 		printValidationSummary(runCtx, summary)
 	}
 
-	// Exit with error code if any validations failed
 	if summary.Invalid > 0 {
-		os.Exit(1)
+		return fmt.Errorf("validation failed")
 	}
+
+	return nil
 }
 
 func validateSingleFile(p parser.Parser, filename string) *ValidationResult {
