@@ -21,8 +21,12 @@ workflow:
     - id: process_text
       run: |
         #!/bin/bash
-        text="$1"
-        operation="$2"
+        # Read JSON from stdin
+        input=$(cat)
+        
+        # Parse JSON to extract text and operation from nested inputs
+        text=$(echo "$input" | jq -r '.inputs.text')
+        operation=$(echo "$input" | jq -r '.inputs.operation')
         
         case "$operation" in
           "uppercase")

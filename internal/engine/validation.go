@@ -29,6 +29,10 @@ type InputValidationResult struct {
 	ProcessedInputs map[string]any          `json:"processed_inputs,omitempty"`
 }
 
+func (r *InputValidationResult) Error() string {
+	return fmt.Sprintf("Valid: %t\nErrors: %v\nProcessedInputs: %v", r.Valid, r.Errors, r.ProcessedInputs)
+}
+
 // AddError adds a validation error
 func (r *InputValidationResult) AddError(field, message string, value any) {
 	r.Valid = false

@@ -634,12 +634,9 @@ func isValidBlockReference(wd, ref string) error {
 }
 
 func isValidLocalPath(wd, ref string) error {
-	rel, err := filepath.Rel(wd, ref)
-	if err != nil {
-		return fmt.Errorf("ref %s cannot be made relative to the current working directory %s", ref, wd)
-	}
+	fullPath := filepath.Join(wd, ref)
 
-	_, err = os.Stat(rel)
+	_, err := os.Stat(fullPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("ref %s does not exist, please ensure that this is a valid path", ref)
 	}

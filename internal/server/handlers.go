@@ -94,16 +94,12 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 	// will cause the context to be cancelled when the request is finished.
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// TODO: get the workflow file path
-	wd := ""
-	panic("not implemented")
-
 	runCtx := execcontext.RunContext{
 		Context: ctx,
 		StdOut:  io.Discard,
 		StdErr:  io.Discard,
 	}
-	execCtx := execcontext.NewExecutionContext(runCtx, workflow, processedInputs, wd)
+	execCtx := execcontext.NewExecutionContext(runCtx, workflow, processedInputs, workflow.SourceFile)
 	runID := execCtx.RunID
 
 	// Start execution tracking
@@ -124,41 +120,12 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 
 // executeWorkflowAsync executes a workflow in the background
 func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflow, execCtx *execcontext.ExecutionContext, runID, workflowID string) {
-
-	// Create executor
-	executorConfig := &engine.ExecutorConfig{
-		MaxConcurrentSteps:   3,
-		DefaultTimeout:       5 * time.Minute,
-		EnableRetries:        true,
-		MaxRetries:           3,
-		EnableStateSnapshots: false,
-	}
-
-	executor, err := engine.NewExecutor(execCtx.Context, executorConfig, workflow, nil)
-	if err != nil {
-		s.manager.FinishExecution(runID, nil, fmt.Errorf("failed to create executor: %w", err))
-		return
-	}
-
-	// Create progress channel
-	progressChan := make(chan events.ExecutionEvent, 100)
-
-	// Forward progress events to manager
-	go func() {
-		for event := range progressChan {
-			event.RunID = runID
-			s.manager.AddProgressEvent(runID, event)
-		}
-	}()
-
-	// Execute workflow
-	err = executor.ExecuteWorkflow(execCtx, progressChan)
-	close(progressChan)
-
-	// Get outputs
+	runner := engine.NewRunner(3, s.manager)
+	result, err := runner.RunWorkflowRaw(execCtx, workflow, time.Now())
+	defer runner.Close()
 	var outputs map[string]any
 	if err == nil {
-		outputs = execCtx.GetWorkflowOutputs()
+		outputs = result.Outputs
 	}
 
 	// Finish execution

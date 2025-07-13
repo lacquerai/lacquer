@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
-
-const blockConfigFile = "block.laq.yaml"
 
 // FileLoader loads blocks from the filesystem
 type FileLoader struct {
@@ -47,29 +46,49 @@ func (l *FileLoader) Load(ctx context.Context, path string) (*Block, error) {
 		}
 		return nil, fmt.Errorf("failed to access block directory: %w", err)
 	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("block path is not a directory: %s", absPath)
+
+	blockConfigFile := absPath
+	if info.IsDir() {
+		// Look for block configuration file in directory
+		entries, err := os.ReadDir(absPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read block directory: %w", err)
+		}
+
+		blockConfigFile = ""
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if strings.HasSuffix(name, ".laq.yml") || strings.HasSuffix(name, ".laq.yaml") {
+				blockConfigFile = name
+				break
+			}
+		}
+
+		if blockConfigFile == "" {
+			return nil, fmt.Errorf("no valid block workflow file found in %s", absPath)
+		}
 	}
 
-	// Check cache
-	configPath := filepath.Join(absPath, blockConfigFile)
-	if cached, ok := l.getFromCache(configPath); ok {
+	if cached, ok := l.getFromCache(absPath); ok {
 		return cached, nil
 	}
 
 	// Load block configuration
-	configData, err := os.ReadFile(configPath)
+	configData, err := os.ReadFile(blockConfigFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("block.laq.yaml not found in %s", absPath)
+			return nil, fmt.Errorf("block workflow file not found: %s", path)
 		}
-		return nil, fmt.Errorf("failed to read block.laq.yaml: %w", err)
+		return nil, fmt.Errorf("failed to read block workflow file: %w", err)
 	}
 
 	// Parse block metadata
 	var block Block
 	if err := yaml.Unmarshal(configData, &block); err != nil {
-		return nil, fmt.Errorf("failed to parse block.laq.yaml: %w", err)
+		return nil, fmt.Errorf("failed to parse block workflow file: %w", err)
 	}
 
 	// Set defaults and validate
@@ -86,24 +105,18 @@ func (l *FileLoader) Load(ctx context.Context, path string) (*Block, error) {
 		return nil, fmt.Errorf("unsupported runtime type: %s", block.Runtime)
 	}
 
-	// Validate required fields
-	if block.Name == "" {
-		return nil, fmt.Errorf("block name is required in block.laq.yaml")
-	}
-
-	// Runtime-specific validation
 	if err := l.validateBlock(&block); err != nil {
 		return nil, err
 	}
 
 	// Get file mod time for caching
-	fileInfo, err := os.Stat(configPath)
+	fileInfo, err := os.Stat(blockConfigFile)
 	if err == nil {
 		block.ModTime = fileInfo.ModTime()
 	}
 
 	// Update cache
-	l.updateCache(configPath, &block)
+	l.updateCache(blockConfigFile, &block)
 
 	return &block, nil
 }
@@ -114,8 +127,7 @@ func (l *FileLoader) GetFromCache(path string) (*Block, bool) {
 	if err != nil {
 		return nil, false
 	}
-	configPath := filepath.Join(absPath, blockConfigFile)
-	return l.getFromCache(configPath)
+	return l.getFromCache(absPath)
 }
 
 // InvalidateCache removes a block from the cache
@@ -124,10 +136,9 @@ func (l *FileLoader) InvalidateCache(path string) {
 	if err != nil {
 		return
 	}
-	configPath := filepath.Join(absPath, blockConfigFile)
 
 	l.cacheMu.Lock()
-	delete(l.cache, configPath)
+	delete(l.cache, absPath)
 	l.cacheMu.Unlock()
 }
 

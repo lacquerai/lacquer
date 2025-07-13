@@ -37,34 +37,33 @@ type Executor struct {
 	progressChan   chan<- events.ExecutionEvent
 	blockManager   *block.Manager
 	dockerExecutor block.Executor
+	runner         *Runner
 }
 
 // ExecutorConfig contains configuration for the executor
 type ExecutorConfig struct {
-	MaxConcurrentSteps   int           `yaml:"max_concurrent_steps"`
-	DefaultTimeout       time.Duration `yaml:"default_timeout"`
-	EnableRetries        bool          `yaml:"enable_retries"`
-	MaxRetries           int           `yaml:"max_retries"`
-	RetryDelay           time.Duration `yaml:"retry_delay"`
-	EnableMetrics        bool          `yaml:"enable_metrics"`
-	EnableStateSnapshots bool          `yaml:"enable_state_snapshots"`
+	MaxConcurrentSteps int           `yaml:"max_concurrent_steps"`
+	DefaultTimeout     time.Duration `yaml:"default_timeout"`
+	EnableRetries      bool          `yaml:"enable_retries"`
+	MaxRetries         int           `yaml:"max_retries"`
+	RetryDelay         time.Duration `yaml:"retry_delay"`
+	EnableMetrics      bool          `yaml:"enable_metrics"`
 }
 
 // DefaultExecutorConfig returns a sensible default configuration
 func DefaultExecutorConfig() *ExecutorConfig {
 	return &ExecutorConfig{
-		MaxConcurrentSteps:   3, // Enable concurrent execution with reasonable limit
-		DefaultTimeout:       30 * time.Minute,
-		EnableRetries:        true,
-		MaxRetries:           3,
-		RetryDelay:           time.Second,
-		EnableMetrics:        true,
-		EnableStateSnapshots: false,
+		MaxConcurrentSteps: 3, // Enable concurrent execution with reasonable limit
+		DefaultTimeout:     30 * time.Minute,
+		EnableRetries:      true,
+		MaxRetries:         3,
+		RetryDelay:         time.Second,
+		EnableMetrics:      true,
 	}
 }
 
 // NewExecutor creates a new workflow executor with only required providers
-func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry) (*Executor, error) {
+func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry, runner *Runner) (*Executor, error) {
 	if config == nil {
 		config = DefaultExecutorConfig()
 	}
@@ -110,10 +109,6 @@ func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *a
 		}
 	}
 
-	// Register native executor with workflow engine
-	workflowEngine := NewRuntimeWorkflowEngine(config, registry)
-	blockManager.RegisterNativeExecutor(workflowEngine)
-
 	// Create tool registry
 	toolRegistry := tools.NewRegistry()
 
@@ -129,6 +124,7 @@ func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *a
 		config:         config,
 		outputParser:   NewOutputParser(),
 		blockManager:   blockManager,
+		runner:         runner,
 	}, nil
 }
 
@@ -1006,18 +1002,13 @@ func (e *Executor) executeBlockStep(execCtx *execcontext.ExecutionContext, step 
 		inputs[key] = rendered
 	}
 
-	// Execute block using block manager
-	outputs, err := e.blockManager.ExecuteBlock(
-		execCtx,
-		blockPath,
-		inputs,
-	)
+	result, err := e.runner.RunWorkflow(execCtx.Context, blockPath, inputs, step.ID)
 	if err != nil {
 		return nil, fmt.Errorf("block execution failed: %w", err)
 	}
 
 	return map[string]interface{}{
-		"outputs": outputs,
+		"outputs": result.Outputs,
 	}, nil
 }
 

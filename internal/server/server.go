@@ -16,6 +16,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/engine"
 	"github.com/lacquerai/lacquer/internal/events"
 	"github.com/lacquerai/lacquer/internal/parser"
 	"github.com/prometheus/client_golang/prometheus"
@@ -176,6 +177,19 @@ func NewExecutionManagerWithRegistry(maxConcurrency int, registerer prometheus.R
 	}
 
 	return em
+}
+
+func (em *ExecutionManager) StartTracking(progressChan <-chan events.ExecutionEvent, result *engine.ExecutionResult) {
+	runID := result.RunID
+
+	for event := range progressChan {
+		event.RunID = runID
+		em.AddProgressEvent(runID, event)
+	}
+}
+
+func (em *ExecutionManager) StopTracking(result *engine.ExecutionResult) {
+	// nothing to do here
 }
 
 // CanStartExecution checks if a new execution can be started

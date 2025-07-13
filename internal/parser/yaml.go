@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,8 +14,7 @@ import (
 // Parser interface defines the contract for workflow parsing
 type Parser interface {
 	ParseFile(filename string) (*ast.Workflow, error)
-	ParseBytes(data []byte) (*ast.Workflow, error)
-	ParseReader(r io.Reader) (*ast.Workflow, error)
+	ParseBytes(data []byte, filename string) (*ast.Workflow, error)
 }
 
 // YAMLParser implements the Parser interface using go-yaml/v3
@@ -106,7 +104,7 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 		return nil, reporter.ToError()
 	}
 
-	workflow, err := p.ParseBytes(data)
+	workflow, err := p.ParseBytes(data, filename)
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", filename, err)
 	}
@@ -118,8 +116,8 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 }
 
 // ParseBytes parses workflow data from bytes
-func (p *YAMLParser) ParseBytes(data []byte) (*ast.Workflow, error) {
-	reporter := NewErrorReporter(data, "")
+func (p *YAMLParser) ParseBytes(data []byte, filename string) (*ast.Workflow, error) {
+	reporter := NewErrorReporter(data, filename)
 
 	if len(data) == 0 {
 		reporter.AddError(&EnhancedError{
@@ -158,11 +156,14 @@ func (p *YAMLParser) ParseBytes(data []byte) (*ast.Workflow, error) {
 		return nil, p.enhanceYAMLError(err, data, reporter)
 	}
 
+	workflow.SourceFile = filename
+
 	// Set position information from the root node
 	if node.Line > 0 {
 		workflow.Position = ast.Position{
 			Line:   node.Line,
 			Column: node.Column,
+			File:   filename,
 		}
 	}
 
@@ -181,16 +182,6 @@ func (p *YAMLParser) ParseBytes(data []byte) (*ast.Workflow, error) {
 	}
 
 	return &workflow, nil
-}
-
-// ParseReader parses workflow data from a reader
-func (p *YAMLParser) ParseReader(r io.Reader) (*ast.Workflow, error) {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read data: %w", err)
-	}
-
-	return p.ParseBytes(data)
 }
 
 func extractPositionFromPath(path string, source []byte) ast.Position {

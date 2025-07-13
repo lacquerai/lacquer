@@ -1,0 +1,53 @@
+
+Running block-step workflow (3 steps)
+
+[SET SUFFIX]  Running step first_processing (1/3)
+[SPINNER START]
+
+Running text-processor workflow (1 steps)
+
+[SET SUFFIX]  Running step process_text (1/1)
+[SPINNER START]
+[SPINNER STOP]
+[FINAL MSG] ✓  Running step process_text (1/1)
+
+[SPINNER STOP]
+[FINAL MSG] ✓  Running step first_processing (1/3)
+
+[SET SUFFIX]  Running step second_processing (2/3)
+[SPINNER START]
+
+Running text-processor workflow (1 steps)
+
+[SET SUFFIX]  Running step process_text (1/1)
+[SPINNER START]
+[SPINNER STOP]
+[FINAL MSG] ✓  Running step process_text (1/1)
+
+[SPINNER STOP]
+[FINAL MSG] ✓  Running step second_processing (2/3)
+
+[SET SUFFIX]  Running step length_check (3/3)
+[SPINNER START]
+
+Running text-processor workflow (1 steps)
+
+[SET SUFFIX]  Running step process_text (1/1)
+[SPINNER START]
+[SPINNER STOP]
+[FINAL MSG] ✓  Running step process_text (1/1)
+
+[SPINNER STOP]
+[FINAL MSG] ✓  Running step length_check (3/3)
+
+
+✓ Workflow completed successfully (TIME)
+
+Outputs
+
+final_length: 23
+first_transformation: testing block execution
+original: Testing Block Execution
+second_transformation: noitucexe kcolb gnitset
+
+STDERR:

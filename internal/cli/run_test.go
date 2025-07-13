@@ -484,7 +484,7 @@ func newSingleDirectoryRunTest(t *testing.T) {
 		StdErr:  stderr,
 	}
 
-	var inputs map[string]string
+	var inputs map[string]interface{}
 	if _, err := os.Stat(filepath.Join(directory, "inputs.json")); err == nil {
 		b, err := os.ReadFile(filepath.Join(directory, "inputs.json"))
 		require.NoError(t, err)

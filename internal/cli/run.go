@@ -2,22 +2,17 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/charmbracelet/lipgloss/v2"
-	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/engine"
-	"github.com/lacquerai/lacquer/internal/events"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/parser"
 	"github.com/lacquerai/lacquer/internal/style"
@@ -42,7 +37,6 @@ This command:
 Examples:
   laq run workflow.laq.yaml                    # Run workflow with default settings
   laq run workflow.laq.yaml --input key=value # Provide input parameters
-  laq run workflow.laq.yaml --dry-run         # Validate without execution
   laq run workflow.laq.yaml --output json     # JSON output for automation
   laq run workflow.laq.yaml --save-state      # Persist state for debugging`,
 	Args: cobra.ExactArgs(1),
@@ -71,7 +65,11 @@ Examples:
 			StdOut:  cmd.OutOrStdout(),
 			StdErr:  cmd.OutOrStderr(),
 		}
-		err := runWorkflow(runCtx, args[0], inputs)
+		inputsMap := make(map[string]interface{})
+		for k, v := range inputs {
+			inputsMap[k] = v
+		}
+		err := runWorkflow(runCtx, args[0], inputsMap)
 		if err != nil {
 			os.Exit(1)
 		}
@@ -81,8 +79,6 @@ Examples:
 var (
 	// Input parameters
 	inputs     map[string]string
-	dryRun     bool
-	saveState  bool
 	maxRetries int
 	timeout    time.Duration
 )
@@ -93,133 +89,19 @@ func init() {
 	// Input flags
 	runCmd.Flags().StringToStringVarP(&inputs, "input", "i", map[string]string{}, "input parameters (key=value)")
 
-	// Execution flags
-	runCmd.Flags().BoolVar(&dryRun, "dry-run", false, "validate and plan without executing")
-	runCmd.Flags().BoolVar(&saveState, "save-state", false, "persist execution state for debugging")
 	runCmd.Flags().IntVar(&maxRetries, "max-retries", 3, "maximum number of retries for failed steps")
 	runCmd.Flags().DurationVar(&timeout, "timeout", 30*time.Minute, "overall execution timeout")
-
-	// Removed verbose output flags - using single clean format
 }
 
-// ExecutionResult represents the result of running a workflow
-type ExecutionResult struct {
-	WorkflowFile  string                 `json:"workflow_file" yaml:"workflow_file"`
-	RunID         string                 `json:"run_id" yaml:"run_id"`
-	Status        string                 `json:"status" yaml:"status"`
-	StartTime     time.Time              `json:"start_time" yaml:"start_time"`
-	EndTime       time.Time              `json:"end_time,omitempty" yaml:"end_time,omitempty"`
-	Duration      time.Duration          `json:"duration" yaml:"duration"`
-	StepsExecuted int                    `json:"steps_executed" yaml:"steps_executed"`
-	StepsTotal    int                    `json:"steps_total" yaml:"steps_total"`
-	StepResults   []StepExecutionResult  `json:"step_results,omitempty" yaml:"step_results,omitempty"`
-	Inputs        map[string]interface{} `json:"inputs" yaml:"inputs"`
-	Outputs       map[string]interface{} `json:"outputs,omitempty" yaml:"outputs,omitempty"`
-	FinalState    map[string]interface{} `json:"final_state,omitempty" yaml:"final_state,omitempty"`
-	Error         string                 `json:"error,omitempty" yaml:"error,omitempty"`
-	TokenUsage    *TokenUsageSummary     `json:"token_usage,omitempty" yaml:"token_usage,omitempty"`
-}
-
-// StepExecutionResult represents the result of executing a single step
-type StepExecutionResult struct {
-	StepID     string                 `json:"step_id" yaml:"step_id"`
-	Status     string                 `json:"status" yaml:"status"`
-	StartTime  time.Time              `json:"start_time" yaml:"start_time"`
-	EndTime    time.Time              `json:"end_time,omitempty" yaml:"end_time,omitempty"`
-	Duration   time.Duration          `json:"duration" yaml:"duration"`
-	Output     map[string]interface{} `json:"output,omitempty" yaml:"output,omitempty"`
-	Response   string                 `json:"response,omitempty" yaml:"response,omitempty"`
-	Error      string                 `json:"error,omitempty" yaml:"error,omitempty"`
-	Retries    int                    `json:"retries" yaml:"retries"`
-	TokenUsage *TokenUsage            `json:"token_usage,omitempty" yaml:"token_usage,omitempty"`
-}
-
-// TokenUsageSummary represents aggregated token usage across all steps
-type TokenUsageSummary struct {
-	TotalTokens      int `json:"total_tokens" yaml:"total_tokens"`
-	PromptTokens     int `json:"prompt_tokens" yaml:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens" yaml:"completion_tokens"`
-}
-
-// TokenUsage represents token usage for a single step
-type TokenUsage struct {
-	PromptTokens     int     `json:"prompt_tokens" yaml:"prompt_tokens"`
-	CompletionTokens int     `json:"completion_tokens" yaml:"completion_tokens"`
-	TotalTokens      int     `json:"total_tokens" yaml:"total_tokens"`
-	EstimatedCost    float64 `json:"estimated_cost" yaml:"estimated_cost"`
-}
-
-// StepProgressState tracks the visual state of each step for spinner display
-type StepProgressState struct {
-	stepID     string
-	stepIndex  int
-	totalSteps int
-	status     string // "running", "completed", "failed"
-	startTime  time.Time
-	endTime    time.Time
-	title      string
-	spinner    style.Spinner
-	actions    ActionStates
-	mu         sync.RWMutex
-}
-
-func (s *StepProgressState) String() string {
-	return fmt.Sprintf(" %s\n%s", s.title, s.actions.String())
-}
-
-type ActionStates []ActionState
-
-func (as *ActionStates) Add(action ActionState) {
-	newActions := make(ActionStates, len(*as)+1)
-	// make sure the previous actions are all marked as success if they are not already
-	for i, a := range *as {
-		if !strings.HasPrefix(a.text, style.SuccessIcon()) && !strings.HasPrefix(a.text, style.ErrorIcon()) {
-			a.text = style.SuccessIcon() + " " + strings.TrimSpace(strings.ReplaceAll(a.text, "...", ""))
-		}
-
-		newActions[i] = a
-	}
-
-	newActions[len(*as)] = action
-	*as = newActions
-}
-
-func (as ActionStates) String() string {
-	var text strings.Builder
-	for _, action := range as {
-		text.WriteString(fmt.Sprintf("   %s", action.text))
-		text.WriteString("\n")
-	}
-	return text.String()
-}
-
-type ActionState struct {
-	id   string
-	text string
-}
-
-// ProgressTracker manages the visual progress display for all steps
-type ProgressTracker struct {
-	steps  map[string]*StepProgressState
-	mu     sync.RWMutex
-	writer io.Writer
-	done   chan struct{}
-}
-
-func runWorkflow(ctx execcontext.RunContext, workflowFile string, inputs map[string]string) error {
-	startTime := time.Now()
-
-	// Parse workflow
-	yamlParser, err := parser.NewYAMLParser()
+func runWorkflow(ctx execcontext.RunContext, workflowFile string, inputs map[string]interface{}) error {
+	runner := engine.NewRunner(maxRetries, engine.NewProgressTracker(ctx, ""))
+	result, err := runner.RunWorkflow(ctx, workflowFile, inputs)
+	defer runner.Close()
 	if err != nil {
-		style.Error(ctx, fmt.Sprintf("Failed to create parser: %v", err))
-	}
-
-	workflow, err := yamlParser.ParseFile(workflowFile)
-	if err != nil {
-		var enhancedErr *parser.MultiErrorEnhanced
-
-		if errors.As(err, &enhancedErr) {
+		switch err.(type) {
+		case *engine.InputValidationResult:
+			printValidationErrors(ctx, err.(*engine.InputValidationResult))
+		case *parser.MultiErrorEnhanced:
 			result := NewValidationResult(workflowFile)
 			result.CollectError(err)
 			summary := ValidationSummary{
@@ -229,387 +111,16 @@ func runWorkflow(ctx execcontext.RunContext, workflowFile string, inputs map[str
 			}
 
 			printValidationSummary(ctx, summary)
-		} else {
-			style.Error(ctx, fmt.Sprintf("Failed to parse workflow: %v", err))
 		}
 
 		return err
 	}
-	log.Info().
-		Str("workflow", workflowFile).
-		Str("version", workflow.Version).
-		Int("steps", len(workflow.Workflow.Steps)).
-		Msg("Workflow loaded and validated")
 
-	// Convert inputs to proper types
-	workflowInputs := make(map[string]interface{})
-	for k, v := range inputs {
-		workflowInputs[k] = v
-	}
-
-	for k, v := range workflow.Workflow.Inputs {
-		if _, ok := workflowInputs[k]; !ok && v.Default != nil {
-			workflowInputs[k] = v.Default
-		}
-	}
-
-	validationResult := engine.ValidateWorkflowInputs(workflow, workflowInputs)
-	if !validationResult.Valid {
-		printValidationErrors(ctx, validationResult)
-		return fmt.Errorf("workflow inputs are invalid")
-	}
-
-	// Show workflow info
-	if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
-		printWorkflowInfo(ctx, workflow)
-	}
-
-	// Dry run mode
-	if dryRun {
-		if !viper.GetBool("quiet") {
-			style.Success(ctx, "Workflow validation completed (dry-run mode)")
-		}
-		return nil
-	}
-
-	// Create executor with configuration
-	executorConfig := &engine.ExecutorConfig{
-		MaxConcurrentSteps:   3, // TODO: make this configurable
-		DefaultTimeout:       5 * time.Minute,
-		EnableRetries:        true,
-		MaxRetries:           maxRetries,
-		EnableStateSnapshots: saveState,
-	}
-
-	executor, err := engine.NewExecutor(ctx, executorConfig, workflow, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create executor: %w", err)
-	}
-
-	// Create execution context
-	wd := filepath.Dir(workflowFile)
-	execCtx := execcontext.NewExecutionContext(ctx, workflow, workflowInputs, wd)
-
-	// Execute workflow
-	result := ExecutionResult{
-		WorkflowFile: workflowFile,
-		RunID:        execCtx.RunID,
-		Status:       "running",
-		StartTime:    startTime,
-		Inputs:       workflowInputs,
-		StepsTotal:   len(workflow.Workflow.Steps),
-	}
-
-	// Execute with progress reporting
-	err = executeWithProgress(executor, execCtx, &result)
-	if err != nil {
-		result.Status = "failed"
-		result.Error = err.Error()
-
-		log.Error().
-			Err(err).
-			Str("run_id", execCtx.RunID).
-			Dur("duration", result.Duration).
-			Msg("Workflow execution failed")
-	} else {
-		result.Status = "completed"
-		result.EndTime = time.Now()
-		result.Duration = result.EndTime.Sub(result.StartTime)
-		result.FinalState = execCtx.GetAllState()
-		result.Outputs = execCtx.GetWorkflowOutputs()
-
-		log.Info().
-			Str("run_id", execCtx.RunID).
-			Dur("duration", result.Duration).
-			Int("steps", result.StepsExecuted).
-			Msg("Workflow execution completed successfully")
-	}
-
-	// Collect step results and token usage
-	collectExecutionResults(execCtx, &result)
-
-	// Output results
 	outputResults(ctx, result)
-
-	// Exit with appropriate code
-	if result.Status == "failed" {
-		return fmt.Errorf("workflow execution failed")
-	}
-
 	return nil
 }
 
-func executeWithProgress(executor *engine.Executor, execCtx *execcontext.ExecutionContext, result *ExecutionResult) error {
-	// Create a progress channel for real-time updates
-	progressChan := make(chan events.ExecutionEvent, 100)
-	defer close(progressChan)
-
-	// Start progress reporter if not quiet and text output
-	if !viper.GetBool("quiet") && viper.GetString("output") == "text" {
-		tracker := NewProgressTracker(execCtx)
-		go tracker.Start(progressChan, result)
-		defer tracker.Stop()
-	}
-
-	// Execute the workflow
-	err := executor.ExecuteWorkflow(execCtx, progressChan)
-
-	return err
-}
-
-// NewProgressTracker creates a new progress tracker
-func NewProgressTracker(writer io.Writer) *ProgressTracker {
-	return &ProgressTracker{
-		steps:  make(map[string]*StepProgressState),
-		writer: writer,
-		done:   make(chan struct{}),
-	}
-}
-
-// Start begins the progress tracking
-func (pt *ProgressTracker) Start(progressChan <-chan events.ExecutionEvent, result *ExecutionResult) {
-	// Process events - spinners handle their own animation
-	for event := range progressChan {
-		switch event.Type {
-		case events.EventStepStarted:
-			result.StepsExecuted++
-			pt.startStep(event.StepID, event.StepIndex, result.StepsTotal)
-
-		case events.EventStepCompleted:
-			pt.completeStep(event.StepID, event.Duration)
-
-		case events.EventStepFailed:
-			pt.failStep(event.StepID, event.Duration, event.Error)
-
-		case events.EventStepRetrying:
-			pt.retryStep(event.StepID, event.Attempt)
-
-		case events.EventStepProgress:
-			pt.updateStepProgress(event.StepID, event.ActionID, event.Text)
-
-		case events.EventStepActionStarted:
-			pt.createActionSpinner(event.StepID, event.ActionID, event.Text)
-
-		case events.EventStepActionCompleted:
-			pt.completeActionSpinner(event.StepID, event.ActionID)
-
-		case events.EventStepActionFailed:
-			pt.failActionSpinner(event.StepID, event.ActionID)
-		}
-	}
-}
-
-// Stop halts the progress tracker and ensures all spinners are stopped
-func (pt *ProgressTracker) Stop() {
-	pt.mu.Lock()
-	defer pt.mu.Unlock()
-
-	// Stop any running spinners
-	for _, state := range pt.steps {
-		if state.spinner != nil && state.status == "running" {
-			state.spinner.Stop()
-		}
-	}
-
-	close(pt.done)
-}
-
-// startStep initializes a new step in running state
-func (pt *ProgressTracker) startStep(stepID string, stepIndex, totalSteps int) {
-	pt.mu.Lock()
-	defer pt.mu.Unlock()
-
-	// Create and configure spinner
-	s := style.NewSpinner(pt.writer)
-	title := fmt.Sprintf(" Running step %s (%d/%d)", style.AccentStyle.Render(stepID), stepIndex, totalSteps)
-	s.SetSuffix(title)
-
-	state := &StepProgressState{
-		stepID:     stepID,
-		stepIndex:  stepIndex,
-		totalSteps: totalSteps,
-		title:      title,
-		status:     "running",
-		startTime:  time.Now(),
-		spinner:    s,
-		actions:    []ActionState{},
-	}
-	pt.steps[stepID] = state
-
-	// Start the spinner
-	s.Start()
-}
-
-// updateStepProgress updates the progress of a step
-func (pt *ProgressTracker) updateStepProgress(stepID string, actionID string, text string) {
-	pt.mu.RLock()
-	defer pt.mu.RUnlock()
-
-	if state, exists := pt.steps[stepID]; exists {
-		state.mu.Lock()
-		state.spinner.SetSuffix(fmt.Sprintf(" %s", text))
-		state.mu.Unlock()
-	}
-}
-
-func (pt *ProgressTracker) createActionSpinner(stepID string, actionID string, text string) {
-	pt.mu.Lock()
-	defer pt.mu.Unlock()
-
-	if state, exists := pt.steps[stepID]; exists {
-		state.mu.Lock()
-
-		state.actions.Add(ActionState{
-			id:   actionID,
-			text: text,
-		})
-
-		state.spinner.SetSuffix(state.String())
-		state.mu.Unlock()
-	}
-}
-
-func (pt *ProgressTracker) completeActionSpinner(stepID string, actionID string) {
-	pt.mu.Lock()
-	defer pt.mu.Unlock()
-
-	if state, exists := pt.steps[stepID]; exists {
-		state.mu.Lock()
-		for i, action := range state.actions {
-			if action.id == actionID {
-				state.actions[i].text = style.SuccessIcon() + " " + strings.TrimSpace(strings.ReplaceAll(action.text, "...", ""))
-				break
-			}
-		}
-
-		state.spinner.SetSuffix(state.String())
-		state.mu.Unlock()
-	}
-}
-
-func (pt *ProgressTracker) failActionSpinner(stepID string, actionID string) {
-	pt.mu.Lock()
-	defer pt.mu.Unlock()
-
-	if state, exists := pt.steps[stepID]; exists {
-		state.mu.Lock()
-		for i, action := range state.actions {
-			if action.id == actionID {
-				state.actions[i].text = style.ErrorIcon() + " " + strings.TrimSpace(strings.ReplaceAll(action.text, "...", ""))
-				break
-			}
-		}
-
-		state.spinner.SetSuffix(state.String())
-		state.mu.Unlock()
-	}
-}
-
-// completeStep marks a step as completed
-func (pt *ProgressTracker) completeStep(stepID string, duration time.Duration) {
-	pt.mu.Lock()
-	defer pt.mu.Unlock()
-
-	if state, exists := pt.steps[stepID]; exists {
-		state.mu.Lock()
-		state.status = "completed"
-		state.endTime = time.Now()
-		state.spinner.SetFinalMSG(style.SuccessIcon() + state.String())
-		state.spinner.Stop()
-		state.mu.Unlock()
-	}
-}
-
-// failStep marks a step as failed
-func (pt *ProgressTracker) failStep(stepID string, duration time.Duration, _ string) {
-	pt.mu.Lock()
-	defer pt.mu.Unlock()
-
-	if state, exists := pt.steps[stepID]; exists {
-		state.mu.Lock()
-		state.status = "failed"
-		state.endTime = time.Now()
-		state.spinner.SetFinalMSG(style.ErrorIcon() + " " + state.String())
-		state.spinner.Stop()
-		state.mu.Unlock()
-	}
-}
-
-// retryStep shows retry information
-func (pt *ProgressTracker) retryStep(stepID string, attempt int) {
-	pt.mu.RLock()
-	defer pt.mu.RUnlock()
-
-	if state, exists := pt.steps[stepID]; exists {
-		// Stop current spinner and update suffix to show retry
-		state.spinner.Stop()
-		state.spinner.SetSuffix(fmt.Sprintf(" Step %d/%d: %s (retry %d)", state.stepIndex, state.totalSteps, stepID, attempt))
-		state.spinner.Start()
-	}
-}
-
-// No animation functions needed - briandowns/spinner handles animation automatically
-
-func collectExecutionResults(execCtx *execcontext.ExecutionContext, result *ExecutionResult) {
-	summary := execCtx.GetExecutionSummary()
-
-	// Convert step results
-	result.StepResults = make([]StepExecutionResult, 0, len(summary.Steps))
-	tokenSummary := &TokenUsageSummary{}
-
-	for _, step := range summary.Steps {
-		stepResult := StepExecutionResult{
-			StepID:    step.StepID,
-			Status:    string(step.Status),
-			StartTime: step.StartTime,
-			EndTime:   step.EndTime,
-			Duration:  step.Duration,
-			Output:    step.Output,
-			Response:  step.Response,
-			Retries:   step.Retries,
-		}
-
-		if step.Error != nil {
-			stepResult.Error = step.Error.Error()
-		}
-
-		if step.TokenUsage != nil {
-			stepResult.TokenUsage = &TokenUsage{
-				PromptTokens:     step.TokenUsage.PromptTokens,
-				CompletionTokens: step.TokenUsage.CompletionTokens,
-				TotalTokens:      step.TokenUsage.TotalTokens,
-			}
-
-			// Aggregate token usage
-			tokenSummary.PromptTokens += step.TokenUsage.PromptTokens
-			tokenSummary.CompletionTokens += step.TokenUsage.CompletionTokens
-			tokenSummary.TotalTokens += step.TokenUsage.TotalTokens
-		}
-
-		result.StepResults = append(result.StepResults, stepResult)
-	}
-
-	if tokenSummary.TotalTokens > 0 {
-		result.TokenUsage = tokenSummary
-	}
-}
-
-func printWorkflowInfo(w io.Writer, workflow *ast.Workflow) {
-	name := getWorkflowName(workflow)
-	stepCount := len(workflow.Workflow.Steps)
-
-	fmt.Fprintf(w, "\nRunning %s workflow (%d steps)\n\n", style.InfoStyle.Render(name), stepCount)
-
-}
-
-func getWorkflowName(workflow *ast.Workflow) string {
-	if workflow.Metadata != nil && workflow.Metadata.Name != "" {
-		return workflow.Metadata.Name
-	}
-	return "Untitled Workflow"
-}
-
-func outputResults(w io.Writer, result ExecutionResult) {
+func outputResults(w io.Writer, result *engine.ExecutionResult) {
 	outputFormat := viper.GetString("output")
 
 	switch outputFormat {
@@ -622,7 +133,7 @@ func outputResults(w io.Writer, result ExecutionResult) {
 	}
 }
 
-func printExecutionSummary(w io.Writer, result ExecutionResult) {
+func printExecutionSummary(w io.Writer, result *engine.ExecutionResult) {
 	if viper.GetBool("quiet") {
 		return
 	}
@@ -666,6 +177,10 @@ func printExecutionSummary(w io.Writer, result ExecutionResult) {
 
 }
 
+func formatDuration(duration time.Duration) string {
+	return fmt.Sprintf("%.2fs", duration.Seconds())
+}
+
 func printValidationErrors(w io.Writer, validationResult *engine.InputValidationResult) {
 	fmt.Fprintf(w, "\n❌ Input validation failed:\n\n")
 
@@ -686,8 +201,4 @@ func printValidationErrors(w io.Writer, validationResult *engine.InputValidation
 	}
 
 	fmt.Fprintf(w, "\n💡 Please check your input parameters and try again.\n")
-}
-
-func formatDuration(duration time.Duration) string {
-	return fmt.Sprintf("%.2fs", duration.Seconds())
 }

@@ -61,46 +61,8 @@ workflow:
           type: object
           description: Metadata about the processing
 
-    - id: final_summary
-      run: |
-        #!/bin/bash
-        original="$1"
-        first_result="$2"
-        second_result="$3"
-        final_length="$4"
-        
-        echo "{
-          \"original_text\": \"$original\",
-          \"after_first_operation\": \"$first_result\",
-          \"after_second_operation\": \"$second_result\",
-          \"final_length\": $final_length,
-          \"transformations_count\": 3
-        }"
-      with:
-        original: "{{ inputs.input_text }}"
-        first_result: "{{ steps.first_processing.outputs.result }}"
-        second_result: "{{ steps.second_processing.outputs.result }}"
-        final_length: "{{ steps.length_check.outputs.metadata.calculated_length }}"
-      outputs:
-        original_text:
-          type: string
-          description: Original input text
-        after_first_operation:
-          type: string
-          description: Text after first operation
-        after_second_operation:
-          type: string
-          description: Text after second operation
-        final_length:
-          type: number
-          description: Final text length
-        transformations_count:
-          type: number
-          description: Number of transformations
-
   outputs:
     original: "{{ inputs.input_text }}"
     first_transformation: "{{ steps.first_processing.outputs.result }}"
     second_transformation: "{{ steps.second_processing.outputs.result }}"
-    final_length: "{{ steps.length_check.outputs.metadata.calculated_length }}"
-    processing_summary: "{{ steps.final_summary.outputs }}"
+    final_length: "{{ steps.length_check.outputs.calculated_length }}"
