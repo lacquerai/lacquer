@@ -8,6 +8,7 @@ import (
 	"github.com/lacquerai/lacquer/internal/runtime/cache"
 	"github.com/lacquerai/lacquer/internal/runtime/golang"
 	"github.com/lacquerai/lacquer/internal/runtime/node"
+	"github.com/lacquerai/lacquer/internal/runtime/python"
 	"github.com/lacquerai/lacquer/internal/runtime/types"
 	"github.com/lacquerai/lacquer/internal/runtime/utils"
 )
@@ -38,6 +39,7 @@ func NewManager(cacheDir string) (*Manager, error) {
 	// Register default runtimes
 	m.Register(golang.New(cache, downloader))
 	m.Register(node.New(cache, downloader))
+	m.Register(python.New(cache, downloader))
 
 	return m, nil
 }

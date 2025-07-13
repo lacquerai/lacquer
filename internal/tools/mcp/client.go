@@ -82,7 +82,7 @@ func (c *MCPClient) Initialize(ctx context.Context) error {
 	}
 
 	// Send initialized notification
-	if err := c.notify(ctx, "initialized", nil); err != nil {
+	if err := c.notify(ctx, "notifications/initialized", nil); err != nil {
 		return fmt.Errorf("initialized notification failed: %w", err)
 	}
 
@@ -95,7 +95,7 @@ func (c *MCPClient) ListTools(ctx context.Context) ([]Tool, error) {
 		Tools []Tool `json:"tools"`
 	}
 
-	if err := c.call(ctx, "tools/list", nil, &result); err != nil {
+	if err := c.call(ctx, "tools/list", map[string]interface{}{}, &result); err != nil {
 		return nil, err
 	}
 

@@ -1,0 +1,12 @@
+{
+  "user_data": {
+    "name": "Alice Smith",
+    "age": 28,
+    "preferences": ["photography", "travel", "cooking", "programming"],
+    "location": {
+      "city": "Seattle",
+      "country": "USA"
+    }
+  },
+  "multiplier": 1.8
+}

@@ -1,0 +1,54 @@
+[
+  {
+    "id": "msg_01Kv1EutxWDBMiWxZkNm7NgY",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-sonnet-20241022",
+    "content": [
+      {
+        "type": "text",
+        "text": "I'll help you convert the time from UTC to America/Los_Angeles using the convert_time function. Since the input includes a date which isn't part of the function parameters, I'll focus on the time component (10:30)."
+      },
+      {
+        "type": "tool_use",
+        "id": "toolu_01HJ2DgJd8UsDrBhHEonuAxd",
+        "name": "convert_time",
+        "input": {
+          "time": "10:30",
+          "source_timezone": "UTC",
+          "target_timezone": "America/Los_Angeles"
+        }
+      }
+    ],
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 797,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 147,
+      "service_tier": "standard"
+    }
+  },
+  {
+    "id": "msg_018nsvwV9sgWcU5RVftE163y",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-sonnet-20241022",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n    \"converted_time\": \"03:30\",\n    \"timezone_info\": \"The time difference between UTC and America/Los_Angeles is -7 hours (during DST). The original time 10:30 UTC on 2024-03-15 converts to 03:30 PDT (Pacific Daylight Time) on the same day. America/Los_Angeles is currently observing Daylight Saving Time (DST).\"\n}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 1122,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 107,
+      "service_tier": "standard"
+    }
+  }
+]

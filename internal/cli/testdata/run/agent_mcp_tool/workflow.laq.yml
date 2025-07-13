@@ -1,0 +1,59 @@
+version: "1.0"
+metadata:
+  name: agent-mcp-tool
+  description: Test workflow for agent MCP tool calling functionality with time operations
+  author: lacquer-team
+
+agents:
+  mcp_agent:
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    temperature: 0
+    system_prompt: You are a helpful assistant that can use MCP tools to help answer questions about time and timezone operations.
+    tools:
+      - name: time_converter
+        description: Convert and analyze time across different timezones using MCP server
+        mcp_server:
+          type: local
+          command: uvx
+          args: ["mcp-server-time"]
+          timeout: 1m
+
+workflow:
+  inputs:
+    source_time:
+      type: string
+      description: The source time to convert (e.g., "2024-01-15 14:30:00")
+      default: "2024-01-15 14:30:00"
+    source_timezone:
+      type: string
+      description: The source timezone
+      default: "UTC"
+    target_timezone:
+      type: string
+      description: The target timezone to convert to
+      default: "America/New_York"
+  
+  steps:
+    - id: convert_time
+      agent: mcp_agent
+      prompt: |
+        Please help me convert the time "{{ inputs.source_time }}" from {{ inputs.source_timezone }} to {{ inputs.target_timezone }}.
+        
+        Use the available MCP time tools to:
+        1. Parse the source time in the source timezone
+        2. Convert it to the target timezone
+        3. Provide the converted time and any additional timezone information
+        
+        Please provide a detailed response with the converted time and timezone details.
+      outputs:
+        converted_time:
+          type: string
+          description: The time converted to the target timezone
+        timezone_info:
+          type: string
+          description: Additional timezone information and details
+
+  outputs:
+    result_time: "{{ steps.convert_time.outputs.converted_time }}"
+    timezone_details: "{{ steps.convert_time.outputs.timezone_info }}"

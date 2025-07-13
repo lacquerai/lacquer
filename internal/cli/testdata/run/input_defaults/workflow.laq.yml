@@ -1,0 +1,233 @@
+version: "1.0"
+metadata:
+  name: input-defaults
+  description: Test workflow for input parameters with defaults and validation
+  author: lacquer-team
+
+workflow:
+  inputs:
+    # Required input without default
+    required_name:
+      type: string
+      description: Required name parameter
+      required: true
+    
+    # Optional input with default
+    greeting_style:
+      type: string
+      description: Style of greeting to use
+      default: "friendly"
+      enum: ["formal", "friendly", "casual"]
+    
+    # Numeric input with default and constraints
+    repetitions:
+      type: number
+      description: Number of times to repeat the greeting
+      default: 3
+      minimum: 1
+      maximum: 10
+    
+    # Boolean input with default
+    include_timestamp:
+      type: boolean
+      description: Whether to include timestamp in output
+      default: true
+    
+    # Array input with default
+    additional_messages:
+      type: array
+      description: Additional messages to include
+      default: ["Have a great day!", "Thank you for using Lacquer!"]
+      min_items: 1
+      max_items: 5
+    
+    # Object input with default
+    formatting_options:
+      type: object
+      description: Formatting options for output
+      default:
+        uppercase: false
+        add_borders: true
+        indent_level: 2
+    
+    # String input with pattern and default
+    user_code:
+      type: string
+      description: User code in format ABC-123
+      default: "LAQ-001"
+      pattern: "^[A-Z]{3}-[0-9]{3}$"
+    
+    # Optional input without default (should be null/undefined)
+    optional_note:
+      type: string
+      description: Optional note to include
+      required: false
+
+  steps:
+    - id: validate_inputs
+      run: |
+        #!/bin/bash
+        name="$1"
+        style="$2"
+        reps="$3"
+        timestamp="$4"
+        code="$5"
+        note="$6"
+        
+        echo "{
+          \"provided_name\": \"$name\",
+          \"greeting_style\": \"$style\",
+          \"repetitions\": $reps,
+          \"include_timestamp\": $timestamp,
+          \"user_code\": \"$code\",
+          \"has_optional_note\": $([ -n \"$note\" ] && echo true || echo false),
+          \"optional_note\": \"$note\",
+          \"validation_status\": \"passed\"
+        }"
+      with:
+        name: "{{ inputs.required_name }}"
+        style: "{{ inputs.greeting_style }}"
+        reps: "{{ inputs.repetitions }}"
+        timestamp: "{{ inputs.include_timestamp }}"
+        code: "{{ inputs.user_code }}"
+        note: "{{ inputs.optional_note or '' }}"
+      outputs:
+        provided_name:
+          type: string
+          description: The provided name
+        greeting_style:
+          type: string
+          description: The greeting style used
+        repetitions:
+          type: number
+          description: Number of repetitions
+        include_timestamp:
+          type: boolean
+          description: Whether timestamp is included
+        user_code:
+          type: string
+          description: The user code
+        has_optional_note:
+          type: boolean
+          description: Whether optional note was provided
+        validation_status:
+          type: string
+          description: Validation result
+
+    - id: generate_greetings
+      run: |
+        #!/bin/bash
+        name="$1"
+        style="$2"
+        reps="$3"
+        include_ts="$4"
+        
+        case "$style" in
+          "formal")
+            greeting="Good day, Mr./Ms. $name"
+            ;;
+          "friendly")
+            greeting="Hello there, $name!"
+            ;;
+          "casual")
+            greeting="Hey $name, what's up?"
+            ;;
+          *)
+            greeting="Hi $name"
+            ;;
+        esac
+        
+        greetings_array="["
+        for i in $(seq 1 $reps); do
+          if [ "$include_ts" = "true" ]; then
+            timestamp=$(date -u +%H:%M:%S)
+            current_greeting="\"[$timestamp] $greeting\""
+          else
+            current_greeting="\"$greeting\""
+          fi
+          
+          if [ $i -eq $reps ]; then
+            greetings_array="$greetings_array$current_greeting"
+          else
+            greetings_array="$greetings_array$current_greeting,"
+          fi
+        done
+        greetings_array="$greetings_array]"
+        
+        echo "{
+          \"greetings\": $greetings_array,
+          \"greeting_count\": $reps,
+          \"style_used\": \"$style\",
+          \"timestamp_included\": $include_ts
+        }"
+      with:
+        name: "{{ inputs.required_name }}"
+        style: "{{ inputs.greeting_style }}"
+        reps: "{{ inputs.repetitions }}"
+        include_ts: "{{ inputs.include_timestamp }}"
+      outputs:
+        greetings:
+          type: array
+          description: Generated greetings
+        greeting_count:
+          type: number
+          description: Number of greetings generated
+        style_used:
+          type: string
+          description: Style that was used
+        timestamp_included:
+          type: boolean
+          description: Whether timestamps were included
+
+    - id: process_additional_data
+      run: |
+        #!/bin/bash
+        # Process the additional messages and formatting options
+        # In a real scenario, this would properly parse JSON inputs
+        
+        echo "{
+          \"additional_message_count\": 2,
+          \"formatting_applied\": {
+            \"uppercase\": false,
+            \"borders_added\": true,
+            \"indentation\": 2
+          },
+          \"processed_options\": true
+        }"
+      outputs:
+        additional_message_count:
+          type: number
+          description: Number of additional messages
+        formatting_applied:
+          type: object
+          description: Formatting that was applied
+        processed_options:
+          type: boolean
+          description: Whether options were processed
+
+  outputs:
+    # Output showing all input values (including defaults)
+    all_inputs: {
+      "required_name": "{{ inputs.required_name }}",
+      "greeting_style": "{{ inputs.greeting_style }}",
+      "repetitions": "{{ inputs.repetitions }}",
+      "include_timestamp": "{{ inputs.include_timestamp }}",
+      "additional_messages": "{{ inputs.additional_messages }}",
+      "formatting_options": "{{ inputs.formatting_options }}",
+      "user_code": "{{ inputs.user_code }}",
+      "optional_note": "{{ inputs.optional_note }}"
+    }
+    
+    # Validation results
+    input_validation: "{{ steps.validate_inputs.outputs }}"
+    
+    # Generated content
+    generated_greetings: "{{ steps.generate_greetings.outputs.greetings }}"
+    greeting_summary: "Generated {{ steps.generate_greetings.outputs.greeting_count }} greetings in {{ steps.generate_greetings.outputs.style_used }} style"
+    
+    # Processing results
+    processing_results: "{{ steps.process_additional_data.outputs }}"
+    
+    # Conditional outputs based on inputs
+    personalized_message: "{{ inputs.greeting_style == 'formal' ? 'Thank you for your formal request, ' + inputs.required_name : 'Thanks ' + inputs.required_name + '!' }}"
+    has_optional_content: "{{ inputs.optional_note != null }}"

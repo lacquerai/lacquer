@@ -1,0 +1,20 @@
+[
+  {
+    "messages": [
+      {
+        "content": "You are a precise analytical assistant. You provide factual, \nwell-structured responses with clear reasoning. Always be thorough \nand methodical in your analysis.\n",
+        "role": "system"
+      },
+      {
+        "content": "Provide a detailed analytical breakdown of: renewable energy adoption in developing countries\n\nAnalysis depth: deep\n\nStructure your response with:\n1. Current state analysis\n2. Key challenges and opportunities\n3. Evidence-based conclusions\n4. Specific recommendations\n\nBe precise and factual in your assessment.\n\n\nIMPORTANT: Respond in JSON using the following schema:\n```json\n{\"analysis\":{\"type\":\"string\",\"description\":\"Analytical breakdown of the topic\"},\"confidence_level\":{\"type\":\"string\",\"description\":\"Confidence level in the analysis\"},\"key_points\":{\"type\":\"array\",\"description\":\"Key analytical points\"},\"recommendations\":{\"type\":\"array\",\"description\":\"Specific recommendations\"}}\n```",
+        "role": "user"
+      }
+    ],
+    "model": "gpt-4",
+    "max_tokens": 1000,
+    "n": 1,
+    "temperature": 0.1,
+    "top_p": 0.3,
+    "tools": []
+  }
+]

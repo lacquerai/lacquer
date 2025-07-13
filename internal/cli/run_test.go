@@ -366,6 +366,66 @@ func Test_GoScript(t *testing.T) {
 	newSingleDirectoryRunTest(t)
 }
 
+func Test_AgentToolCalling(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_AgentMcpTool(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_ContainerStep(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_StateUpdates(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_ConditionalSteps(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_BlockStep(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_WorkflowOutputs(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_ScriptFromFile(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_InputDefaults(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_AgentConfig(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_ComplexTemplates(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_ErrorHandlingRetries(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_ConcurrentSteps(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_TimeoutHandling(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
+func Test_MultipleRuntimes(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
 func newSingleDirectoryRunTest(t *testing.T) {
 	t.Helper()
 

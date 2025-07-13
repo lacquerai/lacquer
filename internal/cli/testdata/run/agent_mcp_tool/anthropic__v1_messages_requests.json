@@ -1,0 +1,176 @@
+[
+  {
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Please help me convert the time \"2024-03-15 10:30:00\" from UTC to America/Los_Angeles.\n\nUse the available MCP time tools to:\n1. Parse the source time in the source timezone\n2. Convert it to the target timezone\n3. Provide the converted time and any additional timezone information\n\nPlease provide a detailed response with the converted time and timezone details.\n\n\nIMPORTANT: Respond in JSON using the following schema:\n```json\n{\"converted_time\":{\"type\":\"string\",\"description\":\"The time converted to the target timezone\"},\"timezone_info\":{\"type\":\"string\",\"description\":\"Additional timezone information and details\"}}\n```",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0,
+    "top_p": 0,
+    "system": [
+      {
+        "text": "You are a helpful assistant that can use MCP tools to help answer questions about time and timezone operations.",
+        "type": "text"
+      }
+    ],
+    "tools": [
+      {
+        "input_schema": {
+          "properties": {
+            "source_timezone": {
+              "type": "string",
+              "description": "Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use 'Europe/Paris' as local timezone if no source timezone provided by the user."
+            },
+            "target_timezone": {
+              "type": "string",
+              "description": "Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use 'Europe/Paris' as local timezone if no target timezone provided by the user."
+            },
+            "time": {
+              "type": "string",
+              "description": "Time to convert in 24-hour format (HH:MM)"
+            }
+          },
+          "required": [
+            "source_timezone",
+            "time",
+            "target_timezone"
+          ],
+          "type": "object"
+        },
+        "name": "convert_time",
+        "description": "Convert time between timezones"
+      },
+      {
+        "input_schema": {
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "description": "IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use 'Europe/Paris' as local timezone if no timezone provided by the user."
+            }
+          },
+          "required": [
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "name": "get_current_time",
+        "description": "Get current time in a specific timezones"
+      }
+    ]
+  },
+  {
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Please help me convert the time \"2024-03-15 10:30:00\" from UTC to America/Los_Angeles.\n\nUse the available MCP time tools to:\n1. Parse the source time in the source timezone\n2. Convert it to the target timezone\n3. Provide the converted time and any additional timezone information\n\nPlease provide a detailed response with the converted time and timezone details.\n\n\nIMPORTANT: Respond in JSON using the following schema:\n```json\n{\"converted_time\":{\"type\":\"string\",\"description\":\"The time converted to the target timezone\"},\"timezone_info\":{\"type\":\"string\",\"description\":\"Additional timezone information and details\"}}\n```",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      },
+      {
+        "content": [
+          {
+            "text": "I'll help you convert the time from UTC to America/Los_Angeles using the convert_time function. Since the input includes a date which isn't part of the function parameters, I'll focus on the time component (10:30).",
+            "type": "text"
+          }
+        ],
+        "role": "assistant"
+      },
+      {
+        "content": [
+          {
+            "id": "toolu_01HJ2DgJd8UsDrBhHEonuAxd",
+            "input": {
+              "time": "10:30",
+              "source_timezone": "UTC",
+              "target_timezone": "America/Los_Angeles"
+            },
+            "name": "convert_time",
+            "type": "tool_use"
+          }
+        ],
+        "role": "assistant"
+      },
+      {
+        "content": [
+          {
+            "tool_use_id": "toolu_01HJ2DgJd8UsDrBhHEonuAxd",
+            "is_error": true,
+            "content": [
+              {
+                "text": "{\"content\":[{\"text\":\"{\\n  \\\"source\\\": {\\n    \\\"timezone\\\": \\\"UTC\\\",\\n    \\\"datetime\\\": \\\"2025-07-13T10:30:00+00:00\\\",\\n    \\\"is_dst\\\": false\\n  },\\n  \\\"target\\\": {\\n    \\\"timezone\\\": \\\"America/Los_Angeles\\\",\\n    \\\"datetime\\\": \\\"2025-07-13T03:30:00-07:00\\\",\\n    \\\"is_dst\\\": true\\n  },\\n  \\\"time_difference\\\": \\\"-7.0h\\\"\\n}\",\"type\":\"text\"}],\"isError\":false}",
+                "type": "text"
+              }
+            ],
+            "type": "tool_result"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0,
+    "top_p": 0,
+    "system": [
+      {
+        "text": "You are a helpful assistant that can use MCP tools to help answer questions about time and timezone operations.",
+        "type": "text"
+      }
+    ],
+    "tools": [
+      {
+        "input_schema": {
+          "properties": {
+            "source_timezone": {
+              "type": "string",
+              "description": "Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use 'Europe/Paris' as local timezone if no source timezone provided by the user."
+            },
+            "target_timezone": {
+              "type": "string",
+              "description": "Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use 'Europe/Paris' as local timezone if no target timezone provided by the user."
+            },
+            "time": {
+              "type": "string",
+              "description": "Time to convert in 24-hour format (HH:MM)"
+            }
+          },
+          "required": [
+            "source_timezone",
+            "time",
+            "target_timezone"
+          ],
+          "type": "object"
+        },
+        "name": "convert_time",
+        "description": "Convert time between timezones"
+      },
+      {
+        "input_schema": {
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "description": "IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use 'Europe/Paris' as local timezone if no timezone provided by the user."
+            }
+          },
+          "required": [
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "name": "get_current_time",
+        "description": "Get current time in a specific timezones"
+      }
+    ]
+  }
+]

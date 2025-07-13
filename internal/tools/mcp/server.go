@@ -13,6 +13,7 @@ import (
 
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/execcontext"
+	"github.com/rs/zerolog/log"
 )
 
 // Server represents a connection to an MCP server
@@ -62,21 +63,17 @@ func (s *Server) Initialize(ctx context.Context) error {
 
 // initializeLocal starts a local MCP server process
 func (s *Server) initializeLocal(ctx context.Context) error {
-	// Create the command
 	cmd := exec.CommandContext(ctx, s.config.Command, s.config.Args...)
 
-	// Set environment variables
 	if len(s.config.Env) > 0 {
 		env := os.Environ()
 		for k, v := range s.config.Env {
-			// Expand environment variables in values
 			expandedValue := os.ExpandEnv(v)
 			env = append(env, fmt.Sprintf("%s=%s", k, expandedValue))
 		}
 		cmd.Env = env
 	}
 
-	// Create pipes for stdio communication
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdin pipe: %w", err)
@@ -92,7 +89,6 @@ func (s *Server) initializeLocal(ctx context.Context) error {
 		return fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
-	// Start the process
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start MCP server: %w", err)
 	}
@@ -105,14 +101,28 @@ func (s *Server) initializeLocal(ctx context.Context) error {
 		stdout: stdout,
 		stderr: stderr,
 	})
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderr.Read(buf)
+			if n > 0 {
+				log.Debug().Msgf("MCP server stderr: %s", buf[:n])
+			}
 
-	// Initialize the client
+			if err != nil {
+				if err != io.EOF {
+					log.Debug().Msgf("Error reading MCP server stderr: %v", err)
+				}
+				break
+			}
+		}
+	}()
+
 	if err := s.client.Initialize(ctx); err != nil {
 		cmd.Process.Kill()
 		return fmt.Errorf("failed to initialize MCP client: %w", err)
 	}
 
-	// Monitor the process
 	go s.monitorProcess()
 
 	return nil
@@ -120,16 +130,13 @@ func (s *Server) initializeLocal(ctx context.Context) error {
 
 // initializeRemote connects to a remote MCP server
 func (s *Server) initializeRemote(ctx context.Context) error {
-	// Create transport based on URL scheme
 	transport, err := CreateTransportFromURL(s.config.URL, s.config.Auth)
 	if err != nil {
 		return fmt.Errorf("failed to create transport: %w", err)
 	}
 
-	// Create MCP client
 	s.client = NewMCPClient(transport)
 
-	// Initialize the client with timeout
 	initCtx := ctx
 	if s.config.Timeout != nil {
 		var cancel context.CancelFunc
@@ -158,13 +165,11 @@ func (s *Server) DiscoverTools(ctx context.Context) ([]Tool, error) {
 		return nil, fmt.Errorf("MCP client not initialized")
 	}
 
-	// Call tools/list method
 	tools, err := client.ListTools(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tools: %w", err)
 	}
 
-	// Cache the tools
 	s.mu.Lock()
 	s.tools = tools
 	s.mu.Unlock()

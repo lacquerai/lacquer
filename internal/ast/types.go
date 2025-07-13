@@ -122,8 +122,9 @@ type Requirements struct {
 type RuntimeType string
 
 var (
-	RuntimeTypeNode RuntimeType = "node"
-	RuntimeTypeGo   RuntimeType = "go"
+	RuntimeTypeNode   RuntimeType = "node"
+	RuntimeTypeGo     RuntimeType = "go"
+	RuntimeTypePython RuntimeType = "python"
 )
 
 // Runtime represents a runtime requirement, e.g. "node" or "go"

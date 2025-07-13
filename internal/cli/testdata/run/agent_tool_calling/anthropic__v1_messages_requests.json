@@ -1,0 +1,156 @@
+[
+  {
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Please solve this math problem: What is 42 divided by 6?\n\nUse the calculator tool to compute the answer. Make sure to call the tool with the correct parameters.\n\n\nIMPORTANT: Respond in JSON using the following schema:\n```json\n{\"answer\":{\"type\":\"string\",\"description\":\"The answer to the math problem\"},\"calculation\":{\"type\":\"number\",\"description\":\"The numerical result\"}}\n```",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0,
+    "top_p": 0,
+    "system": [
+      {
+        "text": "You are a helpful assistant that can use tools to help answer questions.",
+        "type": "text"
+      }
+    ],
+    "tools": [
+      {
+        "input_schema": {
+          "properties": {
+            "num1": {
+              "type": "integer",
+              "description": "The first number"
+            },
+            "num2": {
+              "type": "integer",
+              "description": "The second number"
+            },
+            "operation": {
+              "type": "string",
+              "enum": [
+                "add",
+                "subtract",
+                "multiply",
+                "divide"
+              ],
+              "description": "The arithmetic operation to perform"
+            }
+          },
+          "required": [
+            "operation",
+            "num1",
+            "num2"
+          ],
+          "type": "object"
+        },
+        "name": "calculator",
+        "description": "A simple calculator that can perform basic arithmetic operations"
+      }
+    ]
+  },
+  {
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "Please solve this math problem: What is 42 divided by 6?\n\nUse the calculator tool to compute the answer. Make sure to call the tool with the correct parameters.\n\n\nIMPORTANT: Respond in JSON using the following schema:\n```json\n{\"answer\":{\"type\":\"string\",\"description\":\"The answer to the math problem\"},\"calculation\":{\"type\":\"number\",\"description\":\"The numerical result\"}}\n```",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      },
+      {
+        "content": [
+          {
+            "text": "I'll help you solve this math problem using the calculator tool.",
+            "type": "text"
+          }
+        ],
+        "role": "assistant"
+      },
+      {
+        "content": [
+          {
+            "id": "toolu_0149XPb89ts5uYn6W2m3Vvxh",
+            "input": {
+              "operation": "divide",
+              "num1": 42,
+              "num2": 6
+            },
+            "name": "calculator",
+            "type": "tool_use"
+          }
+        ],
+        "role": "assistant"
+      },
+      {
+        "content": [
+          {
+            "tool_use_id": "toolu_0149XPb89ts5uYn6W2m3Vvxh",
+            "is_error": false,
+            "content": [
+              {
+                "text": "null",
+                "type": "text"
+              }
+            ],
+            "type": "tool_result"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0,
+    "top_p": 0,
+    "system": [
+      {
+        "text": "You are a helpful assistant that can use tools to help answer questions.",
+        "type": "text"
+      }
+    ],
+    "tools": [
+      {
+        "input_schema": {
+          "properties": {
+            "num1": {
+              "type": "integer",
+              "description": "The first number"
+            },
+            "num2": {
+              "type": "integer",
+              "description": "The second number"
+            },
+            "operation": {
+              "type": "string",
+              "enum": [
+                "add",
+                "subtract",
+                "multiply",
+                "divide"
+              ],
+              "description": "The arithmetic operation to perform"
+            }
+          },
+          "required": [
+            "operation",
+            "num1",
+            "num2"
+          ],
+          "type": "object"
+        },
+        "name": "calculator",
+        "description": "A simple calculator that can perform basic arithmetic operations"
+      }
+    ]
+  }
+]

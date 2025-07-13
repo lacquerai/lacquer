@@ -1,0 +1,46 @@
+version: "1.0"
+metadata:
+  name: container-step
+  description: Test workflow for Docker container execution
+  author: lacquer-team
+
+workflow:
+  inputs:
+    message:
+      type: string
+      description: Message to process in container
+      default: "Hello from container!"
+    
+    processing_type:
+      type: string
+      description: Type of processing to perform
+      default: "uppercase"
+  
+  steps:
+    - id: process_in_container
+      container: alpine:latest
+      with:
+        message: "{{ inputs.message }}"
+        type: "{{ inputs.processing_type }}"
+      outputs:
+        processed_message:
+          type: string
+          description: The processed message
+        container_info:
+          type: string
+          description: Information about the container
+
+    - id: process_python_container
+      container: python:3.9-alpine
+      with:
+        text: "{{ steps.process_in_container.outputs.processed_message }}"
+        operation: "reverse"
+      outputs:
+        result:
+          type: string
+          description: The reversed text
+
+  outputs:
+    original_message: "{{ inputs.message }}"
+    processed_result: "{{ steps.process_in_container.outputs.processed_message }}"
+    final_result: "{{ steps.process_python_container.outputs.result }}"

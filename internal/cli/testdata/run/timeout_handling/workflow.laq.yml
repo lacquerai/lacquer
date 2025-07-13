@@ -1,0 +1,325 @@
+version: "1.0"
+metadata:
+  name: timeout-handling
+  description: Test workflow for timeout handling and graceful degradation
+  author: lacquer-team
+
+agents:
+  slow_agent:
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    temperature: 0
+    system_prompt: You are an assistant that may take varying amounts of time to respond.
+
+workflow:
+  inputs:
+    processing_duration:
+      type: string
+      description: How long processing should take
+      default: "short"
+    
+    timeout_scenario:
+      type: string
+      description: Which timeout scenario to test
+      default: "step_timeout"
+
+  state:
+    timeouts_encountered: 0
+    completed_within_timeout: []
+    timed_out_steps: []
+
+  steps:
+    - id: quick_step
+      run: |
+        #!/bin/bash
+        duration="$1"
+        
+        case "$duration" in
+          "instant")
+            sleep 0.1
+            ;;
+          "short")
+            sleep 1
+            ;;
+          "medium")
+            sleep 2
+            ;;
+          *)
+            sleep 1
+            ;;
+        esac
+        
+        echo "{
+          \"completed\": true,
+          \"duration_category\": \"$duration\",
+          \"message\": \"Quick step completed successfully\",
+          \"execution_time\": \"$(date +%s)\"
+        }"
+      with:
+        duration: "{{ inputs.processing_duration }}"
+      timeout: 5s
+      updates:
+        completed_within_timeout: "{{ state.completed_within_timeout + ['quick_step'] }}"
+      outputs:
+        completed:
+          type: boolean
+          description: Whether step completed
+        duration_category:
+          type: string
+          description: Duration category
+        message:
+          type: string
+          description: Completion message
+        execution_time:
+          type: string
+          description: Execution timestamp
+
+    - id: medium_timeout_step
+      run: |
+        #!/bin/bash
+        scenario="$1"
+        
+        case "$scenario" in
+          "step_timeout")
+            echo "Starting medium duration task..."
+            sleep 3  # This should succeed with 5s timeout
+            echo '{"status": "completed", "message": "Medium task finished within timeout"}'
+            ;;
+          "force_timeout")
+            echo "Starting long duration task..."
+            sleep 10  # This should timeout with 5s timeout
+            echo '{"status": "completed", "message": "This should not be reached"}'
+            ;;
+          *)
+            sleep 1
+            echo '{"status": "completed", "message": "Default medium task"}'
+            ;;
+        esac
+      with:
+        scenario: "{{ inputs.timeout_scenario }}"
+      timeout: 5s
+      on_error:
+        - log: "Medium step timed out: {{ error }}"
+          output:
+            status: "timeout"
+            message: "Step exceeded 5 second timeout"
+            fallback_result: true
+      updates:
+        timeouts_encountered: "{{ state.timeouts_encountered + (steps.medium_timeout_step.outputs.status == 'timeout' ? 1 : 0) }}"
+        completed_within_timeout: "{{ state.completed_within_timeout + (steps.medium_timeout_step.outputs.status != 'timeout' ? ['medium_timeout_step'] : []) }}"
+        timed_out_steps: "{{ state.timed_out_steps + (steps.medium_timeout_step.outputs.status == 'timeout' ? ['medium_timeout_step'] : []) }}"
+      outputs:
+        status:
+          type: string
+          description: Step completion status
+        message:
+          type: string
+          description: Step message
+        fallback_result:
+          type: boolean
+          description: Whether this is a fallback result
+
+    - id: agent_with_timeout
+      agent: slow_agent
+      prompt: |
+        Please analyze this timeout scenario: {{ inputs.timeout_scenario }}
+        
+        Processing duration setting: {{ inputs.processing_duration }}
+        
+        Provide a brief analysis of timeout handling strategies. Keep your response concise.
+        
+        Respond in JSON format:
+        {
+          "analysis": "your analysis",
+          "recommendations": ["rec1", "rec2"],
+          "timeout_risk": "low/medium/high"
+        }
+      timeout: 8s
+      on_error:
+        - log: "Agent step timed out after 8 seconds"
+          output:
+            analysis: "Agent response timed out"
+            recommendations: ["Increase timeout", "Implement fallback responses"]
+            timeout_risk: "high"
+      updates:
+        timeouts_encountered: "{{ state.timeouts_encountered + (steps.agent_with_timeout.outputs.analysis == 'Agent response timed out' ? 1 : 0) }}"
+        completed_within_timeout: "{{ state.completed_within_timeout + (steps.agent_with_timeout.outputs.analysis != 'Agent response timed out' ? ['agent_with_timeout'] : []) }}"
+        timed_out_steps: "{{ state.timed_out_steps + (steps.agent_with_timeout.outputs.analysis == 'Agent response timed out' ? ['agent_with_timeout'] : []) }}"
+      outputs:
+        analysis:
+          type: string
+          description: Timeout analysis
+        recommendations:
+          type: array
+          description: Timeout handling recommendations
+        timeout_risk:
+          type: string
+          description: Risk level assessment
+
+    - id: very_long_step
+      run: |
+        #!/bin/bash
+        echo "Starting very long operation..."
+        
+        # Simulate a very long running process
+        for i in {1..15}; do
+          echo "Progress: $i/15"
+          sleep 1
+        done
+        
+        echo '{"status": "completed", "message": "Very long operation completed", "iterations": 15}'
+      timeout: 3s  # This will definitely timeout
+      on_error:
+        - log: "Very long step timed out as expected"
+          output:
+            status: "timeout_expected"
+            message: "Step was designed to timeout for testing"
+            iterations: 0
+            timeout_was_expected: true
+      updates:
+        timeouts_encountered: "{{ state.timeouts_encountered + 1 }}"
+        timed_out_steps: "{{ state.timed_out_steps + ['very_long_step'] }}"
+      outputs:
+        status:
+          type: string
+          description: Step status
+        message:
+          type: string
+          description: Step message
+        iterations:
+          type: number
+          description: Number of iterations completed
+        timeout_was_expected:
+          type: boolean
+          description: Whether timeout was expected
+
+    - id: timeout_recovery
+      run: |
+        #!/bin/bash
+        timeout_count="$1"
+        timed_out_steps="$2"
+        completed_steps="$3"
+        
+        recovery_strategy="graceful_degradation"
+        if [ "$timeout_count" -gt 2 ]; then
+          recovery_strategy="aggressive_fallback"
+        elif [ "$timeout_count" -eq 0 ]; then
+          recovery_strategy="no_recovery_needed"
+        fi
+        
+        echo "{
+          \"recovery_strategy\": \"$recovery_strategy\",
+          \"total_timeouts\": $timeout_count,
+          \"successful_steps\": \"$completed_steps\",
+          \"failed_steps\": \"$timed_out_steps\",
+          \"recovery_actions\": [
+            \"Implemented fallback responses for timed out steps\",
+            \"Logged timeout events for monitoring\",
+            \"Continued workflow execution despite timeouts\"
+          ],
+          \"workflow_resilience\": \"high\"
+        }"
+      with:
+        timeout_count: "{{ state.timeouts_encountered }}"
+        timed_out_steps: "{{ join(state.timed_out_steps, ',') }}"
+        completed_steps: "{{ join(state.completed_within_timeout, ',') }}"
+      outputs:
+        recovery_strategy:
+          type: string
+          description: Recovery strategy used
+        total_timeouts:
+          type: number
+          description: Total number of timeouts
+        successful_steps:
+          type: string
+          description: Steps that completed successfully
+        failed_steps:
+          type: string
+          description: Steps that timed out
+        recovery_actions:
+          type: array
+          description: Actions taken for recovery
+        workflow_resilience:
+          type: string
+          description: Assessment of workflow resilience
+
+    - id: timeout_summary
+      run: |
+        #!/bin/bash
+        total_timeouts="$1"
+        recovery_strategy="$2"
+        
+        if [ "$total_timeouts" -eq 0 ]; then
+          success_rate="100%"
+          timeout_impact="none"
+        else
+          # Calculate success rate (5 total steps, minus timeouts)
+          successful_steps=$((5 - total_timeouts))
+          success_rate="$(echo "scale=1; $successful_steps * 100 / 5" | bc -l)%"
+          
+          if [ "$total_timeouts" -le 1 ]; then
+            timeout_impact="minimal"
+          elif [ "$total_timeouts" -le 2 ]; then
+            timeout_impact="moderate"
+          else
+            timeout_impact="significant"
+          fi
+        fi
+        
+        echo "{
+          \"timeout_handling_summary\": {
+            \"total_steps\": 5,
+            \"timeouts_encountered\": $total_timeouts,
+            \"success_rate\": \"$success_rate\",
+            \"timeout_impact\": \"$timeout_impact\",
+            \"recovery_effectiveness\": \"$recovery_strategy\"
+          },
+          \"lessons_learned\": [
+            \"Timeouts provide important safety mechanisms\",
+            \"Fallback responses maintain workflow continuity\",
+            \"Error handling enables graceful degradation\",
+            \"Monitoring timeout events helps optimize performance\"
+          ],
+          \"best_practices\": [
+            \"Set appropriate timeout values for different step types\",
+            \"Implement meaningful fallback responses\",
+            \"Log timeout events for analysis\",
+            \"Design workflows to handle partial failures\"
+          ]
+        }"
+      with:
+        total_timeouts: "{{ state.timeouts_encountered }}"
+        recovery_strategy: "{{ steps.timeout_recovery.outputs.recovery_strategy }}"
+      outputs:
+        timeout_handling_summary:
+          type: object
+          description: Summary of timeout handling
+        lessons_learned:
+          type: array
+          description: Lessons learned from timeout scenarios
+        best_practices:
+          type: array
+          description: Best practices for timeout handling
+
+  outputs:
+    # Timeout statistics
+    timeout_stats: {
+      "total_timeouts": "{{ state.timeouts_encountered }}",
+      "successful_steps": "{{ state.completed_within_timeout }}",
+      "timed_out_steps": "{{ state.timed_out_steps }}"
+    }
+    
+    # Step results
+    step_results: {
+      "quick_step": "{{ steps.quick_step.outputs }}",
+      "medium_step": "{{ steps.medium_timeout_step.outputs }}",
+      "agent_step": "{{ steps.agent_with_timeout.outputs }}",
+      "long_step": "{{ steps.very_long_step.outputs }}"
+    }
+    
+    # Recovery and handling
+    timeout_recovery: "{{ steps.timeout_recovery.outputs }}"
+    timeout_summary: "{{ steps.timeout_summary.outputs }}"
+    
+    # Overall assessment
+    workflow_completion: "Workflow completed with {{ state.timeouts_encountered }} timeouts handled gracefully through fallback mechanisms"

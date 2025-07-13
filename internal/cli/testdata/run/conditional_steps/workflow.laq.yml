@@ -1,0 +1,136 @@
+version: "1.0"
+metadata:
+  name: conditional-steps
+  description: Test workflow for conditional step execution
+  author: lacquer-team
+
+agents:
+  decision_agent:
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    temperature: 0
+    system_prompt: You are a helpful assistant that analyzes numbers and makes decisions.
+
+workflow:
+  inputs:
+    number:
+      type: number
+      description: A number to analyze
+      default: 42
+    
+    mode:
+      type: string
+      description: Processing mode
+      default: "full"
+
+  state:
+    skip_analysis: false
+    analysis_complete: false
+
+  steps:
+    - id: check_number
+      run: |
+        #!/bin/bash
+        number=$1
+        if [ "$number" -gt 50 ]; then
+          echo '{"is_large": true, "category": "large", "should_analyze": true}'
+        elif [ "$number" -gt 20 ]; then
+          echo '{"is_large": false, "category": "medium", "should_analyze": true}'
+        else
+          echo '{"is_large": false, "category": "small", "should_analyze": false}'
+        fi
+      with:
+        number: "{{ inputs.number }}"
+      outputs:
+        is_large:
+          type: boolean
+          description: Whether the number is large
+        category:
+          type: string
+          description: Category of the number
+        should_analyze:
+          type: boolean
+          description: Whether further analysis is needed
+
+    - id: conditional_skip_check
+      action: update_state
+      condition: "{{ not steps.check_number.outputs.should_analyze }}"
+      updates:
+        skip_analysis: true
+
+    - id: analyze_large_number
+      agent: decision_agent
+      skip_if: "{{ not steps.check_number.outputs.is_large }}"
+      prompt: |
+        The number {{ inputs.number }} is categorized as "{{ steps.check_number.outputs.category }}".
+        Please provide an analysis of what makes this a large number and its mathematical properties.
+      outputs:
+        analysis:
+          type: string
+          description: Analysis of the large number
+
+    - id: analyze_medium_number
+      agent: decision_agent
+      condition: "{{ steps.check_number.outputs.category == 'medium' }}"
+      prompt: |
+        The number {{ inputs.number }} is categorized as "{{ steps.check_number.outputs.category }}".
+        Please provide an analysis of this medium-sized number.
+      outputs:
+        analysis:
+          type: string
+          description: Analysis of the medium number
+
+    - id: skip_small_number
+      run: |
+        echo '{"message": "Number too small for analysis", "skipped": true}'
+      skip_if: "{{ steps.check_number.outputs.should_analyze }}"
+      outputs:
+        message:
+          type: string
+          description: Skip message
+        skipped:
+          type: boolean
+          description: Whether analysis was skipped
+
+    - id: finalize_analysis
+      action: update_state
+      condition: "{{ inputs.mode == 'full' }}"
+      updates:
+        analysis_complete: true
+        final_category: "{{ steps.check_number.outputs.category }}"
+
+    - id: conditional_summary
+      run: |
+        #!/bin/bash
+        category="$1"
+        has_large_analysis="$2"
+        has_medium_analysis="$3"
+        was_skipped="$4"
+        
+        if [ "$has_large_analysis" = "true" ]; then
+          echo '{"summary": "Large number analysis completed", "type": "large"}'
+        elif [ "$has_medium_analysis" = "true" ]; then
+          echo '{"summary": "Medium number analysis completed", "type": "medium"}'
+        elif [ "$was_skipped" = "true" ]; then
+          echo '{"summary": "Small number analysis skipped", "type": "small"}'
+        else
+          echo '{"summary": "No analysis performed", "type": "unknown"}'
+        fi
+      with:
+        category: "{{ steps.check_number.outputs.category }}"
+        has_large_analysis: "{{ steps.analyze_large_number.outputs.analysis != null }}"
+        has_medium_analysis: "{{ steps.analyze_medium_number.outputs.analysis != null }}"
+        was_skipped: "{{ steps.skip_small_number.outputs.skipped or false }}"
+      outputs:
+        summary:
+          type: string
+          description: Summary of what happened
+        type:
+          type: string
+          description: Type of processing that occurred
+
+  outputs:
+    number_category: "{{ steps.check_number.outputs.category }}"
+    analysis_result: "{{ steps.analyze_large_number.outputs.analysis or steps.analyze_medium_number.outputs.analysis or 'No analysis performed' }}"
+    processing_summary: "{{ steps.conditional_summary.outputs.summary }}"
+    state_info: "{{ state }}"

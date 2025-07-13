@@ -1,0 +1,106 @@
+version: "1.0"
+metadata:
+  name: block-step
+  description: Test workflow for block execution (uses)
+  author: lacquer-team
+
+workflow:
+  inputs:
+    input_text:
+      type: string
+      description: Text to process through blocks
+      default: "Hello World from Blocks!"
+    
+    first_operation:
+      type: string
+      description: First operation to perform
+      default: "uppercase"
+    
+    second_operation:
+      type: string
+      description: Second operation to perform
+      default: "reverse"
+
+  steps:
+    - id: first_processing
+      uses: "./blocks/text_processor.laq.yml"
+      with:
+        text: "{{ inputs.input_text }}"
+        operation: "{{ inputs.first_operation }}"
+      outputs:
+        result:
+          type: string
+          description: Result from first processing
+        metadata:
+          type: object
+          description: Metadata about the processing
+
+    - id: second_processing
+      uses: "./blocks/text_processor.laq.yml"
+      with:
+        text: "{{ steps.first_processing.outputs.result }}"
+        operation: "{{ inputs.second_operation }}"
+      outputs:
+        result:
+          type: string
+          description: Result from second processing
+        metadata:
+          type: object
+          description: Metadata about the processing
+
+    - id: length_check
+      uses: "./blocks/text_processor.laq.yml"
+      with:
+        text: "{{ steps.second_processing.outputs.result }}"
+        operation: "length"
+      outputs:
+        result:
+          type: string
+          description: Result from length check
+        metadata:
+          type: object
+          description: Metadata about the processing
+
+    - id: final_summary
+      run: |
+        #!/bin/bash
+        original="$1"
+        first_result="$2"
+        second_result="$3"
+        final_length="$4"
+        
+        echo "{
+          \"original_text\": \"$original\",
+          \"after_first_operation\": \"$first_result\",
+          \"after_second_operation\": \"$second_result\",
+          \"final_length\": $final_length,
+          \"transformations_count\": 3
+        }"
+      with:
+        original: "{{ inputs.input_text }}"
+        first_result: "{{ steps.first_processing.outputs.result }}"
+        second_result: "{{ steps.second_processing.outputs.result }}"
+        final_length: "{{ steps.length_check.outputs.metadata.calculated_length }}"
+      outputs:
+        original_text:
+          type: string
+          description: Original input text
+        after_first_operation:
+          type: string
+          description: Text after first operation
+        after_second_operation:
+          type: string
+          description: Text after second operation
+        final_length:
+          type: number
+          description: Final text length
+        transformations_count:
+          type: number
+          description: Number of transformations
+
+  outputs:
+    original: "{{ inputs.input_text }}"
+    first_transformation: "{{ steps.first_processing.outputs.result }}"
+    second_transformation: "{{ steps.second_processing.outputs.result }}"
+    final_length: "{{ steps.length_check.outputs.metadata.calculated_length }}"
+    processing_summary: "{{ steps.final_summary.outputs }}"

@@ -1,0 +1,54 @@
+[
+  {
+    "id": "msg_01PSdKtEtgkeL2WEtMPhS4sR",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-sonnet-20241022",
+    "content": [
+      {
+        "type": "text",
+        "text": "I'll help you solve this math problem using the calculator tool."
+      },
+      {
+        "type": "tool_use",
+        "id": "toolu_0149XPb89ts5uYn6W2m3Vvxh",
+        "name": "calculator",
+        "input": {
+          "operation": "divide",
+          "num1": 42,
+          "num2": 6
+        }
+      }
+    ],
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 549,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 101,
+      "service_tier": "standard"
+    }
+  },
+  {
+    "id": "msg_01VAayxSWUSNBfU9BHjdyprV",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-sonnet-20241022",
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n    \"answer\": \"42 divided by 6 equals 7\",\n    \"calculation\": 7\n}"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 662,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "output_tokens": 31,
+      "service_tier": "standard"
+    }
+  }
+]

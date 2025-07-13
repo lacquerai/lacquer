@@ -1,0 +1,83 @@
+version: "1.0"
+metadata:
+  name: agent-tool-calling
+  description: Test workflow for agent tool calling functionality
+  author: lacquer-team
+
+agents:
+  tool_agent:
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    temperature: 0
+    system_prompt: You are a helpful assistant that can use tools to help answer questions.
+    tools:
+      - name: calculator
+        description: A simple calculator that can perform basic arithmetic operations
+        script: |
+          #!/bin/bash
+          operation="$1"
+          num1="$2"
+          num2="$3"
+          
+          case $operation in
+            "add")
+              echo '{"result": '$(($num1 + $num2))'}'
+              ;;
+            "subtract")
+              echo '{"result": '$(($num1 - $num2))'}'
+              ;;
+            "multiply")
+              echo '{"result": '$(($num1 * $num2))'}'
+              ;;
+            "divide")
+              if [ "$num2" -eq 0 ]; then
+                echo '{"error": "Division by zero"}'
+                exit 1
+              fi
+              echo '{"result": '$(($num1 / $num2))'}'
+              ;;
+            *)
+              echo '{"error": "Unknown operation"}'
+              exit 1
+              ;;
+          esac
+        parameters:
+          type: object
+          properties:
+            operation:
+              type: string
+              enum: ["add", "subtract", "multiply", "divide"]
+              description: The arithmetic operation to perform
+            num1:
+              type: integer
+              description: The first number
+            num2:
+              type: integer
+              description: The second number
+          required: ["operation", "num1", "num2"]
+
+workflow:
+  inputs:
+    math_problem:
+      type: string
+      description: A math problem to solve
+      default: "What is 15 multiplied by 7?"
+  
+  steps:
+    - id: solve_math
+      agent: tool_agent
+      prompt: |
+        Please solve this math problem: {{ inputs.math_problem }}
+        
+        Use the calculator tool to compute the answer. Make sure to call the tool with the correct parameters.
+      outputs:
+        answer:
+          type: string
+          description: The answer to the math problem
+        calculation:
+          type: number
+          description: The numerical result
+
+  outputs:
+    final_answer: "{{ steps.solve_math.outputs.answer }}"
+    calculation_result: "{{ steps.solve_math.outputs.calculation }}"

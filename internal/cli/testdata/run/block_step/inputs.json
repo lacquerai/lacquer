@@ -1,0 +1,5 @@
+{
+  "input_text": "Testing Block Execution",
+  "first_operation": "lowercase",
+  "second_operation": "reverse"
+}

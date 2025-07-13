@@ -129,12 +129,10 @@ func (p *MCPToolProvider) getOrCreateServer(tool *ast.Tool) (*Server, error) {
 	// In the future, we might want to share servers based on URL/command
 	server := NewServer(config)
 
-	// Initialize the server
 	if err := server.Initialize(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to initialize MCP server: %w", err)
 	}
 
-	// Discover available tools from the server
 	tools, err := server.DiscoverTools(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover tools: %w", err)
