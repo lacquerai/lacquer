@@ -53,7 +53,6 @@ func NewYAMLParser(opts ...ParserOption) (*YAMLParser, error) {
 func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 	reporter := NewErrorReporter(nil, filename)
 
-	// Validate file extension
 	if !isValidWorkflowFile(filename) {
 		reporter.AddError(&EnhancedError{
 			ID:       "file_ext_invalid",
@@ -72,7 +71,6 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 		return nil, reporter.ToError()
 	}
 
-	// Read file
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		reporter.AddError(&EnhancedError{
@@ -92,7 +90,6 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 
 	reporter.source = data
 
-	// Validate file size (prevent DoS)
 	if len(data) > 10*1024*1024 { // 10MB limit
 		reporter.AddError(&EnhancedError{
 			ID:       "file_too_large",

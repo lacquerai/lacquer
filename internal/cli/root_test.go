@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"os"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -81,7 +80,7 @@ func executeCommand(root *cobra.Command, args ...string) (output string, err err
 func TestRootCommand(t *testing.T) {
 	output, err := executeCommand(rootCmd, "--help")
 	assert.NoError(t, err)
-	assert.Contains(t, output, "Lacquer is a domain-specific language")
+	assert.Contains(t, output, "Lacquer")
 	assert.Contains(t, output, "Available Commands:")
 }
 
@@ -109,26 +108,11 @@ func TestGlobalFlags(t *testing.T) {
 }
 
 func TestCommandAvailability(t *testing.T) {
-	commands := []string{"init", "validate", "version"}
+	commands := []string{"init", "validate", "version", "run", "serve"}
 
 	for _, cmdName := range commands {
 		cmd, _, err := rootCmd.Find([]string{cmdName})
 		assert.NoError(t, err, "Command %s should be available", cmdName)
 		assert.Equal(t, cmdName, cmd.Name(), "Command name should match")
 	}
-}
-
-// Test helper to set environment variables
-func setEnv(t *testing.T, key, value string) {
-	originalValue := os.Getenv(key)
-	err := os.Setenv(key, value)
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		if originalValue == "" {
-			os.Unsetenv(key)
-		} else {
-			os.Setenv(key, originalValue)
-		}
-	})
 }

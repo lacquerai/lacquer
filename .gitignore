@@ -70,6 +70,7 @@ coverage.html
 *.coverprofile
 cover.out
 cover.html
+coverage.out
 
 # Profiling data
 *.prof
