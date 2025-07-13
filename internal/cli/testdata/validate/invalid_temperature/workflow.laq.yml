@@ -1,0 +1,26 @@
+version: "1.0"
+metadata:
+  name: invalid-temperature-test
+  description: Test workflow with invalid temperature values
+
+agents:
+  too_cold:
+    provider: anthropic
+    model: claude-3-haiku-20240307
+    temperature: -0.5  # Invalid: below 0
+    
+  too_hot:
+    provider: openai
+    model: gpt-4
+    temperature: 2.5  # Invalid: above 2
+    
+  just_right:
+    provider: anthropic
+    model: claude-3-sonnet-20240229
+    temperature: 0.7  # Valid
+
+workflow:
+  steps:
+    - id: step1
+      agent: too_cold
+      prompt: "Test prompt"

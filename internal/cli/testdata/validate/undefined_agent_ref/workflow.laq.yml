@@ -1,0 +1,23 @@
+version: "1.0"
+metadata:
+  name: undefined-agent-ref-test
+  description: Test workflow with references to undefined agents
+
+agents:
+  existing_agent:
+    provider: anthropic
+    model: claude-3-haiku-20240307
+
+workflow:
+  steps:
+    - id: step1
+      agent: nonexistent_agent  # This agent is not defined
+      prompt: "Process data"
+      
+    - id: step2
+      agent: another_missing_agent  # Also not defined
+      prompt: "Analyze results"
+      
+    - id: step3
+      agent: existing_agent  # This one exists
+      prompt: "Summarize findings"

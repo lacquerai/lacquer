@@ -1,0 +1,24 @@
+version: "1.0"
+metadata:
+  name: invalid-step-id-test
+  description: Test workflow with invalid step identifiers
+
+workflow:
+  steps:
+    - id: "123-starts-with-number"  # Invalid: starts with number
+      run: echo "Step 1"
+      
+    - id: "has spaces in id"  # Invalid: contains spaces
+      run: echo "Step 2"
+      
+    - id: "special-chars!"  # Invalid: contains special characters
+      run: echo "Step 3"
+      
+    - id: "dash-in-middle"  # Invalid: dash not allowed
+      run: echo "Step 4"
+      
+    - id: valid_step_id  # Valid: letters, numbers, underscores
+      run: echo "Step 5"
+      
+    - id: _also_valid  # Valid: can start with underscore
+      run: echo "Step 6"

@@ -1,0 +1,29 @@
+version: "1.0"
+metadata:
+  name: step-multiple-methods-test
+  description: Test workflow with steps specifying multiple execution methods
+
+agents:
+  helper:
+    provider: openai
+    model: gpt-3.5-turbo
+
+workflow:
+  steps:
+    - id: confused_step
+      agent: helper
+      prompt: "Do something"
+      run: echo "Also run this"  # Cannot have both agent and run
+      
+    - id: more_confused
+      uses: lacquer/processor@v1
+      container: ubuntu:latest  # Cannot have both uses and container
+      
+    - id: very_confused
+      action: human_input
+      agent: helper  # Cannot have both action and agent
+      prompt: "Help"
+      
+    - id: valid_step
+      agent: helper
+      prompt: "This is fine"  # Only agent execution method

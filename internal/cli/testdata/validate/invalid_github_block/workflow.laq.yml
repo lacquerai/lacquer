@@ -1,0 +1,25 @@
+version: "1.0"
+metadata:
+  name: invalid-github-block-test
+  description: Test workflow with invalid GitHub block references
+
+agents:
+  agent1:
+    uses: github.com/user  # Missing repository
+  
+  agent2:
+    uses: github.com/user/repo/extra/path  # Too many path segments
+  
+  agent3:
+    uses: github.com//double-slash  # Invalid format
+
+workflow:
+  steps:
+    - id: step1
+      uses: github.com/123user/repo  # Username starts with number
+      
+    - id: step2
+      uses: github.com/user/repo with spaces  # Invalid repo name
+      
+    - id: step3
+      uses: github.com/valid-user/valid-repo@v1.0.0  # Valid format

@@ -1,0 +1,21 @@
+version: "1.0"
+metadata:
+  name: empty-condition-test
+  description: Test workflow with empty conditions
+
+agents:
+  checker:
+    provider: openai
+    model: gpt-4
+
+workflow:
+  steps:
+    - id: empty_condition_step
+      agent: checker
+      prompt: "Check something"
+      condition: ""  # Empty condition should be invalid
+      
+    - id: empty_skip_if_step
+      agent: checker
+      prompt: "Skip check"
+      skip_if: "   "  # Whitespace-only condition should be invalid

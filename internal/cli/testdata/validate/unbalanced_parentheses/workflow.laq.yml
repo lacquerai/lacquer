@@ -1,0 +1,29 @@
+version: "1.0"
+metadata:
+  name: unbalanced-parentheses-test
+  description: Test workflow with unbalanced parentheses in conditions
+
+agents:
+  evaluator:
+    provider: openai
+    model: gpt-4
+
+workflow:
+  state:
+    counter: 0
+    
+  steps:
+    - id: check1
+      agent: evaluator
+      prompt: "Check condition"
+      condition: "((state.counter > 0) and (state.counter < 10)"  # Missing closing parenthesis
+      
+    - id: check2
+      agent: evaluator
+      prompt: "Skip check"
+      skip_if: "state.counter == 5))"  # Extra closing parenthesis
+      
+    - id: check3
+      agent: evaluator
+      prompt: "Complex condition"
+      condition: "(((state.counter > 0 and (state.counter < 10)"  # Multiple unbalanced

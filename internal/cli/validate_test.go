@@ -23,6 +23,112 @@ func Test_Valid(t *testing.T) {
 	newSingleDirectoryValidateTest(t)
 }
 
+// Semantic Validator Tests
+func Test_CircularDependency(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_ForwardReference(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_UndefinedVariable(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidLacquerBlock(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidGithubBlock(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidLocalBlock(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_UnbalancedParentheses(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_UndefinedAgentRef(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_ExcessiveRetry(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+// AST Validator Tests
+func Test_InvalidProvider(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_AgentMissingModel(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_AgentBothModelUses(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidTemperature(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidTopP(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidMaxTokens(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_DuplicateToolName(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_ToolMultipleTypes(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidMcpAuth(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidInputType(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InputMinMaxConflict(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_DuplicateStepId(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_StepMultipleMethods(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidStepId(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidDuration(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_InvalidRuntime(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
+func Test_EmptyCondition(t *testing.T) {
+	newSingleDirectoryValidateTest(t)
+}
+
 func newSingleDirectoryValidateTest(t *testing.T) {
 	t.Helper()
 
@@ -76,6 +182,11 @@ func assertGoldenFile(t *testing.T, directory string, stdout *bytes.Buffer, stde
 		require.NoError(t, err)
 	} else {
 		require.NoError(t, err)
+	}
+
+	if *rewriteGolden {
+		os.WriteFile(filepath.Join(directory, "golden.txt"), []byte(actual), 0644)
+		return
 	}
 
 	if !assert.Equal(t, string(golden), actual) {

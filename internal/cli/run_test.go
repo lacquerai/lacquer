@@ -33,10 +33,17 @@ var (
 	// and save it to the model_response.json file. This can be used to update the
 	// mocked responses for the aws client calls.
 	captureResponse = flag.Bool("capture-response", false, "capture the response from the model")
+	// use the rewrite-golden flag to rewrite the golden files
+	rewriteGolden = flag.Bool("rewrite-golden", false, "rewrite the golden files")
 
 	re     = regexp.MustCompile(ansi)
 	timeRe = regexp.MustCompile(`\(\d+\.?\d*[a-zA-Z]+\)`) // matches patterns like (6.81s), (123ms), etc.
 )
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	os.Exit(m.Run())
+}
 
 type TestServer struct {
 	provider          string

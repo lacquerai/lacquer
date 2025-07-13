@@ -1,0 +1,19 @@
+version: "1.0"
+metadata:
+  name: invalid-local-block-test
+  description: Test workflow with invalid local block references
+
+agents:
+  agent1:
+    uses: ./nonexistent/path/to/block  # Path doesn't exist
+  
+  agent2:
+    uses: ../  # Too short
+
+workflow:
+  steps:
+    - id: step1
+      uses: ./another/missing/path
+      
+    - id: step2
+      uses: ./  # Too short

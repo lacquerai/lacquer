@@ -400,10 +400,19 @@ func (p *YAMLParser) validateSemanticsEnhanced(workflow *ast.Workflow, reporter 
 	result := p.semanticValidator.ValidateWorkflow(workflow)
 	if result.HasErrors() {
 		for _, validationErr := range result.Errors {
-			// Try to extract position from the validation error context
 			pos := ast.Position{Line: 1, Column: 1}
 			if validationErr.Path != "" {
-				pos = extractPositionFromPath(validationErr.Path, reporter.source)
+				path := validationErr.Path
+
+				if validationErr.Field != "" {
+					path = fmt.Sprintf("%s.%s", path, validationErr.Field)
+				}
+
+				// TODO: in future we should change the AST to use a structured
+				// Value which contains all the position information, this way
+				// we can extract the position from the structured value instead
+				// of the path.
+				pos = extractPositionFromPath(path, reporter.source)
 			}
 
 			reporter.AddError(&EnhancedError{
@@ -416,6 +425,7 @@ func (p *YAMLParser) validateSemanticsEnhanced(workflow *ast.Workflow, reporter 
 				Suggestion: reporter.generateSemanticSuggestion(validationErr.Message),
 			})
 		}
+
 		return reporter.ToError()
 	}
 

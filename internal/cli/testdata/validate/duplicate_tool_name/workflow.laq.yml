@@ -1,0 +1,27 @@
+version: "1.0"
+metadata:
+  name: duplicate-tool-name-test
+  description: Test workflow with duplicate tool names
+
+agents:
+  tooled_agent:
+    provider: anthropic
+    model: claude-3-haiku-20240307
+    tools:
+      - name: search_tool
+        script: "echo 'searching'"
+        
+      - name: analyze_tool
+        script: "echo 'analyzing'"
+        
+      - name: search_tool  # Duplicate name
+        uses: lacquer/web-search@v1
+        
+      - name: analyze_tool  # Another duplicate
+        script: "echo 'different analyze'"
+
+workflow:
+  steps:
+    - id: step1
+      agent: tooled_agent
+      prompt: "Use tools"

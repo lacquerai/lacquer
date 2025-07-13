@@ -31,7 +31,7 @@ func ListToReadable(list []string) string {
 	for i, v := range list {
 		builder.WriteString(v)
 		if len(list)-2 == i {
-			builder.WriteString("or ")
+			builder.WriteString(" or ")
 		} else {
 			builder.WriteString(", ")
 		}
@@ -59,12 +59,23 @@ func (ve *ValidationError) Error() string {
 type ValidationResult struct {
 	Valid  bool               `json:"valid"`
 	Errors []*ValidationError `json:"errors,omitempty"`
+	// TODO: add warning output to the CLI, currently we only collect these
+	// as potential improvements
+	Warnings []*ValidationError `json:"warnings,omitempty"`
 }
 
 // AddError adds a validation error
 func (vr *ValidationResult) AddError(path, message string) {
 	vr.Valid = false
 	vr.Errors = append(vr.Errors, &ValidationError{
+		Path:    path,
+		Message: message,
+	})
+}
+
+// AddWarning adds a validation warning
+func (vr *ValidationResult) AddWarning(path, message string) {
+	vr.Warnings = append(vr.Warnings, &ValidationError{
 		Path:    path,
 		Message: message,
 	})
@@ -155,7 +166,7 @@ func (v *Validator) validateRequirements() {
 		}
 
 		if !isValidRuntime {
-			v.result.AddFieldError("requirements", "runtimes", fmt.Sprintf("rutimes must be one of: %s", ListToReadable(ValidRuntimes)))
+			v.result.AddFieldError("requirements", "runtimes", fmt.Sprintf("runtimes must be one of: %s", ListToReadable(ValidRuntimes)))
 		}
 	}
 }
@@ -267,7 +278,7 @@ func (v *Validator) validateTool(tool *Tool, path string) {
 	if len(toolTypes) == 0 {
 		v.result.AddError(path, fmt.Sprintf("tool must specify one of: %s", ListToReadable(ValidToolTypes)))
 	} else if len(toolTypes) > 1 {
-		names := make([]string, len(toolTypes), 0)
+		names := make([]string, 0, len(toolTypes))
 		for v := range toolTypes {
 			names = append(names, v)
 		}
@@ -508,7 +519,7 @@ func (v *Validator) validateStep(step *Step, path string) {
 	if len(stepTypes) == 0 {
 		v.result.AddError(path, fmt.Sprintf("step must specify either %s", ListToReadable(ValidStepTypes)))
 	} else if len(stepTypes) > 1 {
-		types := make([]string, len(stepTypes), 0)
+		types := make([]string, 0, len(stepTypes))
 		for v := range stepTypes {
 			types = append(types, v)
 		}
@@ -577,7 +588,7 @@ func (v *Validator) validateAgentStep(path string, step *Step) {
 	}
 
 	if _, ok := v.workflow.Agents[step.Agent]; !ok {
-		v.result.AddFieldError(path, "agent", fmt.Sprintf("agent %s specified must exist in the agents section", step.Agent))
+		v.result.AddFieldError(path, "agent", fmt.Sprintf("agent %q must exist in the agents section", step.Agent))
 	}
 }
 

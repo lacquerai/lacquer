@@ -1,0 +1,19 @@
+version: "1.0"
+metadata:
+  name: agent-missing-model-test
+  description: Test workflow with agents missing both model and uses
+
+agents:
+  incomplete_agent:
+    provider: anthropic
+    # Missing model and uses
+    
+  another_incomplete:
+    temperature: 0.7
+    # Missing both model and uses
+
+workflow:
+  steps:
+    - id: step1
+      agent: incomplete_agent
+      prompt: "Test prompt"

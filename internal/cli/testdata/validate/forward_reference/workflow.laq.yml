@@ -1,0 +1,23 @@
+version: "1.0"
+metadata:
+  name: forward-reference-test
+  description: Test workflow with forward step references
+
+agents:
+  processor:
+    provider: openai
+    model: gpt-3.5-turbo
+
+workflow:
+  steps:
+    - id: first_step
+      agent: processor
+      prompt: "Process data using result from later step: {{ steps.third_step.output }}"
+    
+    - id: second_step
+      agent: processor
+      prompt: "Process intermediate data"
+    
+    - id: third_step
+      agent: processor
+      prompt: "Generate final output"

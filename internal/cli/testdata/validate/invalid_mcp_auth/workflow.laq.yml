@@ -1,0 +1,47 @@
+version: "1.0"
+metadata:
+  name: invalid-mcp-auth-test
+  description: Test workflow with invalid MCP authentication configurations
+
+agents:
+  mcp_agent:
+    provider: anthropic
+    model: claude-3-haiku-20240307
+    tools:
+      - name: oauth_tool
+        mcp_server:
+          type: remote
+          url: https://api.example.com
+          auth:
+            type: oauth2
+            # Missing required fields: client_id, client_secret, token_url
+            
+      - name: api_key_tool
+        mcp_server:
+          type: remote
+          url: https://api.example.com
+          auth:
+            type: api_key
+            # Missing required field: api_key
+            
+      - name: basic_auth_tool
+        mcp_server:
+          type: remote
+          url: https://api.example.com
+          auth:
+            type: basic
+            username: user
+            # Missing required field: password
+            
+      - name: invalid_auth_type
+        mcp_server:
+          type: remote
+          url: https://api.example.com
+          auth:
+            type: custom  # Invalid auth type
+
+workflow:
+  steps:
+    - id: step1
+      agent: mcp_agent
+      prompt: "Use MCP tools"

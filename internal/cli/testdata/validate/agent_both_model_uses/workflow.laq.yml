@@ -1,0 +1,21 @@
+version: "1.0"
+metadata:
+  name: agent-both-model-uses-test
+  description: Test workflow with agents specifying both model and uses
+
+agents:
+  conflicted_agent:
+    provider: anthropic
+    model: claude-3-haiku-20240307
+    uses: lacquer/summarizer@v1  # Cannot have both model and uses
+    
+  another_conflict:
+    model: gpt-4
+    provider: openai
+    uses: ./local/agent  # Cannot have both
+
+workflow:
+  steps:
+    - id: step1
+      agent: conflicted_agent
+      prompt: "Test prompt"

@@ -1,0 +1,26 @@
+version: "1.0"
+metadata:
+  name: duplicate-step-id-test
+  description: Test workflow with duplicate step IDs
+
+agents:
+  assistant:
+    provider: anthropic
+    model: claude-3-haiku-20240307
+
+workflow:
+  steps:
+    - id: process_data
+      agent: assistant
+      prompt: "First processing step"
+      
+    - id: analyze_data
+      agent: assistant
+      prompt: "Analyze the processed data"
+      
+    - id: process_data  # Duplicate ID
+      agent: assistant
+      prompt: "Another processing step"
+      
+    - id: analyze_data  # Another duplicate
+      run: echo "Running analysis"

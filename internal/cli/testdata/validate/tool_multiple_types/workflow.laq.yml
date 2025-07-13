@@ -1,0 +1,29 @@
+version: "1.0"
+metadata:
+  name: tool-multiple-types-test
+  description: Test workflow with tools specifying multiple types
+
+agents:
+  confused_agent:
+    provider: openai
+    model: gpt-4
+    tools:
+      - name: conflicted_tool
+        script: "echo 'script'"
+        uses: lacquer/tool@v1  # Cannot have both script and uses
+        
+      - name: triple_conflict
+        script: "echo 'script'"
+        uses: ./local/tool
+        mcp_server:  # Three types!
+          type: local
+          command: tool-server
+          
+      - name: valid_tool
+        script: "echo 'just a script'"  # Only one type
+
+workflow:
+  steps:
+    - id: step1
+      agent: confused_agent
+      prompt: "Use tools"

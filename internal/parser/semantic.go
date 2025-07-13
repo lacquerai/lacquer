@@ -47,7 +47,6 @@ func (sv *SemanticValidator) ValidateWorkflow(w *ast.Workflow) *ast.ValidationRe
 
 	// Perform semantic checks
 	sv.validateStepDependencies(ctx, result)
-	sv.validateBlockReferences(ctx, result)
 	sv.validateControlFlow(ctx, result)
 	sv.validateResourceUsage(ctx, result)
 
@@ -132,7 +131,6 @@ func (sv *SemanticValidator) validateStepDependencies(ctx *validationContext, re
 
 	steps := ctx.workflow.Workflow.Steps
 
-	// Build dependency graph
 	dependencies := make(map[string][]string) // stepID -> dependencies
 
 	for _, step := range steps {
@@ -140,7 +138,6 @@ func (sv *SemanticValidator) validateStepDependencies(ctx *validationContext, re
 		dependencies[step.ID] = deps
 	}
 
-	// Check for circular dependencies using DFS
 	visited := make(map[string]bool)
 	recursionStack := make(map[string]bool)
 
@@ -155,7 +152,6 @@ func (sv *SemanticValidator) validateStepDependencies(ctx *validationContext, re
 		}
 	}
 
-	// Check for forward references (referencing steps that haven't executed yet)
 	for i, step := range steps {
 		deps := dependencies[step.ID]
 		for _, depStepID := range deps {
@@ -264,154 +260,6 @@ func (sv *SemanticValidator) extractVariableReferences(text, prefix string) []st
 	return stepIDs
 }
 
-// isValidVariableReference checks if a variable reference is valid
-func (sv *SemanticValidator) isValidVariableReference(variable string, ctx *validationContext) bool {
-	// Check exact matches first
-	if ctx.variables[variable] {
-		return true
-	}
-
-	// Check prefix matches for environment variables
-	if strings.HasPrefix(variable, "env.") && len(variable) > 4 {
-		return true
-	}
-
-	// Check inputs
-	if strings.HasPrefix(variable, "inputs.") {
-		inputName := strings.TrimPrefix(variable, "inputs.")
-		return ctx.inputs[inputName] != nil
-	}
-
-	// Check step references with flexible output matching
-	if strings.HasPrefix(variable, "steps.") {
-		parts := strings.Split(variable, ".")
-		if len(parts) >= 3 {
-			stepID := parts[1]
-			// If the step exists, allow any output reference
-			if _, exists := ctx.stepIDs[stepID]; exists {
-				return true
-			}
-		}
-	}
-
-	// Check built-in variables
-	builtins := []string{
-		"step_index", "total_steps", "run_id", "timestamp",
-		"metadata.name", "metadata.version", "metadata.description", "metadata.author",
-	}
-
-	for _, builtin := range builtins {
-		if variable == builtin {
-			return true
-		}
-	}
-
-	// Allow common template functions and expressions
-	// Allow common functions like now(), default(), etc.
-	if strings.Contains(variable, "(") {
-		return true
-	}
-
-	// Allow conditional expressions (ternary-like)
-	if strings.Contains(variable, " if ") || strings.Contains(variable, " else ") {
-		return true
-	}
-
-	// Allow pipe expressions
-	if strings.Contains(variable, " | ") {
-		return true
-	}
-
-	return false
-}
-
-// validateBlockReferences validates that block references are properly formatted and accessible
-func (sv *SemanticValidator) validateBlockReferences(ctx *validationContext, result *ast.ValidationResult) {
-	// Validate agent block references
-	if ctx.workflow.Agents != nil {
-		for name, agent := range ctx.workflow.Agents {
-			if agent.Uses != "" {
-				path := fmt.Sprintf("agents.%s.uses", name)
-				sv.validateBlockReference(agent.Uses, path, result)
-			}
-		}
-	}
-
-	// Validate step block references
-	if ctx.workflow.Workflow != nil && ctx.workflow.Workflow.Steps != nil {
-		for i, step := range ctx.workflow.Workflow.Steps {
-			if step.Uses != "" {
-				path := fmt.Sprintf("workflow.steps[%d].uses", i)
-				sv.validateBlockReference(step.Uses, path, result)
-			}
-		}
-	}
-}
-
-// validateBlockReference validates a single block reference
-func (sv *SemanticValidator) validateBlockReference(ref, path string, result *ast.ValidationResult) {
-	if ref == "" {
-		return
-	}
-
-	// Validate official lacquer blocks
-	if strings.HasPrefix(ref, "lacquer/") {
-		if !sv.isValidLacquerBlock(ref) {
-			result.AddError(path, fmt.Sprintf("invalid lacquer block reference: %s", ref))
-		}
-		return
-	}
-
-	// Validate GitHub references
-	if strings.HasPrefix(ref, "github.com/") {
-		if !sv.isValidGitHubReference(ref) {
-			result.AddError(path, fmt.Sprintf("invalid GitHub block reference: %s", ref))
-		}
-		return
-	}
-
-	// Validate local references
-	if strings.HasPrefix(ref, "./") || strings.HasPrefix(ref, "../") {
-		if !sv.isValidLocalReference(ref) {
-			result.AddError(path, fmt.Sprintf("invalid local block reference: %s", ref))
-		}
-		return
-	}
-
-	result.AddError(path, fmt.Sprintf("unsupported block reference format: %s", ref))
-}
-
-// isValidLacquerBlock validates official lacquer block references
-func (sv *SemanticValidator) isValidLacquerBlock(ref string) bool {
-	// Format: lacquer/block-name@version or lacquer/block-name
-	pattern := `^lacquer/[a-z0-9][a-z0-9-]*[a-z0-9](@v[0-9]+(\.[0-9]+)*)?$`
-	matched, _ := regexp.MatchString(pattern, ref)
-	return matched
-}
-
-// isValidGitHubReference validates GitHub block references
-func (sv *SemanticValidator) isValidGitHubReference(ref string) bool {
-	// Format: github.com/owner/repo@version or github.com/owner/repo
-	pattern := `^github\.com/[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]/[a-zA-Z0-9][a-zA-Z0-9_.-]*[a-zA-Z0-9](@[a-zA-Z0-9][a-zA-Z0-9_.-]*)?$`
-	matched, _ := regexp.MatchString(pattern, ref)
-	return matched
-}
-
-// isValidLocalReference validates local block references
-func (sv *SemanticValidator) isValidLocalReference(ref string) bool {
-	// Basic validation - should be a path
-	if len(ref) <= 2 {
-		return false
-	}
-
-	// Allow relative paths with .. as long as they don't try to escape too far
-	if strings.HasPrefix(ref, "../") {
-		return len(ref) > 3
-	}
-
-	return true
-}
-
 // validateControlFlow validates control flow logic and conditions
 func (sv *SemanticValidator) validateControlFlow(ctx *validationContext, result *ast.ValidationResult) {
 	if ctx.workflow.Workflow == nil || ctx.workflow.Workflow.Steps == nil {
@@ -468,46 +316,30 @@ func (sv *SemanticValidator) hasBalancedParentheses(text string) bool {
 	return count == 0
 }
 
-// validateOperators checks for valid operators in conditions
-func (sv *SemanticValidator) validateOperators(condition string, validOps []string, path string, result *ast.ValidationResult) {
-	// This is a simplified validation - a full implementation would parse the expression
-	for _, op := range []string{"=", "<>", "AND", "OR", "NOT"} {
-		if strings.Contains(condition, op) {
-			result.AddError(path, fmt.Sprintf("use proper operators instead of '%s' (e.g., == instead of =)", op))
-		}
-	}
-}
-
 // validateResourceUsage validates resource usage patterns and limits
 func (sv *SemanticValidator) validateResourceUsage(ctx *validationContext, result *ast.ValidationResult) {
-	// Count expensive operations
 	expensiveSteps := 0
 
 	if ctx.workflow.Workflow != nil && ctx.workflow.Workflow.Steps != nil {
 		for i, step := range ctx.workflow.Workflow.Steps {
 			stepPath := fmt.Sprintf("workflow.steps[%d]", i)
 
-			// Count agent steps (potentially expensive)
 			if step.Agent != "" && step.Prompt != "" {
 				expensiveSteps++
 			}
 
-			// Check for resource-intensive configurations and validate agent references
 			if step.Agent != "" {
 				if agent, exists := ctx.agents[step.Agent]; exists {
 					if agent.MaxTokens != nil && *agent.MaxTokens > 4000 {
 						// Note: high token limit detected - consider breaking into smaller steps
+						result.AddWarning(stepPath+".agent", "high token limit detected - consider breaking into smaller steps")
 					}
-				} else {
-					// Agent reference is undefined
-					result.AddError(stepPath+".agent", fmt.Sprintf("undefined agent: %s", step.Agent))
 				}
 			}
 
-			// Validate retry configurations
 			if step.Retry != nil {
 				if step.Retry.MaxAttempts > 10 {
-					result.AddError(stepPath+".retry.max_attempts", "excessive retry attempts (>10) may cause long delays")
+					result.AddWarning(stepPath+".retry.max_attempts", "excessive retry attempts (>10) may cause long delays")
 				}
 			}
 		}
@@ -529,14 +361,4 @@ func (sv *SemanticValidator) uniqueStrings(slice []string) []string {
 	}
 
 	return unique
-}
-
-// contains checks if a string slice contains a value
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
