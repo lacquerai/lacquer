@@ -233,7 +233,7 @@ func findNodeByPath(node *yaml.Node, path string) ast.Position {
 	}
 
 	// Navigate through each path part
-	for _, part := range pathParts {
+	for partIdx, part := range pathParts {
 		if current == nil {
 			break
 		}
@@ -247,6 +247,11 @@ func findNodeByPath(node *yaml.Node, path string) ast.Position {
 				value := current.Content[i+1]
 
 				if key.Value == part {
+					// If this is the last part of the path and the value is a mapping,
+					// return the key position instead of the value position for better error highlighting
+					if partIdx == len(pathParts)-1 && value.Kind == yaml.MappingNode {
+						return ast.Position{Line: key.Line, Column: key.Column}
+					}
 					current = value
 					found = true
 					break

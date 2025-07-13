@@ -194,7 +194,7 @@ func (v *Validator) validateAgent(agent *Agent, path string) {
 	}
 
 	if agent.Model != "" && agent.Uses != "" {
-		v.result.AddError(path, "agent cannot specify both 'model' and 'uses'")
+		v.result.AddFieldError(path, "model", "agent cannot specify both 'model' and 'uses'")
 		return
 	}
 
@@ -450,7 +450,7 @@ func (v *Validator) validateInputParam(param *InputParam, path string) {
 
 	// Validate numeric constraints
 	if param.Minimum != nil && param.Maximum != nil && *param.Minimum > *param.Maximum {
-		v.result.AddError(path, "minimum cannot be greater than maximum")
+		v.result.AddFieldError(path, "minimum", "minimum cannot be greater than maximum")
 	}
 
 	if param.MinItems != nil && *param.MinItems < 0 {
@@ -462,7 +462,7 @@ func (v *Validator) validateInputParam(param *InputParam, path string) {
 	}
 
 	if param.MinItems != nil && param.MaxItems != nil && *param.MinItems > *param.MaxItems {
-		v.result.AddError(path, "min_items cannot be greater than max_items")
+		v.result.AddFieldError(path, "min_items", "min_items cannot be greater than max_items")
 	}
 }
 

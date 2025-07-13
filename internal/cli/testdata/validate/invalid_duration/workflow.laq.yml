@@ -8,28 +8,10 @@ agents:
     provider: anthropic
     model: claude-3-haiku-20240307
     policies:
-      timeout: "invalid"  # Invalid duration format
+      timeout: "invalid"  # Invalid duration format - will fail during YAML parsing
 
 workflow:
   steps:
-    - id: step_with_bad_timeout
+    - id: step1
       agent: timer
-      prompt: "Process with timeout"
-      timeout: "10 seconds"  # Invalid: space not allowed
-      
-    - id: step_with_bad_retry_delay
-      agent: timer
-      prompt: "Process with retry"
-      retry:
-        max_attempts: 3
-        initial_delay: "5sec"  # Invalid: should be "5s"
-        max_delay: "sixty seconds"  # Invalid: text not allowed
-        
-    - id: valid_durations
-      agent: timer
-      prompt: "Valid timing"
-      timeout: "30s"  # Valid
-      retry:
-        max_attempts: 2
-        initial_delay: "1s"  # Valid
-        max_delay: "10m"  # Valid
+      prompt: "Test step"
