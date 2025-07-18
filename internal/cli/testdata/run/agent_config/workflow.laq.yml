@@ -4,6 +4,18 @@ metadata:
   description: Test workflow for various agent configurations and parameters
   author: lacquer-team
 
+inputs:
+  topic:
+    type: string
+    description: Topic to explore from different perspectives
+    default: "artificial intelligence in education"
+  
+  analysis_depth:
+    type: string
+    description: Depth of analysis required
+    default: "moderate"
+    enum: ["surface", "moderate", "deep"]
+
 agents:
   creative_agent:
     provider: anthropic
@@ -37,18 +49,6 @@ agents:
       Provide responses that are both informative and engaging.
 
 workflow:
-  inputs:
-    topic:
-      type: string
-      description: Topic to explore from different perspectives
-      default: "artificial intelligence in education"
-    
-    analysis_depth:
-      type: string
-      description: Depth of analysis required
-      default: "moderate"
-      enum: ["surface", "moderate", "deep"]
-
   steps:
     - id: creative_perspective
       agent: creative_agent
@@ -71,9 +71,9 @@ workflow:
     - id: analytical_perspective
       agent: analytical_agent
       prompt: |
-        Provide a detailed analytical breakdown of: {{ inputs.topic }}
+        Provide a detailed analytical breakdown of: ${{ inputs.topic }}
         
-        Analysis depth: {{ inputs.analysis_depth }}
+        Analysis depth: ${{ inputs.analysis_depth }}
         
         Structure your response with:
         1. Current state analysis
@@ -99,13 +99,13 @@ workflow:
     - id: balanced_synthesis
       agent: balanced_agent
       prompt: |
-        Based on these two perspectives on {{ inputs.topic }}:
+        Based on these two perspectives on ${{ inputs.topic }}:
         
         CREATIVE PERSPECTIVE:
-        {{ steps.creative_perspective.outputs.introduction }}
+        ${{ steps.creative_perspective.outputs.introduction }}
         
         ANALYTICAL PERSPECTIVE:
-        {{ steps.analytical_perspective.outputs.analysis }}
+        ${{ steps.analytical_perspective.outputs.analysis }}
         
         Create a balanced synthesis that combines the inspiring vision with 
         practical insights. Make it both engaging and actionable.
@@ -121,30 +121,11 @@ workflow:
           description: Practical steps that can be taken
 
     - id: compare_approaches
-      run: |
-        #!/bin/bash
-        creative_length=$(echo "$1" | wc -w | tr -d ' ')
-        analytical_length=$(echo "$2" | wc -w | tr -d ' ')
-        synthesis_length=$(echo "$3" | wc -w | tr -d ' ')
-        
-        echo "{
-          \"response_lengths\": {
-            \"creative\": $creative_length,
-            \"analytical\": $analytical_length,
-            \"synthesis\": $synthesis_length
-          },
-          \"longest_response\": \"$(if [ $creative_length -gt $analytical_length ] && [ $creative_length -gt $synthesis_length ]; then echo 'creative'; elif [ $analytical_length -gt $synthesis_length ]; then echo 'analytical'; else echo 'synthesis'; fi)\",
-          \"total_words\": $((creative_length + analytical_length + synthesis_length)),
-          \"agent_comparison\": {
-            \"creative_agent_characteristics\": \"High temperature (0.8), enthusiastic tone\",
-            \"analytical_agent_characteristics\": \"Low temperature (0.1), precise structure\",
-            \"balanced_agent_characteristics\": \"Medium temperature (0.5), combined approach\"
-          }
-        }"
+      run: "go run scripts/response_comparator.go"
       with:
-        creative: "{{ steps.creative_perspective.outputs.introduction }}"
-        analytical: "{{ steps.analytical_perspective.outputs.analysis }}"
-        synthesis: "{{ steps.balanced_synthesis.outputs.synthesis }}"
+        creative: ${{ steps.creative_perspective.outputs.introduction }}
+        analytical: ${{ steps.analytical_perspective.outputs.analysis }}
+        synthesis: ${{ steps.balanced_synthesis.outputs.synthesis }}
       outputs:
         response_lengths:
           type: object
@@ -161,16 +142,16 @@ workflow:
 
   outputs:
     # Individual agent outputs
-    creative_output: "{{ steps.creative_perspective.outputs }}"
-    analytical_output: "{{ steps.analytical_perspective.outputs }}"
-    balanced_output: "{{ steps.balanced_synthesis.outputs }}"
+    creative_output: ${{ steps.creative_perspective.outputs }}
+    analytical_output: ${{ steps.analytical_perspective.outputs }}
+    balanced_output: ${{ steps.balanced_synthesis.outputs }}
     
     # Comparison metrics
-    agent_performance: "{{ steps.compare_approaches.outputs }}"
+    agent_performance: ${{ steps.compare_approaches.outputs }}
     
     # Topic exploration summary
-    topic_explored: "{{ inputs.topic }}"
-    exploration_summary: "Explored {{ inputs.topic }} through three different agent configurations: creative (temp=0.8), analytical (temp=0.1), and balanced (temp=0.5)"
+    topic_explored: ${{ inputs.topic }}
+    exploration_summary: "Explored ${{ inputs.topic }} through three different agent configurations: creative (temp=0.8), analytical (temp=0.1), and balanced (temp=0.5)"
     
     # Agent configuration details
     agent_configs: {

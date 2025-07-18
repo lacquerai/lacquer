@@ -4,77 +4,68 @@ metadata:
   description: Test workflow for state updates and management
   author: lacquer-team
 
-workflow:
-  inputs:
-    initial_value:
-      type: number
-      description: Initial value for calculations
-      default: 10
-    
-    multiplier:
-      type: number
-      description: Multiplier value
-      default: 3
+inputs:
+  initial_value:
+    type: integer
+    description: Initial value for calculations
+    default: 10
+  
+  multiplier:
+    type: integer
+    description: Multiplier value
+    default: 3
 
+workflow:
   state:
     counter: 0
     total: 0
     operations: []
     metadata:
       workflow_name: "state-test"
-      started_at: "{{ now() }}"
 
   steps:
     - id: initialize_state
       action: update_state
       updates:
-        counter: "{{ inputs.initial_value }}"
-        total: "{{ inputs.initial_value }}"
-        operations: ["initialized"]
+        counter: ${{ inputs.initial_value }}
+        total: ${{ inputs.initial_value }}
+        operations: "initialized"
         metadata.current_step: "initialize"
 
     - id: first_calculation
-      run: |
-        #!/bin/bash
-        current_value=$1
-        multiplier=$2
-        result=$((current_value * multiplier))
-        echo "{\"calculated_value\": $result, \"operation\": \"multiply\"}"
+      run: "go run scripts/calculator.go"
       with:
-        current_value: "{{ state.counter }}"
-        multiplier: "{{ inputs.multiplier }}"
+        current_value: ${{ state.counter }}
+        multiplier: ${{ inputs.multiplier }}
+        operation: "multiply"
       updates:
-        counter: "{{ steps.first_calculation.outputs.calculated_value }}"
-        total: "{{ state.total + steps.first_calculation.outputs.calculated_value }}"
-        operations: "{{ state.operations + [steps.first_calculation.outputs.operation] }}"
+        counter: ${{ steps.first_calculation.outputs.calculated_value }}
+        total: ${{ state.total + steps.first_calculation.outputs.calculated_value }}
+        operations: ${{ state.operations + "|" + steps.first_calculation.outputs.operation }}
         metadata.current_step: "first_calculation"
       outputs:
         calculated_value:
-          type: number
+          type: integer
           description: The calculated value
         operation:
           type: string
           description: The operation performed
 
     - id: second_calculation
-      run: |
-        #!/bin/bash
-        current_value=$1
-        addition=$2
-        result=$((current_value + addition))
-        echo "{\"calculated_value\": $result, \"operation\": \"add\"}"
+      run: "go run scripts/calculator.go"
       with:
-        current_value: "{{ state.counter }}"
+        current_value: ${{ state.counter }}
         addition: 100
+        operation: "add"
       updates:
-        counter: "{{ steps.second_calculation.outputs.calculated_value }}"
-        total: "{{ state.total + steps.second_calculation.outputs.calculated_value }}"
-        operations: "{{ state.operations + [steps.second_calculation.outputs.operation] }}"
+        counter: ${{ steps.second_calculation.outputs.calculated_value }}
+        total: ${{ state.total + steps.second_calculation.outputs.calculated_value }}
+        operations: ${{ state.operations + "|" + steps.second_calculation.outputs.operation }}
         metadata.current_step: "second_calculation"
-        metadata.final_counter: "{{ steps.second_calculation.outputs.calculated_value }}"
+        metadata.final_counter: ${{ steps.second_calculation.outputs.calculated_value }}
       outputs:
         calculated_value:
-          type: number
+          type: integer
           description: The calculated value
         operation:
           type: string
@@ -83,13 +74,12 @@ workflow:
     - id: finalize_state
       action: update_state
       updates:
-        metadata.completed_at: "{{ now() }}"
-        metadata.total_operations: "{{ len(state.operations) }}"
-        final_result: "{{ state.counter }}"
+        metadata.total_operations: ${{ length(state.operations) }}
+        final_result: ${{ state.counter }}
 
   outputs:
-    final_counter: "{{ state.counter }}"
-    total_accumulated: "{{ state.total }}"
-    all_operations: "{{ state.operations }}"
-    workflow_metadata: "{{ state.metadata }}"
-    final_state_result: "{{ state.final_result }}"
+    final_counter: ${{ state.counter }}
+    total_accumulated: ${{ state.total }}
+    all_operations: ${{ state.operations }}
+    workflow_metadata: ${{ state.metadata }}
+    final_state_result: ${{ state.final_result }}

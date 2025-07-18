@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/ast"
@@ -27,6 +26,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	JSON_OUTPUT_SCHEMA_PREFIX = "IMPORTANT: Respond in JSON using the following schema:"
+)
+
 // Executor is the main workflow execution engine
 type Executor struct {
 	templateEngine *expression.TemplateEngine
@@ -36,8 +39,9 @@ type Executor struct {
 	outputParser   *OutputParser
 	progressChan   chan<- events.ExecutionEvent
 	blockManager   *block.Manager
-	dockerExecutor block.Executor
 	runner         *Runner
+
+	execCtx *execcontext.ExecutionContext
 }
 
 // ExecutorConfig contains configuration for the executor
@@ -113,7 +117,7 @@ func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *a
 	toolRegistry := tools.NewRegistry()
 
 	// Initialize tool providers for workflow
-	if err := initializeToolProviders(toolRegistry, workflow, cacheDir, runtimeManager); err != nil {
+	if err := initializeToolProviders(toolRegistry, workflow, cacheDir); err != nil {
 		return nil, fmt.Errorf("failed to initialize tool providers: %w", err)
 	}
 
@@ -130,6 +134,7 @@ func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *a
 
 // ExecuteWorkflow runs a workflow with progress events sent to the given channel
 func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progressChan chan<- events.ExecutionEvent) error {
+	e.execCtx = execCtx
 	e.progressChan = progressChan
 	log.Info().
 		Str("workflow", getWorkflowNameFromContext(execCtx)).
@@ -155,22 +160,19 @@ func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progre
 
 		execCtx.CurrentStepIndex = i
 
-		// Send step started event
-		if e.progressChan != nil {
-			e.progressChan <- events.ExecutionEvent{
-				Type:      events.EventStepStarted,
-				Timestamp: time.Now(),
-				RunID:     execCtx.RunID,
-				StepID:    step.ID,
-				StepIndex: i + 1,
-			}
-		}
-
 		stepStart := time.Now()
 		err := e.executeStep(execCtx, step)
 		stepDuration := time.Since(stepStart)
 
 		if err != nil {
+			if err == errStepSkipped {
+				log.Debug().
+					Str("run_id", execCtx.RunID).
+					Str("step_id", step.ID).
+					Msg("Step skipped")
+				continue
+			}
+
 			log.Error().
 				Err(err).
 				Str("run_id", execCtx.RunID).
@@ -261,6 +263,10 @@ func getWorkflowNameFromContext(execCtx *execcontext.ExecutionContext) string {
 	return "Untitled Workflow"
 }
 
+var (
+	errStepSkipped = fmt.Errorf("step skipped")
+)
+
 // executeStep executes a single workflow step
 func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (err error) {
 	defer func() {
@@ -295,7 +301,17 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 		log.Debug().
 			Str("step_id", step.ID).
 			Msg("Step skipped due to condition")
-		return nil
+		return errStepSkipped
+	}
+
+	if e.progressChan != nil {
+		e.progressChan <- events.ExecutionEvent{
+			Type:      events.EventStepStarted,
+			Timestamp: time.Now(),
+			RunID:     execCtx.RunID,
+			StepID:    step.ID,
+			StepIndex: execCtx.CurrentStepIndex + 1,
+		}
 	}
 
 	var stepOutput map[string]interface{}
@@ -338,7 +354,6 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 		result.Status = execcontext.StepStatusCompleted
 		result.Output = stepOutput
 
-		// Store step outputs for template access
 		for key, value := range stepOutput {
 			execCtx.SetState(fmt.Sprintf("steps.%s.%s", step.ID, key), value)
 		}
@@ -395,314 +410,6 @@ func (e *Executor) parseAgentOutput(step *ast.Step, response string) (map[string
 	return stepOutput, nil
 }
 
-// executeStepsWithConcurrency executes steps with support for concurrent execution
-func (e *Executor) executeStepsWithConcurrency(execCtx *execcontext.ExecutionContext, steps []*ast.Step) error {
-	if e.config.MaxConcurrentSteps <= 1 {
-		// Fall back to sequential execution
-		return e.executeStepsSequentially(execCtx, steps)
-	}
-
-	// Build dependency graph
-	dependencies := e.buildDependencyGraph(steps)
-
-	// Track step completion and execution using sync.Map for thread safety
-	var completed sync.Map
-	var executing sync.Map
-	var stepErrors sync.Map
-
-	// Channel to limit concurrent executions
-	semaphore := make(chan struct{}, e.config.MaxConcurrentSteps)
-
-	// Channel for step completion notifications
-	stepDone := make(chan string, len(steps))
-
-	// Execute steps
-	for {
-		completedCount := 0
-		completed.Range(func(key, value interface{}) bool {
-			completedCount++
-			return true
-		})
-		errorCount := 0
-		stepErrors.Range(func(key, value interface{}) bool {
-			errorCount++
-			return true
-		})
-
-		if completedCount+errorCount >= len(steps) {
-			break
-		}
-		if execCtx.IsCancelled() {
-			return execCtx.Context.Context.Err()
-		}
-
-		// Find steps that are ready to execute (dependencies satisfied)
-		readySteps := e.findReadySteps(steps, dependencies, &completed, &executing, &stepErrors)
-
-		if len(readySteps) == 0 {
-			// Check if we have any steps currently executing
-			hasExecutingSteps := false
-			executing.Range(func(key, value interface{}) bool {
-				if value.(bool) {
-					hasExecutingSteps = true
-					return false // Stop iteration
-				}
-				return true
-			})
-
-			if !hasExecutingSteps {
-				// No steps are executing and none are ready
-				// Check if there are steps that can't proceed due to failed dependencies
-				hasErrors := false
-				stepErrors.Range(func(key, value interface{}) bool {
-					hasErrors = true
-					return false // Stop iteration
-				})
-				if hasErrors {
-					// Some steps failed, so dependent steps can't proceed
-					break
-				}
-				// Otherwise it's a deadlock
-				return fmt.Errorf("workflow execution deadlocked: no steps ready and none executing")
-			}
-
-			// Wait for a step to complete
-			select {
-			case stepID := <-stepDone:
-				// Step completed, continue to next iteration
-				_ = stepID
-			case <-execCtx.Context.Context.Done():
-				return execCtx.Context.Context.Err()
-			}
-			continue
-		}
-
-		// Launch ready steps concurrently
-		for _, step := range readySteps {
-			_, isCompleted := completed.Load(step.ID)
-			_, isExecuting := executing.Load(step.ID)
-			if isCompleted || isExecuting {
-				continue // Skip already completed or executing steps
-			}
-
-			// Mark as executing
-			executing.Store(step.ID, true)
-
-			// Acquire semaphore
-			semaphore <- struct{}{}
-
-			go func(s *ast.Step) {
-				defer func() { <-semaphore }() // Release semaphore
-
-				log.Debug().
-					Str("run_id", execCtx.RunID).
-					Str("step_id", s.ID).
-					Msg("Executing step concurrently")
-
-				err := e.executeStep(execCtx, s)
-				if err != nil {
-					stepErrors.Store(s.ID, err)
-					log.Error().
-						Err(err).
-						Str("run_id", execCtx.RunID).
-						Str("step_id", s.ID).
-						Msg("Step execution failed")
-				} else {
-					completed.Store(s.ID, true)
-				}
-
-				// Clear executing flag
-				executing.Store(s.ID, false)
-
-				// Notify completion
-				stepDone <- s.ID
-			}(step)
-		}
-	}
-
-	// Don't return errors for failed steps - let the workflow complete
-	// The ExecutionSummary will have the correct status based on step results
-	return nil
-}
-
-// executeStepsSequentially executes steps one by one (fallback for sequential execution)
-func (e *Executor) executeStepsSequentially(execCtx *execcontext.ExecutionContext, steps []*ast.Step) error {
-	for i, step := range steps {
-		if execCtx.IsCancelled() {
-			log.Info().Str("run_id", execCtx.RunID).Msg("Workflow execution cancelled")
-			break
-		}
-
-		execCtx.CurrentStepIndex = i
-
-		log.Debug().
-			Str("run_id", execCtx.RunID).
-			Str("step_id", step.ID).
-			Int("step_index", i+1).
-			Int("total_steps", execCtx.TotalSteps).
-			Msg("Executing step")
-
-		if err := e.executeStep(execCtx, step); err != nil {
-			log.Error().
-				Err(err).
-				Str("run_id", execCtx.RunID).
-				Str("step_id", step.ID).
-				Msg("Step execution failed")
-
-			// Mark step as failed
-			result := &execcontext.StepResult{
-				StepID:    step.ID,
-				Status:    execcontext.StepStatusFailed,
-				StartTime: time.Now(),
-				EndTime:   time.Now(),
-				Error:     err,
-			}
-			execCtx.SetStepResult(step.ID, result)
-
-			// Stop execution on error for MVP (no error recovery yet)
-			return err
-		}
-	}
-	return nil
-}
-
-// buildDependencyGraph analyzes steps to determine dependencies based on template variable usage
-func (e *Executor) buildDependencyGraph(steps []*ast.Step) map[string][]string {
-	dependencies := make(map[string][]string)
-
-	for _, step := range steps {
-		deps := e.findStepDependencies(step, steps)
-		if len(deps) > 0 {
-			dependencies[step.ID] = deps
-		}
-	}
-
-	return dependencies
-}
-
-// findStepDependencies finds which other steps this step depends on by analyzing template variables
-func (e *Executor) findStepDependencies(step *ast.Step, allSteps []*ast.Step) []string {
-	var dependencies []string
-
-	// Create a map of step IDs for quick lookup
-	stepIDs := make(map[string]bool)
-	for _, s := range allSteps {
-		stepIDs[s.ID] = true
-	}
-
-	// Check template variables in prompt
-	if step.Prompt != "" {
-		deps := e.extractStepReferences(step.Prompt, stepIDs)
-		dependencies = append(dependencies, deps...)
-	}
-
-	// Check template variables in condition
-	if step.Condition != "" {
-		deps := e.extractStepReferences(step.Condition, stepIDs)
-		dependencies = append(dependencies, deps...)
-	}
-
-	// Check template variables in skip condition
-	if step.SkipIf != "" {
-		deps := e.extractStepReferences(step.SkipIf, stepIDs)
-		dependencies = append(dependencies, deps...)
-	}
-
-	// Check template variables in updates
-	if step.Updates != nil {
-		for _, value := range step.Updates {
-			if strValue, ok := value.(string); ok {
-				deps := e.extractStepReferences(strValue, stepIDs)
-				dependencies = append(dependencies, deps...)
-			}
-		}
-	}
-
-	// Remove duplicates
-	unique := make(map[string]bool)
-	var result []string
-	for _, dep := range dependencies {
-		if !unique[dep] {
-			unique[dep] = true
-			result = append(result, dep)
-		}
-	}
-
-	return result
-}
-
-// extractStepReferences extracts step references like {{ steps.stepname.output }} from template strings
-func (e *Executor) extractStepReferences(template string, validStepIDs map[string]bool) []string {
-	var dependencies []string
-
-	// Use strings.Contains to find patterns - simpler and more reliable
-	for stepID := range validStepIDs {
-		// Look for patterns like {{ steps.stepID.output }}
-		pattern := "{{ steps." + stepID + "."
-		if strings.Contains(template, pattern) {
-			dependencies = append(dependencies, stepID)
-		}
-
-		// Also check for just {{ steps.stepID }} (without property)
-		simplePattern := "{{ steps." + stepID + " }}"
-		if strings.Contains(template, simplePattern) {
-			// Check if not already added
-			found := false
-			for _, dep := range dependencies {
-				if dep == stepID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				dependencies = append(dependencies, stepID)
-			}
-		}
-	}
-
-	return dependencies
-}
-
-// findReadySteps finds steps that have all their dependencies satisfied
-func (e *Executor) findReadySteps(steps []*ast.Step, dependencies map[string][]string, completed *sync.Map, executing *sync.Map, stepErrors *sync.Map) []*ast.Step {
-	var ready []*ast.Step
-
-	for _, step := range steps {
-		_, isCompleted := completed.Load(step.ID)
-		_, isExecuting := executing.Load(step.ID)
-		if isCompleted || isExecuting {
-			continue // Already completed or executing
-		}
-
-		// Skip failed steps
-		if _, hasFailed := stepErrors.Load(step.ID); hasFailed {
-			continue
-		}
-
-		// Check if all dependencies are satisfied
-		deps, hasDeps := dependencies[step.ID]
-		if !hasDeps {
-			// No dependencies, ready to execute
-			ready = append(ready, step)
-			continue
-		}
-
-		allDepsSatisfied := true
-		for _, dep := range deps {
-			if _, isDepCompleted := completed.Load(dep); !isDepCompleted {
-				allDepsSatisfied = false
-				break
-			}
-		}
-
-		if allDepsSatisfied {
-			ready = append(ready, step)
-		}
-	}
-
-	return ready
-}
-
 // executeAgentStep executes a step that uses an AI agent
 func (e *Executor) executeAgentStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (string, *execcontext.TokenUsage, error) {
 	// Get the agent configuration
@@ -735,22 +442,27 @@ func (e *Executor) buildInitialPrompt(execCtx *execcontext.ExecutionContext, ste
 		return "", fmt.Errorf("failed to render prompt template: %w", err)
 	}
 
-	if step.Outputs == nil {
-		return prompt, nil
+	promptString, ok := prompt.(string)
+	if !ok {
+		return "", fmt.Errorf("prompt is not a string")
 	}
 
-	prompt += "\n\n"
-	prompt += "IMPORTANT: Respond in JSON using the following schema:\n"
+	if step.Outputs == nil {
+		return promptString, nil
+	}
+
+	promptString += "\n\n"
+	promptString += JSON_OUTPUT_SCHEMA_PREFIX + "\n"
 
 	jsonSchema, err := json.Marshal(step.Outputs)
 	if err != nil {
-		return prompt, fmt.Errorf("failed to marshal step outputs: %w", err)
+		return promptString, fmt.Errorf("failed to marshal step outputs: %w", err)
 	}
-	prompt += "```json\n"
-	prompt += string(jsonSchema)
-	prompt += "\n```"
+	promptString += "```json\n"
+	promptString += string(jsonSchema)
+	promptString += "\n```"
 
-	return prompt, nil
+	return promptString, nil
 }
 
 // executeConversationWithTools handles multi-turn conversation with tool calling
@@ -798,6 +510,7 @@ func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionCo
 
 		actionID := fmt.Sprintf("turn-%d", turn)
 		prompt := getLastContentBlock(messages)
+		prompt = RemoveJSONSchema(prompt)
 		e.progressChan <- events.NewPromptAgentEvent(step.ID, actionID, execCtx.RunID, prompt)
 
 		responseMessages, tokenUsage, err := pr.Generate(provider.GenerateContext{
@@ -874,10 +587,15 @@ func (e *Executor) createModelRequestWithTools(agent *ast.Agent, messages []prov
 
 // createLocalRequest creates a local request with tools
 func (e *Executor) createLocalRequest(agent *ast.Agent, messages []provider.Message) (*provider.Request, error) {
+	systemPrompt, err := e.templateEngine.Render(agent.SystemPrompt, e.execCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render system prompt: %w", err)
+	}
+
 	request := &provider.Request{
 		Model:        agent.Model,
 		Messages:     messages,
-		SystemPrompt: agent.SystemPrompt,
+		SystemPrompt: fmt.Sprintf("%s", systemPrompt),
 		Temperature:  agent.Temperature,
 		MaxTokens:    agent.MaxTokens,
 		TopP:         agent.TopP,
@@ -891,10 +609,15 @@ func (e *Executor) createLocalRequest(agent *ast.Agent, messages []provider.Mess
 
 // createAnthropicRequestWithTools creates an Anthropic request with tools
 func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, messages []provider.Message) (*provider.Request, error) {
+	systemPrompt, err := e.templateEngine.Render(agent.SystemPrompt, e.execCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render system prompt: %w", err)
+	}
+
 	request := &provider.Request{
 		Model:        agent.Model,
 		Messages:     messages,
-		SystemPrompt: agent.SystemPrompt,
+		SystemPrompt: fmt.Sprintf("%s", systemPrompt),
 		Temperature:  agent.Temperature,
 		MaxTokens:    agent.MaxTokens,
 		TopP:         agent.TopP,
@@ -909,10 +632,15 @@ func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, messages []
 
 // createOpenAIRequestWithTools creates an OpenAI request with tools
 func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, messages []provider.Message) (*provider.Request, error) {
+	systemPrompt, err := e.templateEngine.Render(agent.SystemPrompt, e.execCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render system prompt: %w", err)
+	}
+
 	request := &provider.Request{
 		Model:        agent.Model,
 		Messages:     messages,
-		SystemPrompt: agent.SystemPrompt,
+		SystemPrompt: fmt.Sprintf("%s", systemPrompt),
 		Temperature:  agent.Temperature,
 		MaxTokens:    agent.MaxTokens,
 		TopP:         agent.TopP,
@@ -1029,20 +757,10 @@ func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step
 		inputs[key] = rendered
 	}
 
-	scriptContent := step.Run
-	if strings.HasPrefix(step.Run, "./") || strings.HasPrefix(step.Run, "/") {
-		// load the script from the file
-		contentBytes, err := os.ReadFile(step.Run)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read script file %s: %w", step.Run, err)
-		}
-		scriptContent = string(contentBytes)
-	}
-
 	tempBlock := &block.Block{
 		Name:    fmt.Sprintf("script-%s", step.ID),
 		Runtime: block.RuntimeBash,
-		Script:  scriptContent,
+		Script:  step.Run,
 	}
 
 	outputs, err := e.blockManager.ExecuteRawBlock(execCtx, tempBlock, inputs)
@@ -1079,21 +797,7 @@ func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, s
 		Image:   step.Container,
 		Inputs:  make(map[string]block.InputSchema),
 		Outputs: make(map[string]block.OutputSchema),
-		Command: []string{"sh", "-c", `
-			# Extract the inputs from LACQUER_INPUTS environment variable
-			if echo "$LACQUER_INPUTS" | grep -q '"message"'; then
-				echo '{"outputs": {"message": "processed"}}'
-			elif echo "$LACQUER_INPUTS" | grep -q '"text"'; then
-				echo '{"outputs": {"result": "processed"}}'
-			else
-				echo '{"outputs": {"status": "completed"}}'
-			fi
-		`},
-	}
-
-	// Validate the block before execution
-	if err := e.dockerExecutor.Validate(tempBlock); err != nil {
-		return nil, fmt.Errorf("container validation failed: %w", err)
+		Command: step.Command,
 	}
 
 	// Define dynamic inputs based on step.With
@@ -1105,12 +809,14 @@ func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, s
 	}
 
 	// Execute using Docker executor
-	outputs, err := e.dockerExecutor.Execute(execCtx, tempBlock, inputs)
+	outputs, err := e.blockManager.ExecuteRawBlock(execCtx, tempBlock, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("container execution failed: %w", err)
 	}
 
-	return outputs, nil
+	return map[string]interface{}{
+		"outputs": outputs,
+	}, nil
 }
 
 // executeActionStep executes a step that performs a system action
@@ -1160,27 +866,6 @@ func (e *Executor) evaluateSkipCondition(execCtx *execcontext.ExecutionContext, 
 	}
 
 	return false, nil
-}
-
-// validateInputs validates that required inputs are provided
-func (e *Executor) validateInputs(workflow *ast.Workflow, inputs map[string]interface{}) error {
-	if workflow.Workflow.Inputs == nil {
-		return nil
-	}
-
-	for name, param := range workflow.Workflow.Inputs {
-		if param.Required {
-			if _, exists := inputs[name]; !exists {
-				if param.Default == nil {
-					return fmt.Errorf("required input %s is missing", name)
-				}
-				// Set default value
-				inputs[name] = param.Default
-			}
-		}
-	}
-
-	return nil
 }
 
 // renderValueRecursively renders template variables in nested structures
@@ -1278,8 +963,8 @@ func initializeRequiredProviders(registry *provider.Registry, requiredProviders 
 }
 
 // initializeToolProviders initializes tool providers for the workflow
-func initializeToolProviders(toolRegistry *tools.Registry, workflow *ast.Workflow, cacheDir string, runtimeManager *runtime.Manager) error {
-	scriptProvider, err := script.NewScriptToolProvider("local", cacheDir, runtimeManager)
+func initializeToolProviders(toolRegistry *tools.Registry, workflow *ast.Workflow, cacheDir string) error {
+	scriptProvider, err := script.NewScriptToolProvider("local", cacheDir)
 	if err != nil {
 		return fmt.Errorf("failed to create script tool provider: %w", err)
 	}
@@ -1367,4 +1052,54 @@ func getLastContentBlock(responseMessages []provider.Message) string {
 	}
 
 	return ""
+}
+
+func RemoveJSONSchema(input string) string {
+	lines := strings.Split(input, "\n")
+
+	// Find the last occurrence of the IMPORTANT line
+	importantLineIndex := -1
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], JSON_OUTPUT_SCHEMA_PREFIX) {
+			importantLineIndex = i
+			break
+		}
+	}
+
+	// If not found, return original
+	if importantLineIndex == -1 {
+		return input
+	}
+
+	// Look for the pattern: code block start, JSON content, code block end
+	foundCodeBlockStart := false
+
+	for i := importantLineIndex + 1; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+
+		if !foundCodeBlockStart && strings.HasPrefix(line, "```") {
+			foundCodeBlockStart = true
+			continue
+		}
+
+		if foundCodeBlockStart && line == "```" {
+			// Check if this is the last non-empty content
+			hasContentAfter := false
+			for j := i + 1; j < len(lines); j++ {
+				if strings.TrimSpace(lines[j]) != "" {
+					hasContentAfter = true
+					break
+				}
+			}
+
+			// If no content after, remove from importantLineIndex to end
+			if !hasContentAfter {
+				result := strings.Join(lines[:importantLineIndex], "\n")
+				return strings.TrimRight(result, " \t\n")
+			}
+			break
+		}
+	}
+
+	return input
 }

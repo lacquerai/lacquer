@@ -11,6 +11,8 @@ import (
 
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
+	"github.com/google/uuid"
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 type Spinner interface {
@@ -23,6 +25,7 @@ type Spinner interface {
 // TestSpinner is a spinner implementation for testing that outputs each
 // spinner update on a new line instead of clearing and redrawing
 type TestSpinner struct {
+	ID         string
 	mu         *sync.RWMutex
 	Delay      time.Duration
 	chars      []string
@@ -43,7 +46,10 @@ type TestOption func(*TestSpinner)
 
 // New provides a pointer to an instance of TestSpinner with the supplied options.
 func NewTestSpinner(cs []string, d time.Duration, options ...TestOption) *TestSpinner {
+	// Generate a random 7-character ID
+	id := uuid.New().String()[:7]
 	s := &TestSpinner{
+		ID:         id,
 		Delay:      d,
 		chars:      cs,
 		color:      color.New(color.FgWhite).SprintFunc(),
@@ -63,7 +69,50 @@ func NewTestSpinner(cs []string, d time.Duration, options ...TestOption) *TestSp
 }
 
 func (s *TestSpinner) SetSuffix(suffix string) {
-	fmt.Fprintf(s.Writer, "[SET SUFFIX] %s\n", suffix)
+	if !s.active {
+		s.Suffix = suffix
+		return
+	}
+
+	oldSuffix := s.Suffix
+
+	// No change, don't print anything
+	if oldSuffix == suffix {
+		return
+	}
+
+	// Create diff using diffmatchpatch
+	dmp := diffmatchpatch.New()
+	diffs := dmp.DiffMain(oldSuffix, suffix, false)
+
+	// Cleanup the diffs for better readability
+	diffs = dmp.DiffCleanupSemantic(diffs)
+
+	// Format the diff output
+	var diffParts []string
+	hasChanges := false
+
+	for _, diff := range diffs {
+		switch diff.Type {
+		case diffmatchpatch.DiffDelete:
+			if diff.Text != "" {
+				diffParts = append(diffParts, fmt.Sprintf("-%s", diff.Text))
+				hasChanges = true
+			}
+		case diffmatchpatch.DiffInsert:
+			if diff.Text != "" {
+				diffParts = append(diffParts, fmt.Sprintf("+%s", diff.Text))
+				hasChanges = true
+			}
+		}
+	}
+
+	// Only print if there are actual changes
+	if hasChanges {
+		diffOutput := strings.Join(diffParts, "")
+		fmt.Fprintf(s.Writer, "[%s] %s\n", s.ID, strings.TrimRight(diffOutput, "\n"))
+	}
+
 	s.Suffix = suffix
 }
 
@@ -79,7 +128,7 @@ func (s *TestSpinner) Start() {
 	s.mu.Unlock()
 
 	// Output start message
-	fmt.Fprintf(s.Writer, "[SPINNER START]\n")
+	fmt.Fprintf(s.Writer, "[Spinner %s]:%s\n", s.ID, s.Suffix)
 }
 
 // Stop stops the indicator.
@@ -89,12 +138,7 @@ func (s *TestSpinner) Stop() {
 	if s.active {
 		s.active = false
 
-		// Output stop message
-		fmt.Fprintf(s.Writer, "[SPINNER STOP]\n")
-
-		if s.FinalMSG != "" {
-			fmt.Fprintf(s.Writer, "[FINAL MSG] %s\n", s.FinalMSG)
-		}
+		fmt.Fprintf(s.Writer, "[Finish %s]%s\n", s.ID, s.FinalMSG)
 
 		s.stopChan <- struct{}{}
 	}

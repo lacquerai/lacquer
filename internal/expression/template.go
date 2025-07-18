@@ -9,7 +9,7 @@ import (
 	"github.com/lacquerai/lacquer/internal/execcontext"
 )
 
-var expressionPattern = regexp.MustCompile(`\{\{\s*(.*?)\s*\}\}`)
+var expressionPattern = regexp.MustCompile(`\$\{\{\s*(.*?)\s*\}\}`)
 
 // TemplateEngine handles variable interpolation and template rendering
 type TemplateEngine struct {
@@ -25,9 +25,9 @@ func NewTemplateEngine() *TemplateEngine {
 }
 
 // Render renders a template string with variables from the execution context
-func (te *TemplateEngine) Render(template string, execCtx *execcontext.ExecutionContext) (string, error) {
+func (te *TemplateEngine) Render(template string, execCtx *execcontext.ExecutionContext) (interface{}, error) {
 	if template == "" {
-		return "", nil
+		return nil, nil
 	}
 
 	// Find all expressions
@@ -50,6 +50,10 @@ func (te *TemplateEngine) Render(template string, execCtx *execcontext.Execution
 		value, err := te.expressionEvaluator.Evaluate(rawExpression, execCtx)
 		if err != nil {
 			return "", fmt.Errorf("failed to evaluate expression %s: %w", rawExpression, err)
+		}
+
+		if len(matches) == 1 {
+			return value, nil
 		}
 
 		strValue := valueToString(value)
@@ -128,9 +132,10 @@ func (vr *VariableResolver) ResolveVariable(varPath string, execCtx *execcontext
 		return vr.resolveNestedPath(value, parts[2:])
 
 	case "state":
-		if len(parts) < 2 {
-			return nil, fmt.Errorf("state variable requires a key name")
+		if len(parts) == 1 {
+			return execCtx.GetAllState(), nil
 		}
+
 		value, exists := execCtx.GetState(parts[1])
 		if !exists {
 			return nil, fmt.Errorf("state variable %s not found", parts[1])

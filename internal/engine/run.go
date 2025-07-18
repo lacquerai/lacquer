@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/events"
 	"github.com/lacquerai/lacquer/internal/execcontext"
@@ -116,13 +114,11 @@ type ActionState struct {
 }
 
 type Runner struct {
-	maxRetries      int
 	progressTracker ProgressTracker
 }
 
-func NewRunner(maxRetries int, progressTracker ProgressTracker) *Runner {
+func NewRunner(progressTracker ProgressTracker) *Runner {
 	return &Runner{
-		maxRetries:      maxRetries,
 		progressTracker: progressTracker,
 	}
 }
@@ -132,7 +128,6 @@ func (r *Runner) RunWorkflowRaw(execCtx *execcontext.ExecutionContext, workflow 
 		MaxConcurrentSteps: 3,
 		DefaultTimeout:     5 * time.Minute,
 		EnableRetries:      true,
-		MaxRetries:         r.maxRetries,
 	}
 	executor, err := NewExecutor(execCtx.Context, executorConfig, workflow, nil, r)
 	if err != nil {
@@ -213,7 +208,7 @@ func (r *Runner) RunWorkflow(ctx execcontext.RunContext, workflowFile string, in
 		workflowInputs[k] = v
 	}
 
-	for k, v := range workflow.Workflow.Inputs {
+	for k, v := range workflow.Inputs {
 		if _, ok := workflowInputs[k]; !ok && v.Default != nil {
 			workflowInputs[k] = v.Default
 		}
@@ -258,6 +253,14 @@ type ProgressTracker interface {
 	StartTracking(progressChan <-chan events.ExecutionEvent, result *ExecutionResult)
 	StopTracking(result *ExecutionResult)
 }
+
+// NoopProgressTracker is a progress tracker that does nothing
+type NoopProgressTracker struct{}
+
+func (n *NoopProgressTracker) StartTracking(progressChan <-chan events.ExecutionEvent, result *ExecutionResult) {
+}
+
+func (n *NoopProgressTracker) StopTracking(result *ExecutionResult) {}
 
 // ProgressTracker manages the visual progress display for all steps
 type CLIProgressTracker struct {
@@ -519,65 +522,4 @@ func getWorkflowName(workflow *ast.Workflow) string {
 		return workflow.Metadata.Name
 	}
 	return "Untitled Workflow"
-}
-
-func outputResults(w io.Writer, result ExecutionResult) {
-	outputFormat := viper.GetString("output")
-
-	switch outputFormat {
-	case "json":
-		style.PrintJSON(w, result)
-	case "yaml":
-		style.PrintYAML(w, result)
-	default:
-		printExecutionSummary(w, result)
-	}
-}
-
-func printExecutionSummary(w io.Writer, result ExecutionResult) {
-	if viper.GetBool("quiet") {
-		return
-	}
-
-	fmt.Fprintf(w, "\n")
-
-	// Show success or failure with duration
-	if result.Status == "completed" {
-		fmt.Fprintf(w, "%s Workflow completed %s (%s)\n", style.SuccessIcon(), style.SuccessStyle.Render("successfully"), formatDuration(result.Duration))
-
-	} else {
-		fmt.Fprintf(w, "%s Workflow failed\n\n", style.ErrorIcon())
-		// Show error details for failures
-		if result.Error != "" {
-			fmt.Fprintf(w, "%s\n", style.ErrorStyle.Render(result.Error))
-		}
-	}
-
-	if len(result.Outputs) > 0 {
-		var outputContent strings.Builder
-		outputContent.WriteString("\n")
-		outputContent.WriteString(lipgloss.NewStyle().Bold(true).Underline(true).Render("Outputs"))
-		outputContent.WriteString("\n\n")
-		var i int
-		keys := make([]string, 0, len(result.Outputs))
-		for k := range result.Outputs {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			v := result.Outputs[k]
-			outputContent.WriteString(lipgloss.NewStyle().Bold(true).Underline(true).Render(k))
-			outputContent.WriteString(fmt.Sprintf(": %v", v))
-			if i < len(result.Outputs)-1 {
-				outputContent.WriteString("\n")
-			}
-			i++
-		}
-		fmt.Fprintf(w, "%s\n", outputContent.String())
-	}
-
-}
-
-func formatDuration(duration time.Duration) string {
-	return fmt.Sprintf("%.2fs", duration.Seconds())
 }

@@ -1,10 +1,8 @@
 
 Running hello-world workflow (1 steps)
 
-[SET SUFFIX]  Running step say_hello (1/1)
-[SPINNER START]
-[SPINNER STOP]
-[FINAL MSG] ✓  Running step say_hello (1/1)
+[Spinner b7b04ba]: Running step say_hello (1/1)
+[Finish b7b04ba]✓  Running step say_hello (1/1)
 
 
 ✓ Workflow completed successfully (TIME)

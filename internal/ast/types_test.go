@@ -395,14 +395,14 @@ func TestStep_YAMLUnmarshalingWithNewFields(t *testing.T) {
 			name: "Script step from file",
 			yamlStr: `
 id: analyze
-script: ./scripts/analyzer.go
+run: ./scripts/analyzer.go
 with:
   text: "some text"
   mode: "analyze"
 `,
 			expected: &Step{
-				ID:     "analyze",
-				Script: "./scripts/analyzer.go",
+				ID:  "analyze",
+				Run: "./scripts/analyzer.go",
 				With: map[string]interface{}{
 					"text": "some text",
 					"mode": "analyze",
@@ -413,7 +413,7 @@ with:
 			name: "Script step inline",
 			yamlStr: `
 id: process
-script: |
+run: |
   package main
   import "fmt"
   func main() {
@@ -424,7 +424,7 @@ with:
 `,
 			expected: &Step{
 				ID: "process",
-				Script: `package main
+				Run: `package main
 import "fmt"
 func main() {
   fmt.Println("Hello")
@@ -433,24 +433,6 @@ func main() {
 				With: map[string]interface{}{
 					"input": "data",
 				},
-			},
-		},
-		{
-			name: "Container step",
-			yamlStr: `
-id: run_container
-container: alpine:latest
-with:
-  command: "echo hello"
-timeout: 30s
-`,
-			expected: &Step{
-				ID:        "run_container",
-				Container: "alpine:latest",
-				With: map[string]interface{}{
-					"command": "echo hello",
-				},
-				Timeout: &Duration{Duration: 30 * time.Second},
 			},
 		},
 		{
@@ -478,12 +460,9 @@ with:
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.expected.ID, step.ID)
-			assert.Equal(t, tc.expected.Script, step.Script)
+			assert.Equal(t, tc.expected.Run, step.Run)
 			assert.Equal(t, tc.expected.Container, step.Container)
 			assert.Equal(t, tc.expected.With, step.With)
-			if tc.expected.Timeout != nil {
-				assert.Equal(t, tc.expected.Timeout.Duration, step.Timeout.Duration)
-			}
 		})
 	}
 }

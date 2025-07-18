@@ -84,8 +84,8 @@ func (sv *SemanticValidator) buildValidationContext(ctx *validationContext) {
 	}
 
 	// Collect inputs
-	if w.Workflow != nil && w.Workflow.Inputs != nil {
-		for name, param := range w.Workflow.Inputs {
+	if w.Inputs != nil {
+		for name, param := range w.Inputs {
 			ctx.inputs[name] = param
 		}
 	}
@@ -155,6 +155,10 @@ func (sv *SemanticValidator) validateStepDependencies(ctx *validationContext, re
 	for i, step := range steps {
 		deps := dependencies[step.ID]
 		for _, depStepID := range deps {
+			// Allow self-references - a step can reference itself
+			if depStepID == step.ID {
+				continue
+			}
 			if depIndex, exists := ctx.stepIDs[depStepID]; exists {
 				if depIndex >= i {
 					result.AddError(
@@ -213,6 +217,11 @@ func (sv *SemanticValidator) hasCycle(stepID string, dependencies map[string][]s
 	recursionStack[stepID] = true
 
 	for _, dep := range dependencies[stepID] {
+		// Skip self-references - they are allowed and don't constitute a cycle
+		if dep == stepID {
+			continue
+		}
+
 		if !visited[dep] {
 			if sv.hasCycle(dep, dependencies, visited, recursionStack) {
 				return true
@@ -334,12 +343,6 @@ func (sv *SemanticValidator) validateResourceUsage(ctx *validationContext, resul
 						// Note: high token limit detected - consider breaking into smaller steps
 						result.AddWarning(stepPath+".agent", "high token limit detected - consider breaking into smaller steps")
 					}
-				}
-			}
-
-			if step.Retry != nil {
-				if step.Retry.MaxAttempts > 10 {
-					result.AddWarning(stepPath+".retry.max_attempts", "excessive retry attempts (>10) may cause long delays")
 				}
 			}
 		}

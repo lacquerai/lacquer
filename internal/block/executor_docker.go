@@ -3,10 +3,14 @@ package block
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/execcontext"
@@ -14,13 +18,15 @@ import (
 
 // DockerExecutor executes Docker blocks
 type DockerExecutor struct {
-	pullTimeout time.Duration
+	pullTimeout  time.Duration
+	buildTimeout time.Duration
 }
 
 // NewDockerExecutor creates a new Docker block executor
 func NewDockerExecutor() *DockerExecutor {
 	return &DockerExecutor{
-		pullTimeout: 5 * time.Minute,
+		pullTimeout:  5 * time.Minute,
+		buildTimeout: 10 * time.Minute,
 	}
 }
 
@@ -33,9 +39,14 @@ func (e *DockerExecutor) Validate(block *Block) error {
 		return fmt.Errorf("docker block missing image")
 	}
 
-	// Check if Docker is available
 	if err := e.checkDockerAvailable(); err != nil {
 		return fmt.Errorf("docker not available: %w", err)
+	}
+
+	if e.isLocalPath(block.Image) {
+		if err := e.validateLocalPath(block.Image); err != nil {
+			return fmt.Errorf("invalid local path: %w", err)
+		}
 	}
 
 	return nil
@@ -43,18 +54,26 @@ func (e *DockerExecutor) Validate(block *Block) error {
 
 // Execute runs a Docker block
 func (e *DockerExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
-	// Pull image if not present
-	if err := e.pullImageIfNeeded(execCtx.Context.Context, block.Image); err != nil {
-		return nil, fmt.Errorf("failed to pull image: %w", err)
+	var imageName string
+	var err error
+
+	if e.isLocalPath(block.Image) {
+		imageName, err = e.buildImageFromLocal(execCtx, block.Image, execCtx.Cwd)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build image from local path: %w", err)
+		}
+	} else {
+		imageName = block.Image
+		if err := e.pullImageIfNeeded(execCtx.Context.Context, imageName); err != nil {
+			return nil, fmt.Errorf("failed to pull image: %w", err)
+		}
 	}
 
-	// Prepare execution input
 	execInput := ExecutionInput{
 		Inputs: inputs,
 		Env:    make(map[string]string),
 	}
 
-	// Add environment variables from block config
 	for key, value := range block.Env {
 		execInput.Env[key] = value
 	}
@@ -64,31 +83,18 @@ func (e *DockerExecutor) Execute(execCtx *execcontext.ExecutionContext, block *B
 		return nil, fmt.Errorf("failed to marshal input: %w", err)
 	}
 
-	// Build Docker run command
 	args := []string{"run", "--rm"}
-
-	// Add LACQUER_INPUTS environment variable with the execution input
 	args = append(args, "-e", fmt.Sprintf("LACQUER_INPUTS=%s", string(inputJSON)))
-
-	// Add environment variables from block config
 	for key, value := range execInput.Env {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Mount workspace if specified
-	if execCtx.Cwd != "" {
-		args = append(args, "-v", fmt.Sprintf("%s:/workspace", execCtx.Cwd))
-	}
+	args = append(args, imageName)
 
-	// Add image
-	args = append(args, block.Image)
-
-	// Add command if specified
 	if len(block.Command) > 0 {
 		args = append(args, block.Command...)
 	}
 
-	// Execute Docker container
 	cmd := exec.CommandContext(execCtx.Context.Context, "docker", args...)
 
 	var stdout, stderr bytes.Buffer
@@ -111,10 +117,139 @@ func (e *DockerExecutor) Execute(execCtx *execcontext.ExecutionContext, block *B
 	// Parse output
 	var output map[string]interface{}
 	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		return nil, fmt.Errorf("failed to parse container output: %w", err)
+		return map[string]interface{}{
+			"output": stdout.String(),
+		}, nil
 	}
 
 	return output, nil
+}
+
+// isLocalPath determines if the image reference is a local path
+func (e *DockerExecutor) isLocalPath(image string) bool {
+	// Check for common patterns that indicate local paths
+	return strings.HasPrefix(image, "./") ||
+		strings.HasPrefix(image, "../") ||
+		strings.Contains(image, "/Dockerfile") ||
+		image == "Dockerfile" ||
+		(strings.Contains(image, "/") && !strings.Contains(image, ":") && !strings.Contains(image, "@"))
+}
+
+// validateLocalPath validates that a local path exists and is accessible
+func (e *DockerExecutor) validateLocalPath(path string) error {
+	// Resolve the path
+	resolvedPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
+
+	// Check if path exists
+	info, err := os.Stat(resolvedPath)
+	if err != nil {
+		return fmt.Errorf("path does not exist: %w", err)
+	}
+
+	// If it's a directory, check for Dockerfile
+	if info.IsDir() {
+		dockerfilePath := filepath.Join(resolvedPath, "Dockerfile")
+		if _, err := os.Stat(dockerfilePath); err != nil {
+			return fmt.Errorf("directory does not contain Dockerfile: %w", err)
+		}
+	} else {
+		// If it's a file, ensure it's named Dockerfile
+		if filepath.Base(resolvedPath) != "Dockerfile" {
+			return fmt.Errorf("file must be named 'Dockerfile'")
+		}
+	}
+
+	return nil
+}
+
+// buildImageFromLocal builds a Docker image from a local path
+func (e *DockerExecutor) buildImageFromLocal(execCtx *execcontext.ExecutionContext, imagePath string, workspaceDir string) (string, error) {
+	var buildContext, dockerfilePath string
+
+	if filepath.IsAbs(imagePath) {
+		buildContext = filepath.Dir(imagePath)
+		dockerfilePath = imagePath
+	} else {
+		if workspaceDir != "" {
+			buildContext = filepath.Join(workspaceDir, filepath.Dir(imagePath))
+			dockerfilePath = filepath.Join(workspaceDir, imagePath)
+		} else {
+			buildContext = filepath.Dir(imagePath)
+			dockerfilePath = imagePath
+		}
+	}
+
+	buildContext, err := filepath.Abs(buildContext)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve build context: %w", err)
+	}
+
+	dockerfilePath, err = filepath.Abs(dockerfilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve dockerfile path: %w", err)
+	}
+
+	if info, err := os.Stat(dockerfilePath); err == nil && info.IsDir() {
+		buildContext = dockerfilePath
+		dockerfilePath = filepath.Join(dockerfilePath, "Dockerfile")
+	}
+
+	imageName, err := e.generateImageName(dockerfilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate image name: %w", err)
+	}
+
+	if e.imageExists(execCtx.Context.Context, imageName) {
+		return imageName, nil
+	}
+
+	buildCtx, cancel := context.WithTimeout(execCtx.Context.Context, e.buildTimeout)
+	defer cancel()
+	relDockerfilePath, err := filepath.Rel(buildContext, dockerfilePath)
+	if err != nil {
+		relDockerfilePath = "Dockerfile"
+	}
+
+	args := []string{"build", "-t", imageName, "-f", relDockerfilePath, buildContext}
+	cmd := exec.CommandContext(buildCtx, "docker", args...)
+	cmd.Dir = buildContext
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to build image %s: %s", imageName, stderr.String())
+	}
+
+	return imageName, nil
+}
+
+// generateImageName generates a unique image name based on dockerfile path and content
+func (e *DockerExecutor) generateImageName(dockerfilePath string) (string, error) {
+	// Read dockerfile content for hashing
+	content, err := os.ReadFile(dockerfilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read dockerfile: %w", err)
+	}
+
+	// Create hash of path and content
+	hasher := sha256.New()
+	hasher.Write([]byte(dockerfilePath))
+	hasher.Write(content)
+	hash := fmt.Sprintf("%x", hasher.Sum(nil))[:12] // Use first 12 chars
+
+	// Generate image name
+	imageName := fmt.Sprintf("lacquer-local:%s", hash)
+	return imageName, nil
+}
+
+// imageExists checks if a Docker image exists locally
+func (e *DockerExecutor) imageExists(ctx context.Context, imageName string) bool {
+	cmd := exec.CommandContext(ctx, "docker", "image", "inspect", imageName)
+	return cmd.Run() == nil
 }
 
 func (e *DockerExecutor) checkDockerAvailable() error {

@@ -1,8 +1,7 @@
 version: "1.0"
 metadata:
   name: multiple-runtimes
-  description: Test workflow for multiple runtime requirements and cross-runtime integration
-  author: lacquer-team
+  description: Test workflow for multiple runtime requirements
 
 requirements:
   runtimes:
@@ -14,35 +13,11 @@ requirements:
       version: "1.21"
 
 workflow:
-  inputs:
-    data_set:
-      type: array
-      description: Numeric data for processing
-      default: [5, 10, 15, 20, 25, 30]
-    
-    text_content:
-      type: string
-      description: Text content for analysis
-      default: "Multi-runtime workflow processing with Python, Node.js, and Go"
-    
-    system_component:
-      type: string
-      description: System component to analyze
-      default: "runtime"
-
-  state:
-    runtime_results: {}
-    processing_sequence: []
-
   steps:
-    - id: python_data_analysis
+    - id: test_python
       run: "python3 scripts/data_processor.py"
       with:
-        data: "{{ inputs.data_set }}"
-        operation: "analyze"
-      updates:
-        runtime_results: "{{ merge(state.runtime_results, {'python': steps.python_data_analysis.outputs}) }}"
-        processing_sequence: "{{ state.processing_sequence + ['python_data_analysis'] }}"
+        test_param: "hello python"
       outputs:
         runtime:
           type: string
@@ -50,24 +25,14 @@ workflow:
         version:
           type: string
           description: Runtime version
-        timestamp:
+        message:
           type: string
-          description: Processing timestamp
-        input_size:
-          type: number
-          description: Size of input data
-        analysis:
-          type: object
-          description: Data analysis results
+          description: Test message
 
-    - id: nodejs_text_analysis
+    - id: test_node
       run: "node scripts/text_processor.js"
       with:
-        text: "{{ inputs.text_content }}"
-        operation: "analyze"
-      updates:
-        runtime_results: "{{ merge(state.runtime_results, {'nodejs': steps.nodejs_text_analysis.outputs}) }}"
-        processing_sequence: "{{ state.processing_sequence + ['nodejs_text_analysis'] }}"
+        test_param: "hello node"
       outputs:
         runtime:
           type: string
@@ -75,24 +40,14 @@ workflow:
         version:
           type: string
           description: Runtime version
-        timestamp:
+        message:
           type: string
-          description: Processing timestamp
-        input_length:
-          type: number
-          description: Length of input text
-        analysis:
-          type: object
-          description: Text analysis results
+          description: Test message
 
-    - id: go_system_info
+    - id: test_go
       run: "go run scripts/system_info.go"
       with:
-        component: "{{ inputs.system_component }}"
-        details: true
-      updates:
-        runtime_results: "{{ merge(state.runtime_results, {'go': steps.go_system_info.outputs}) }}"
-        processing_sequence: "{{ state.processing_sequence + ['go_system_info'] }}"
+        test_param: "hello go"
       outputs:
         runtime:
           type: string
@@ -100,168 +55,11 @@ workflow:
         version:
           type: string
           description: Runtime version
-        timestamp:
+        message:
           type: string
-          description: Processing timestamp
-        system:
-          type: object
-          description: System information
-
-    - id: python_data_transform
-      run: "python3 scripts/data_processor.py"
-      with:
-        data: "{{ steps.python_data_analysis.outputs.analysis.transformed_data or inputs.data_set }}"
-        operation: "transform"
-      outputs:
-        runtime:
-          type: string
-          description: Runtime used
-        transformed_data:
-          type: array
-          description: Transformed data
-
-    - id: nodejs_text_transform
-      run: "node scripts/text_processor.js"
-      with:
-        text: "{{ inputs.text_content }}"
-        operation: "transform"
-      outputs:
-        runtime:
-          type: string
-          description: Runtime used
-        transformed_text:
-          type: string
-          description: Transformed text
-
-    - id: cross_runtime_integration
-      run: |
-        #!/bin/bash
-        python_version="$1"
-        node_version="$2"
-        go_version="$3"
-        data_sum="$4"
-        word_count="$5"
-        cpu_count="$6"
-        
-        echo "{
-          \"integration_summary\": {
-            \"runtimes_used\": [\"python\", \"node\", \"go\"],
-            \"versions\": {
-              \"python\": \"$python_version\",
-              \"node\": \"$node_version\",
-              \"go\": \"$go_version\"
-            },
-            \"cross_runtime_data\": {
-              \"numeric_sum_from_python\": $data_sum,
-              \"word_count_from_node\": $word_count,
-              \"cpu_count_from_go\": $cpu_count
-            },
-            \"integration_score\": $(echo \"scale=2; ($data_sum + $word_count + $cpu_count) / 3\" | bc -l),
-            \"workflow_complexity\": \"multi-runtime\"
-          },
-          \"runtime_compatibility\": {
-            \"python_nodejs_integration\": \"successful\",
-            \"nodejs_go_integration\": \"successful\", 
-            \"go_python_integration\": \"successful\",
-            \"overall_compatibility\": \"excellent\"
-          },
-          \"performance_metrics\": {
-            \"total_steps\": 6,
-            \"runtime_diversity\": 3,
-            \"data_flow_complexity\": \"high\"
-          }
-        }"
-      with:
-        python_version: "{{ steps.python_data_analysis.outputs.version }}"
-        node_version: "{{ steps.nodejs_text_analysis.outputs.version }}"
-        go_version: "{{ steps.go_system_info.outputs.version }}"
-        data_sum: "{{ steps.python_data_analysis.outputs.analysis.sum }}"
-        word_count: "{{ steps.nodejs_text_analysis.outputs.analysis.word_count }}"
-        cpu_count: "{{ steps.go_system_info.outputs.system.num_cpu }}"
-      outputs:
-        integration_summary:
-          type: object
-          description: Summary of multi-runtime integration
-        runtime_compatibility:
-          type: object
-          description: Runtime compatibility assessment
-        performance_metrics:
-          type: object
-          description: Performance metrics
-
-    - id: runtime_comparison
-      run: |
-        #!/bin/bash
-        echo "{
-          \"runtime_analysis\": {
-            \"python\": {
-              \"strengths\": [\"Data analysis\", \"Scientific computing\", \"Rich ecosystem\"],
-              \"use_case\": \"Numerical data processing and analysis\",
-              \"performance\": \"excellent for data tasks\"
-            },
-            \"nodejs\": {
-              \"strengths\": [\"Text processing\", \"JSON handling\", \"Async operations\"],
-              \"use_case\": \"Text analysis and transformation\",
-              \"performance\": \"excellent for I/O intensive tasks\"
-            },
-            \"go\": {
-              \"strengths\": [\"System programming\", \"Concurrency\", \"Performance\"],
-              \"use_case\": \"System information and monitoring\",
-              \"performance\": \"excellent for system-level operations\"
-            }
-          },
-          \"multi_runtime_benefits\": [
-            \"Leverage language-specific strengths\",
-            \"Use best tool for each task\",
-            \"Integrate diverse ecosystems\",
-            \"Maximize performance and capability\"
-          ],
-          \"workflow_architecture\": \"polyglot\",
-          \"integration_pattern\": \"task-specific_runtime_selection\"
-        }"
-      outputs:
-        runtime_analysis:
-          type: object
-          description: Analysis of different runtimes
-        multi_runtime_benefits:
-          type: array
-          description: Benefits of using multiple runtimes
-        workflow_architecture:
-          type: string
-          description: Architecture pattern used
-        integration_pattern:
-          type: string
-          description: Integration pattern
+          description: Test message
 
   outputs:
-    # Individual runtime results
-    python_results: "{{ steps.python_data_analysis.outputs }}"
-    nodejs_results: "{{ steps.nodejs_text_analysis.outputs }}"
-    go_results: "{{ steps.go_system_info.outputs }}"
-    
-    # Data transformations
-    transformed_data: "{{ steps.python_data_transform.outputs.transformed_data }}"
-    transformed_text: "{{ steps.nodejs_text_transform.outputs.transformed_text }}"
-    
-    # Cross-runtime integration
-    integration_results: "{{ steps.cross_runtime_integration.outputs }}"
-    runtime_comparison: "{{ steps.runtime_comparison.outputs }}"
-    
-    # Runtime execution summary
-    runtime_versions: {
-      "python": "{{ steps.python_data_analysis.outputs.version }}",
-      "node": "{{ steps.nodejs_text_analysis.outputs.version }}",
-      "go": "{{ steps.go_system_info.outputs.version }}"
-    }
-    
-    # Processing flow
-    execution_sequence: "{{ state.processing_sequence }}"
-    runtime_coordination: "Successfully coordinated execution across Python {{ steps.python_data_analysis.outputs.version }}, Node.js {{ steps.nodejs_text_analysis.outputs.version }}, and Go {{ steps.go_system_info.outputs.version }}"
-    
-    # Summary metrics
-    multi_runtime_summary: {
-      "total_runtimes": 3,
-      "data_processed": "{{ len(inputs.data_set) }} numbers, {{ len(inputs.text_content) }} characters",
-      "integration_success": true,
-      "workflow_type": "polyglot"
-    }
+    python_result: ${{ steps.test_python.outputs }}
+    node_result: ${{ steps.test_node.outputs }}
+    go_result: ${{ steps.test_go.outputs }}

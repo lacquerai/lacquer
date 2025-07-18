@@ -120,7 +120,7 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 
 // executeWorkflowAsync executes a workflow in the background
 func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflow, execCtx *execcontext.ExecutionContext, runID, workflowID string) {
-	runner := engine.NewRunner(3, s.manager)
+	runner := engine.NewRunner(s.manager)
 	result, err := runner.RunWorkflowRaw(execCtx, workflow, time.Now())
 	defer runner.Close()
 	var outputs map[string]any

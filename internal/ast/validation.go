@@ -13,7 +13,7 @@ import (
 
 var (
 	ValidProviders = []string{"anthropic", "openai", "local"}
-	ValidRuntimes  = []string{"go", "node"}
+	ValidRuntimes  = []string{"go", "node", "python"}
 	ValidStepTypes = []string{"agent", "uses", "run", "container", "action"}
 	ValidToolTypes = []string{"uses", "script", "mcp"}
 )
@@ -139,6 +139,10 @@ func (v *Validator) ValidateWorkflow() *ValidationResult {
 	if w.Workflow == nil {
 		v.result.AddError("", "workflow section is required")
 		return v.result
+	}
+
+	if w.Inputs != nil {
+		v.validateInputs(w.Inputs, "inputs")
 	}
 
 	// Validate agents
@@ -416,10 +420,6 @@ func (v *Validator) validateWorkflowDef() {
 	if len(workflow.Steps) == 0 {
 		v.result.AddFieldError(path, "steps", "workflow must have at least one step")
 		return
-	}
-
-	if workflow.Inputs != nil {
-		v.validateInputs(workflow.Inputs, fmt.Sprintf("%s.inputs", path))
 	}
 
 	v.validateSteps()

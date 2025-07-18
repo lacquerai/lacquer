@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,7 +44,7 @@ type ExecutionContext struct {
 	mu sync.RWMutex
 }
 
-func (ec ExecutionContext) Write(p []byte) (n int, err error) {
+func (ec *ExecutionContext) Write(p []byte) (n int, err error) {
 	return ec.Context.Write(p)
 }
 
@@ -135,7 +136,33 @@ func (ec *ExecutionContext) GetState(key string) (interface{}, bool) {
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
 
-	value, exists := ec.State[key]
+	return ec.getNestedValue(ec.State, key)
+}
+
+// getNestedValue retrieves a value from a nested map structure using dot notation
+func (ec *ExecutionContext) getNestedValue(target map[string]interface{}, key string) (interface{}, bool) {
+	keys := strings.Split(key, ".")
+	current := target
+
+	// Navigate to the parent of the final key
+	for _, k := range keys[:len(keys)-1] {
+		if existing, exists := current[k]; exists {
+			// Check if the existing value is a map
+			if existingMap, ok := existing.(map[string]interface{}); ok {
+				current = existingMap
+			} else {
+				// If it's not a map, the path doesn't exist
+				return nil, false
+			}
+		} else {
+			// Key doesn't exist in the path
+			return nil, false
+		}
+	}
+
+	// Get the final value
+	finalKey := keys[len(keys)-1]
+	value, exists := current[finalKey]
 	return value, exists
 }
 
@@ -144,7 +171,7 @@ func (ec *ExecutionContext) SetState(key string, value interface{}) {
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
 
-	ec.State[key] = value
+	ec.setNestedValue(ec.State, key, value)
 	ec.Logger.Debug().
 		Str("key", key).
 		Interface("value", value).
@@ -157,12 +184,37 @@ func (ec *ExecutionContext) UpdateState(updates map[string]interface{}) {
 	defer ec.mu.Unlock()
 
 	for key, value := range updates {
-		ec.State[key] = value
+		ec.setNestedValue(ec.State, key, value)
 	}
 
 	ec.Logger.Debug().
 		Interface("updates", updates).
 		Msg("State batch updated")
+}
+
+// setNestedValue sets a value in a nested map structure using dot notation
+func (ec *ExecutionContext) setNestedValue(target map[string]interface{}, key string, value interface{}) {
+	keys := strings.Split(key, ".")
+	current := target
+
+	for _, k := range keys[:len(keys)-1] {
+		if existing, exists := current[k]; exists {
+			if existingMap, ok := existing.(map[string]interface{}); ok {
+				current = existingMap
+			} else {
+				newMap := make(map[string]interface{})
+				current[k] = newMap
+				current = newMap
+			}
+		} else {
+			newMap := make(map[string]interface{})
+			current[k] = newMap
+			current = newMap
+		}
+	}
+
+	finalKey := keys[len(keys)-1]
+	current[finalKey] = value
 }
 
 // GetAllState returns a copy of all state variables

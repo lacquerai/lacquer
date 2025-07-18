@@ -4,6 +4,17 @@ metadata:
   description: Test workflow for concurrent step execution and dependency management
   author: lacquer-team
 
+inputs:
+  dataset_size:
+    type: integer
+    description: Size of dataset to process
+    default: 1000
+  
+  processing_mode:
+    type: string
+    description: Mode of processing
+    default: "parallel"
+    
 agents:
   data_agent:
     provider: anthropic
@@ -12,60 +23,29 @@ agents:
     system_prompt: You are a data processing assistant that provides structured analysis.
 
 workflow:
-  inputs:
-    dataset_size:
-      type: number
-      description: Size of dataset to process
-      default: 1000
-    
-    processing_mode:
-      type: string
-      description: Mode of processing
-      default: "parallel"
 
   state:
     parallel_results: {}
-    processing_start: "{{ now() }}"
+    processing_start: ${{ now() }}
 
   steps:
     # Independent steps that can run concurrently
     - id: generate_dataset_a
-      run: |
-        #!/bin/bash
-        size="$1"
-        start_time=$(date +%s)
-        
-        # Simulate data generation work
-        sleep 2
-        
-        end_time=$(date +%s)
-        duration=$((end_time - start_time))
-        
-        echo "{
-          \"dataset_name\": \"dataset_a\",
-          \"size\": $size,
-          \"data_type\": \"numerical\",
-          \"generation_time\": $duration,
-          \"samples\": [1, 2, 3, 4, 5],
-          \"metadata\": {
-            \"created_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
-            \"source\": \"generator_a\"
-          }
-        }"
+      run: "go run scripts/generate_dataset_a.go"
       with:
-        size: "{{ inputs.dataset_size }}"
+        size: ${{ inputs.dataset_size }}
       outputs:
         dataset_name:
           type: string
           description: Name of the dataset
         size:
-          type: number
+          type: integer
           description: Dataset size
         data_type:
           type: string
           description: Type of data
         generation_time:
-          type: number
+          type: integer
           description: Time taken to generate
         samples:
           type: array
@@ -75,42 +55,21 @@ workflow:
           description: Dataset metadata
 
     - id: generate_dataset_b
-      run: |
-        #!/bin/bash
-        size="$1"
-        start_time=$(date +%s)
-        
-        # Simulate different data generation work
-        sleep 1.5
-        
-        end_time=$(date +%s)
-        duration=$((end_time - start_time))
-        
-        echo "{
-          \"dataset_name\": \"dataset_b\", 
-          \"size\": $size,
-          \"data_type\": \"categorical\",
-          \"generation_time\": $duration,
-          \"categories\": [\"A\", \"B\", \"C\", \"D\"],
-          \"metadata\": {
-            \"created_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
-            \"source\": \"generator_b\"
-          }
-        }"
+      run: "go run scripts/generate_dataset_b.go"
       with:
-        size: "{{ inputs.dataset_size }}"
+        size: ${{ inputs.dataset_size }}
       outputs:
         dataset_name:
           type: string
           description: Name of the dataset
         size:
-          type: number
+          type: integer
           description: Dataset size
         data_type:
           type: string
           description: Type of data
         generation_time:
-          type: number
+          type: integer
           description: Time taken to generate
         categories:
           type: array
@@ -120,42 +79,21 @@ workflow:
           description: Dataset metadata
 
     - id: generate_dataset_c
-      run: |
-        #!/bin/bash
-        size="$1"
-        start_time=$(date +%s)
-        
-        # Simulate yet another data generation work
-        sleep 1
-        
-        end_time=$(date +%s)
-        duration=$((end_time - start_time))
-        
-        echo "{
-          \"dataset_name\": \"dataset_c\",
-          \"size\": $size,
-          \"data_type\": \"textual\", 
-          \"generation_time\": $duration,
-          \"sample_texts\": [\"hello\", \"world\", \"test\", \"data\"],
-          \"metadata\": {
-            \"created_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
-            \"source\": \"generator_c\"
-          }
-        }"
+      run: "go run scripts/generate_dataset_c.go"
       with:
-        size: "{{ inputs.dataset_size }}"
+        size: ${{ inputs.dataset_size }}
       outputs:
         dataset_name:
           type: string
           description: Name of the dataset
         size:
-          type: number
+          type: integer
           description: Dataset size
         data_type:
           type: string
           description: Type of data
         generation_time:
-          type: number
+          type: integer
           description: Time taken to generate
         sample_texts:
           type: array
@@ -169,9 +107,9 @@ workflow:
       agent: data_agent
       prompt: |
         Analyze this numerical dataset:
-        - Dataset: {{ steps.generate_dataset_a.outputs.dataset_name }}
-        - Size: {{ steps.generate_dataset_a.outputs.size }}
-        - Samples: {{ steps.generate_dataset_a.outputs.samples }}
+        - Dataset: ${{ steps.generate_dataset_a.outputs.dataset_name }}
+        - Size: ${{ steps.generate_dataset_a.outputs.size }}
+        - Samples: ${{ steps.generate_dataset_a.outputs.samples }}
         
         Provide statistical analysis in JSON format:
         {
@@ -181,10 +119,10 @@ workflow:
         }
       outputs:
         mean:
-          type: number
+          type: integer
           description: Mean of the data
         median:
-          type: number
+          type: integer
           description: Median of the data
         analysis:
           type: string
@@ -192,33 +130,19 @@ workflow:
 
     # Step that depends on dataset_b  
     - id: analyze_categorical_data
-      run: |
-        #!/bin/bash
-        categories="$1"
-        dataset_name="$2"
-        
-        # Simple categorical analysis
-        category_count=$(echo "$categories" | grep -o ',' | wc -l)
-        category_count=$((category_count + 1))
-        
-        echo "{
-          \"category_count\": $category_count,
-          \"most_common\": \"A\",
-          \"diversity_score\": 0.85,
-          \"analysis\": \"Dataset $dataset_name has $category_count categories with good diversity\"
-        }"
+      run: "go run scripts/analyze_categorical_data.go"
       with:
-        categories: "{{ join(steps.generate_dataset_b.outputs.categories, ',') }}"
-        dataset_name: "{{ steps.generate_dataset_b.outputs.dataset_name }}"
+        categories: ${{ join(steps.generate_dataset_b.outputs.categories, ',') }}
+        dataset_name: ${{ steps.generate_dataset_b.outputs.dataset_name }}
       outputs:
         category_count:
-          type: number
+          type: integer
           description: Number of categories
         most_common:
           type: string
           description: Most common category
         diversity_score:
-          type: number
+          type: integer
           description: Diversity score
         analysis:
           type: string
@@ -226,31 +150,16 @@ workflow:
 
     # Step that depends on dataset_c
     - id: analyze_textual_data
-      run: |
-        #!/bin/bash
-        texts="$1"
-        dataset_name="$2"
-        
-        # Simple text analysis
-        text_count=$(echo "$texts" | grep -o ',' | wc -l)
-        text_count=$((text_count + 1))
-        avg_length=5  # Average length of sample texts
-        
-        echo "{
-          \"text_count\": $text_count,
-          \"average_length\": $avg_length,
-          \"language\": \"english\",
-          \"analysis\": \"Dataset $dataset_name contains $text_count text samples with average length $avg_length\"
-        }"
+      run: "go run scripts/analyze_textual_data.go"
       with:
-        texts: "{{ join(steps.generate_dataset_c.outputs.sample_texts, ',') }}"
-        dataset_name: "{{ steps.generate_dataset_c.outputs.dataset_name }}"
+        texts: ${{ join(steps.generate_dataset_c.outputs.sample_texts, ',') }}
+        dataset_name: ${{ steps.generate_dataset_c.outputs.dataset_name }}
       outputs:
         text_count:
-          type: number
+          type: integer
           description: Number of text samples
         average_length:
-          type: number
+          type: integer
           description: Average text length
         language:
           type: string
@@ -261,38 +170,14 @@ workflow:
 
     # Step that depends on multiple analysis results (must wait for all analyses)
     - id: combine_analyses
-      run: |
-        #!/bin/bash
-        numerical_mean="$1"
-        categorical_count="$2"
-        textual_count="$3"
-        
-        total_features=$((categorical_count + textual_count))
-        combined_score=$(echo "$numerical_mean + $total_features" | bc -l)
-        
-        echo "{
-          \"numerical_insights\": {
-            \"mean_value\": $numerical_mean,
-            \"data_quality\": \"good\"
-          },
-          \"categorical_insights\": {
-            \"category_count\": $categorical_count,
-            \"diversity\": \"high\"
-          },
-          \"textual_insights\": {
-            \"text_samples\": $textual_count,
-            \"language_detected\": \"english\"
-          },
-          \"combined_score\": $combined_score,
-          \"overall_assessment\": \"Multi-modal dataset with good variety across numerical, categorical, and textual dimensions\"
-        }"
+      run: "go run scripts/combine_analyses.go"
       with:
-        numerical_mean: "{{ steps.analyze_numerical_data.outputs.mean }}"
-        categorical_count: "{{ steps.analyze_categorical_data.outputs.category_count }}"
-        textual_count: "{{ steps.analyze_textual_data.outputs.text_count }}"
+        numerical_mean: ${{ steps.analyze_numerical_data.outputs.mean }}
+        categorical_count: ${{ steps.analyze_categorical_data.outputs.category_count }}
+        textual_count: ${{ steps.analyze_textual_data.outputs.text_count }}
       updates:
-        parallel_results: "{{ steps.combine_analyses.outputs }}"
-        processing_end: "{{ now() }}"
+        parallel_results: ${{ steps.combine_analyses.outputs }}
+        processing_end: ${{ now() }}
       outputs:
         numerical_insights:
           type: object
@@ -304,7 +189,7 @@ workflow:
           type: object
           description: Insights from textual analysis
         combined_score:
-          type: number
+          type: integer
           description: Combined analysis score
         overall_assessment:
           type: string
@@ -312,39 +197,11 @@ workflow:
 
     # Final step that summarizes timing and concurrency benefits
     - id: concurrency_summary
-      run: |
-        #!/bin/bash
-        gen_time_a="$1"
-        gen_time_b="$2" 
-        gen_time_c="$3"
-        
-        # Calculate what sequential vs concurrent execution would look like
-        sequential_time=$((gen_time_a + gen_time_b + gen_time_c))
-        concurrent_time=$([ $gen_time_a -gt $gen_time_b ] && [ $gen_time_a -gt $gen_time_c ] && echo $gen_time_a || ([ $gen_time_b -gt $gen_time_c ] && echo $gen_time_b || echo $gen_time_c))
-        time_saved=$((sequential_time - concurrent_time))
-        
-        echo "{
-          \"generation_times\": {
-            \"dataset_a\": $gen_time_a,
-            \"dataset_b\": $gen_time_b,
-            \"dataset_c\": $gen_time_c
-          },
-          \"execution_analysis\": {
-            \"sequential_time_estimate\": $sequential_time,
-            \"concurrent_time_actual\": $concurrent_time,
-            \"time_saved\": $time_saved,
-            \"efficiency_gain\": \"$(echo \"scale=2; $time_saved * 100 / $sequential_time\" | bc -l)%\"
-          },
-          \"concurrency_benefits\": [
-            \"Independent steps executed in parallel\",
-            \"Dependent steps waited for prerequisites\", 
-            \"Overall workflow time reduced through parallelization\"
-          ]
-        }"
+      run: "go run scripts/concurrency_summary.go"
       with:
-        gen_time_a: "{{ steps.generate_dataset_a.outputs.generation_time }}"
-        gen_time_b: "{{ steps.generate_dataset_b.outputs.generation_time }}"
-        gen_time_c: "{{ steps.generate_dataset_c.outputs.generation_time }}"
+        gen_time_a: ${{ steps.generate_dataset_a.outputs.generation_time }}
+        gen_time_b: ${{ steps.generate_dataset_b.outputs.generation_time }}
+        gen_time_c: ${{ steps.generate_dataset_c.outputs.generation_time }}
       outputs:
         generation_times:
           type: object
@@ -359,23 +216,23 @@ workflow:
   outputs:
     # Dataset generation results (these ran concurrently)
     generated_datasets: {
-      "dataset_a": "{{ steps.generate_dataset_a.outputs }}",
-      "dataset_b": "{{ steps.generate_dataset_b.outputs }}",
-      "dataset_c": "{{ steps.generate_dataset_c.outputs }}"
+      "dataset_a": "${{ steps.generate_dataset_a.outputs }}",
+      "dataset_b": "${{ steps.generate_dataset_b.outputs }}",
+      "dataset_c": "${{ steps.generate_dataset_c.outputs }}"
     }
     
     # Analysis results (these depended on dataset generation)
     analysis_results: {
-      "numerical": "{{ steps.analyze_numerical_data.outputs }}",
-      "categorical": "{{ steps.analyze_categorical_data.outputs }}",
-      "textual": "{{ steps.analyze_textual_data.outputs }}"
+      "numerical": "${{ steps.analyze_numerical_data.outputs }}",
+      "categorical": "${{ steps.analyze_categorical_data.outputs }}",
+      "textual": "${{ steps.analyze_textual_data.outputs }}"
     }
     
     # Combined analysis (depended on all individual analyses)
-    combined_analysis: "{{ steps.combine_analyses.outputs }}"
+    combined_analysis: "${{ steps.combine_analyses.outputs }}"
     
     # Concurrency performance metrics
-    concurrency_metrics: "{{ steps.concurrency_summary.outputs }}"
+    concurrency_metrics: "${{ steps.concurrency_summary.outputs }}"
     
     # Processing summary
-    processing_summary: "Processed {{ inputs.dataset_size }} records across 3 datasets using concurrent execution with dependency management"
+    processing_summary: "Processed ${{ inputs.dataset_size }} records across 3 datasets using concurrent execution with dependency management"

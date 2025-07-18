@@ -4,6 +4,11 @@ metadata:
   description: A simple greeting workflow demonstrating basic Lacquer syntax
   author: lacquer-team
 
+inputs:
+  name:
+    type: string
+    description: Name of the person to greet
+  
 agents:
   anthropic_greeter:
     provider: anthropic
@@ -17,16 +22,11 @@ agents:
     system_prompt: You are a friendly assistant who gives warm greetings.
 
 workflow:
-  inputs:
-    name:
-      type: string
-      description: Name of the person to greet
-  
   steps:
     - id: say_hello_anthropic
       agent: anthropic_greeter
       prompt: |
-        Say hello to {{ inputs.name }} in a creative and friendly way.
+        Say hello to ${{ inputs.name }} in a creative and friendly way.
         Make it warm and welcoming!
       outputs:
         greeting:
@@ -35,12 +35,12 @@ workflow:
     - id: say_hello_openai
       agent: openai_greeter
       prompt: |
-        Say hello to {{ inputs.name }} in a creative and friendly way.
+        Say hello to ${{ inputs.name }} in a creative and friendly way.
         Make it warm and welcoming!
       outputs:
         greeting:
           type: string
           description: The greeting to the person
   outputs:
-    anthropic_greeting: "{{ steps.say_hello_anthropic.outputs.greeting }}"
-    openai_greeting: "{{ steps.say_hello_openai.outputs.greeting }}"
+    anthropic_greeting: ${{ steps.say_hello_anthropic.outputs.greeting }}
+    openai_greeting: ${{ steps.say_hello_openai.outputs.greeting }}

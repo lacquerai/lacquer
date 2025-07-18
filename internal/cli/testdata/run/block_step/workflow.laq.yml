@@ -4,29 +4,29 @@ metadata:
   description: Test workflow for block execution (uses)
   author: lacquer-team
 
-workflow:
-  inputs:
-    input_text:
-      type: string
-      description: Text to process through blocks
-      default: "Hello World from Blocks!"
-    
-    first_operation:
-      type: string
-      description: First operation to perform
-      default: "uppercase"
-    
-    second_operation:
-      type: string
-      description: Second operation to perform
-      default: "reverse"
+inputs:
+  input_text:
+    type: string
+    description: Text to process through blocks
+    default: "Hello World from Blocks!"
+  
+  first_operation:
+    type: string
+    description: First operation to perform
+    default: "uppercase"
+  
+  second_operation:
+    type: string
+    description: Second operation to perform
+    default: "reverse"
 
+workflow:
   steps:
     - id: first_processing
       uses: "./blocks/text_processor.laq.yml"
       with:
-        text: "{{ inputs.input_text }}"
-        operation: "{{ inputs.first_operation }}"
+        text: ${{ inputs.input_text }}
+        operation: ${{ inputs.first_operation }}
       outputs:
         result:
           type: string
@@ -38,8 +38,8 @@ workflow:
     - id: second_processing
       uses: "./blocks/text_processor.laq.yml"
       with:
-        text: "{{ steps.first_processing.outputs.result }}"
-        operation: "{{ inputs.second_operation }}"
+        text: ${{ steps.first_processing.outputs.result }}
+        operation: ${{ inputs.second_operation }}
       outputs:
         result:
           type: string
@@ -51,7 +51,7 @@ workflow:
     - id: length_check
       uses: "./blocks/text_processor.laq.yml"
       with:
-        text: "{{ steps.second_processing.outputs.result }}"
+        text: ${{ steps.second_processing.outputs.result }}
         operation: "length"
       outputs:
         result:
@@ -62,7 +62,7 @@ workflow:
           description: Metadata about the processing
 
   outputs:
-    original: "{{ inputs.input_text }}"
-    first_transformation: "{{ steps.first_processing.outputs.result }}"
-    second_transformation: "{{ steps.second_processing.outputs.result }}"
-    final_length: "{{ steps.length_check.outputs.calculated_length }}"
+    original: ${{ inputs.input_text }}
+    first_transformation: ${{ steps.first_processing.outputs.result }}
+    second_transformation: ${{ steps.second_processing.outputs.result }}
+    final_length: ${{ steps.length_check.outputs.calculated_length }}

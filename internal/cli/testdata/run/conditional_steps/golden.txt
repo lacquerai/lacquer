@@ -1,0 +1,34 @@
+
+Running conditional-steps workflow (7 steps)
+
+[Spinner b19c325]: Running step check_number (1/7)
+[Finish b19c325]✓  Running step check_number (1/7)
+
+[Spinner e231d15]: Running step analyze_large_number (3/7)
+[e231d15] + +
+   The number 75 is categorized as "large".
+Please provide an analysis of what makes this a large number and its mathematical properties.
+[e231d15] +✓ 
+[Finish e231d15]✓  Running step analyze_large_number (3/7)
+   ✓ The number 75 is categorized as "large".
+Please provide an analysis of what makes this a large number and its mathematical properties.
+
+[Spinner 4e0483f]: Running step finalize_analysis (6/7)
+[Finish 4e0483f]✓  Running step finalize_analysis (6/7)
+
+[Spinner 966e433]: Running step conditional_summary (7/7)
+[Finish 966e433]✓  Running step conditional_summary (7/7)
+
+
+✓ Workflow completed successfully (TIME)
+
+Outputs
+
+analysis_result: 75 can be considered large in several contexts: 1) It represents 75% of 100, making it a significant portion of a whole. 2) In grading systems, it often indicates a passing score. 3) Mathematically, it's a composite number divisible by 3, 5, 15, and 25, making it rich in factors. 4) It's three-quarters of the way to 100, placing it in the upper range of double-digit numbers. 5) In many real-world contexts like speed limits, temperatures, or ages, 75 represents a relatively high value. The number's mathematical properties include being an odd number, having factors of [1, 3, 5, 15, 25, 75], and being the product of two prime numbers (3 × 5²).
+number_category: large
+processing_summary: Large number analysis completed
+state_info: map[analysis_complete:true final_category:large skip_analysis:false steps.analyze_large_number.output:{
+  "analysis": "75 can be considered large in several contexts: 1) It represents 75% of 100, making it a significant portion of a whole. 2) In grading systems, it often indicates a passing score. 3) Mathematically, it's a composite number divisible by 3, 5, 15, and 25, making it rich in factors. 4) It's three-quarters of the way to 100, placing it in the upper range of double-digit numbers. 5) In many real-world contexts like speed limits, temperatures, or ages, 75 represents a relatively high value. The number's mathematical properties include being an odd number, having factors of [1, 3, 5, 15, 25, 75], and being the product of two prime numbers (3 × 5²)."
+} steps.analyze_large_number.outputs:map[analysis:75 can be considered large in several contexts: 1) It represents 75% of 100, making it a significant portion of a whole. 2) In grading systems, it often indicates a passing score. 3) Mathematically, it's a composite number divisible by 3, 5, 15, and 25, making it rich in factors. 4) It's three-quarters of the way to 100, placing it in the upper range of double-digit numbers. 5) In many real-world contexts like speed limits, temperatures, or ages, 75 represents a relatively high value. The number's mathematical properties include being an odd number, having factors of [1, 3, 5, 15, 25, 75], and being the product of two prime numbers (3 × 5²).] steps.check_number.outputs:map[category:large is_large:true should_analyze:true] steps.conditional_summary.outputs:map[summary:Large number analysis completed type:large] steps.finalize_analysis.updated_keys:[analysis_complete final_category]]
+
+STDERR:

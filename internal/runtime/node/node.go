@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/lacquerai/lacquer/internal/runtime/types"
 	"github.com/lacquerai/lacquer/internal/runtime/utils"
 	"github.com/rs/zerolog/log"
@@ -205,6 +206,22 @@ func (n *NodeRuntime) getDownloadURL(ctx context.Context, version string) (strin
 				return url, nil
 			}
 			return "", fmt.Errorf("version %s not available for platform %s", version, n.getPlatformKey())
+		}
+	}
+
+	cv, err := semver.NewVersion(version)
+	if err != nil {
+		return "", fmt.Errorf("invalid semver version: %w", err)
+	}
+
+	for _, v := range versions {
+		sv, err := semver.NewVersion(v.Version)
+		if err != nil {
+			continue
+		}
+
+		if sv.Compare(cv) == 0 {
+			return v.DownloadURLs[n.getPlatformKey()], nil
 		}
 	}
 

@@ -4,6 +4,12 @@ metadata:
   description: Test workflow for agent tool calling functionality
   author: lacquer-team
 
+inputs:
+  math_problem:
+    type: string
+    description: A math problem to solve
+    default: "What is 15 multiplied by 7?"
+  
 agents:
   tool_agent:
     provider: anthropic
@@ -13,34 +19,7 @@ agents:
     tools:
       - name: calculator
         description: A simple calculator that can perform basic arithmetic operations
-        script: |
-          #!/bin/bash
-          operation="$1"
-          num1="$2"
-          num2="$3"
-          
-          case $operation in
-            "add")
-              echo '{"result": '$(($num1 + $num2))'}'
-              ;;
-            "subtract")
-              echo '{"result": '$(($num1 - $num2))'}'
-              ;;
-            "multiply")
-              echo '{"result": '$(($num1 * $num2))'}'
-              ;;
-            "divide")
-              if [ "$num2" -eq 0 ]; then
-                echo '{"error": "Division by zero"}'
-                exit 1
-              fi
-              echo '{"result": '$(($num1 / $num2))'}'
-              ;;
-            *)
-              echo '{"error": "Unknown operation"}'
-              exit 1
-              ;;
-          esac
+        script: "go run scripts/calculator.go"
         parameters:
           type: object
           properties:
@@ -57,17 +36,11 @@ agents:
           required: ["operation", "num1", "num2"]
 
 workflow:
-  inputs:
-    math_problem:
-      type: string
-      description: A math problem to solve
-      default: "What is 15 multiplied by 7?"
-  
   steps:
     - id: solve_math
       agent: tool_agent
       prompt: |
-        Please solve this math problem: {{ inputs.math_problem }}
+        Please solve this math problem: ${{ inputs.math_problem }}
         
         Use the calculator tool to compute the answer. Make sure to call the tool with the correct parameters.
       outputs:
@@ -79,5 +52,5 @@ workflow:
           description: The numerical result
 
   outputs:
-    final_answer: "{{ steps.solve_math.outputs.answer }}"
-    calculation_result: "{{ steps.solve_math.outputs.calculation }}"
+    final_answer: ${{ steps.solve_math.outputs.answer }}
+    calculation_result: ${{ steps.solve_math.outputs.calculation }}

@@ -3,80 +3,50 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
-	"time"
 )
 
+type InputWrapper struct {
+	Inputs Input `json:"inputs"`
+}
+
 type Input struct {
-	Component string `json:"component"`
-	Details   bool   `json:"details"`
+	TestParam string `json:"test_param"`
 }
 
 type Output struct {
-	Runtime   string                 `json:"runtime"`
-	Version   string                 `json:"version"`
-	Timestamp string                 `json:"timestamp"`
-	System    map[string]interface{} `json:"system"`
+	Runtime string `json:"runtime"`
+	Version string `json:"version"`
+	Message string `json:"message"`
 }
 
 func main() {
-	// Get input from environment variable
-	inputsJson := os.Getenv("LACQUER_INPUTS")
-	if inputsJson == "" {
-		inputsJson = "{}"
+	// Read input from stdin
+	inputData, err := io.ReadAll(os.Stdin)
+	var inputs InputWrapper
+
+	if err == nil && len(inputData) > 0 {
+		json.Unmarshal(inputData, &inputs)
 	}
 
-	var inputs Input
-	if err := json.Unmarshal([]byte(inputsJson), &inputs); err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing inputs: %v\n", err)
-		os.Exit(1)
+	// Set default if no input received
+	testParam := inputs.Inputs.TestParam
+	if testParam == "" {
+		testParam = "default_value"
 	}
 
 	result := Output{
-		Runtime:   "go",
-		Version:   runtime.Version(),
-		Timestamp: time.Now().Format(time.RFC3339),
-		System:    make(map[string]interface{}),
-	}
-
-	switch inputs.Component {
-	case "runtime":
-		result.System["go_version"] = runtime.Version()
-		result.System["go_os"] = runtime.GOOS
-		result.System["go_arch"] = runtime.GOARCH
-		result.System["num_cpu"] = runtime.NumCPU()
-		if inputs.Details {
-			result.System["compiler"] = runtime.Compiler
-			result.System["num_goroutines"] = runtime.NumGoroutine()
-		}
-	case "memory":
-		var m runtime.MemStats
-		runtime.ReadMemStats(&m)
-		result.System["allocated_mb"] = m.Alloc / 1024 / 1024
-		result.System["total_allocated_mb"] = m.TotalAlloc / 1024 / 1024
-		result.System["system_mb"] = m.Sys / 1024 / 1024
-		if inputs.Details {
-			result.System["gc_cycles"] = m.NumGC
-			result.System["heap_objects"] = m.HeapObjects
-		}
-	default:
-		result.System["basic_info"] = map[string]interface{}{
-			"os":   runtime.GOOS,
-			"arch": runtime.GOARCH,
-			"cpus": runtime.NumCPU(),
-		}
+		Runtime: "go",
+		Version: runtime.Version(),
+		Message: fmt.Sprintf("Received input: %s", testParam),
 	}
 
 	output := map[string]interface{}{
 		"outputs": result,
 	}
 
-	outputJson, err := json.Marshal(output)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error marshaling output: %v\n", err)
-		os.Exit(1)
-	}
-
+	outputJson, _ := json.Marshal(output)
 	fmt.Println(string(outputJson))
 }

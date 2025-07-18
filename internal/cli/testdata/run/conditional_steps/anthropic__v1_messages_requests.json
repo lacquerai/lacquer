@@ -1,0 +1,26 @@
+[
+  {
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "The number 75 is categorized as \"large\".\nPlease provide an analysis of what makes this a large number and its mathematical properties.\n\n\nIMPORTANT: Respond in JSON using the following schema:\n```json\n{\"analysis\":{\"type\":\"string\",\"description\":\"Analysis of the large number\"}}\n```",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0,
+    "top_p": 0,
+    "system": [
+      {
+        "text": "You are a helpful assistant that analyzes numbers and makes decisions.",
+        "type": "text"
+      }
+    ],
+    "tools": []
+  }
+]

@@ -1,0 +1,18 @@
+
+Running container-step workflow (2 steps)
+
+[Spinner 89c29d2]: Running step process_in_container (1/2)
+[Finish 89c29d2]✓  Running step process_in_container (1/2)
+
+[Spinner f47d516]: Running step process_golang_container (2/2)
+[Finish f47d516]
+
+✓ Workflow completed successfully (TIME)
+
+Outputs
+
+final_result: NOITUCEXE RENIATNOC REKCOD GNITSET
+original_message: Testing Docker container execution
+processed_result: TESTING DOCKER CONTAINER EXECUTION
+
+STDERR:
