@@ -94,9 +94,9 @@ func init() {
 }
 
 func runWorkflow(ctx execcontext.RunContext, workflowFile string, inputs map[string]interface{}) error {
-	runner := engine.NewRunner(maxRetries, engine.NewProgressTracker(ctx, ""))
+	runner := engine.NewRunner(engine.NewProgressTracker(ctx, ""))
 	result, err := runner.RunWorkflow(ctx, workflowFile, inputs)
-	defer runner.Close()
+	runner.Close()
 	if err != nil {
 		switch err.(type) {
 		case *engine.InputValidationResult:
@@ -125,9 +125,9 @@ func outputResults(w io.Writer, result *engine.ExecutionResult) {
 
 	switch outputFormat {
 	case "json":
-		style.PrintJSON(w, result)
+		style.PrintJSON(w, result.Outputs)
 	case "yaml":
-		style.PrintYAML(w, result)
+		style.PrintYAML(w, result.Outputs)
 	default:
 		printExecutionSummary(w, result)
 	}

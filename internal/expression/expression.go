@@ -7,7 +7,39 @@ import (
 	"unicode"
 
 	"github.com/lacquerai/lacquer/internal/execcontext"
+	"github.com/rs/zerolog/log"
 )
+
+var (
+	ExpressionDefs []ExpressionDef
+	FunctionDefs   []*FunctionDefinition
+)
+
+type ExpressionDef struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Examples    []string `json:"examples"`
+}
+
+func init() {
+	expressions := []Expression{
+		&LiteralExpr{},
+		&VariableExpr{},
+		&BinaryOpExpr{},
+		&UnaryOpExpr{},
+		&ConditionalExpr{},
+		&CallExpr{},
+		&IndexExpr{},
+		&DotExpr{},
+	}
+
+	ExpressionDefs = make([]ExpressionDef, len(expressions))
+	for i, expr := range expressions {
+		ExpressionDefs[i] = expr.Definition()
+	}
+
+	FunctionDefs = NewFunctionRegistry().ListFunctions()
+}
 
 // Value represents any value in the expression system
 type Value interface {
@@ -310,6 +342,7 @@ func GoToValue(v interface{}) Value {
 
 type Expression interface {
 	Eval(*EvalContext) (Value, error)
+	Definition() ExpressionDef
 }
 
 // LiteralExpr represents a literal value
@@ -321,6 +354,24 @@ func (e *LiteralExpr) Eval(ctx *EvalContext) (Value, error) {
 	return e.Value, nil
 }
 
+func (e *LiteralExpr) Description() string {
+	return "Literal value expression. Use literal values like numbers (42, 3.14), strings ('hello', \"world\"), booleans (true, false), or null."
+}
+
+func (e *LiteralExpr) Definition() ExpressionDef {
+	return ExpressionDef{
+		Name:        "Literal",
+		Description: "Literal value expression. Use literal values like numbers (42, 3.14), strings ('hello', \"world\"), booleans (true, false), or null.",
+		Examples: []string{
+			"${{ 42 }}",
+			"${{ \"hello\" }}",
+			"${{ true }}",
+			"${{ false }}",
+			"${{ null }}",
+		},
+	}
+}
+
 // VariableExpr represents a variable reference
 type VariableExpr struct {
 	Name string
@@ -330,12 +381,43 @@ func (e *VariableExpr) Eval(ctx *EvalContext) (Value, error) {
 	return ctx.Variables.Get(e.Name)
 }
 
+func (e *VariableExpr) Definition() ExpressionDef {
+	return ExpressionDef{
+		Name:        "Variable",
+		Description: "Variable reference expression. Access variables using their names.",
+		Examples: []string{
+			"${{ inputs.name }}",
+			"${{ state.counter }}",
+			"${{ steps.step1.output }}",
+		},
+	}
+}
+
 // BinaryOpExpr represents a binary operation
 type BinaryOpExpr struct {
 	Left  Expression
-	Op    string
+	Op    BinaryOpType
 	Right Expression
 }
+
+type BinaryOpType string
+
+const (
+	BinaryOpTypeAdd BinaryOpType = "+"
+	BinaryOpTypeSub BinaryOpType = "-"
+	BinaryOpTypeMul BinaryOpType = "*"
+	BinaryOpTypeDiv BinaryOpType = "/"
+	BinaryOpTypeMod BinaryOpType = "%"
+
+	BinaryOpTypeEq  BinaryOpType = "=="
+	BinaryOpTypeNeq BinaryOpType = "!="
+	BinaryOpTypeLt  BinaryOpType = "<"
+	BinaryOpTypeGt  BinaryOpType = ">"
+	BinaryOpTypeLte BinaryOpType = "<="
+	BinaryOpTypeGte BinaryOpType = ">="
+	BinaryOpTypeAnd BinaryOpType = "&&"
+	BinaryOpTypeOr  BinaryOpType = "||"
+)
 
 func (e *BinaryOpExpr) Eval(ctx *EvalContext) (Value, error) {
 	left, err := e.Left.Eval(ctx)
@@ -344,11 +426,11 @@ func (e *BinaryOpExpr) Eval(ctx *EvalContext) (Value, error) {
 	}
 
 	// Short-circuit evaluation for logical operators
-	if e.Op == "&&" {
+	if e.Op == BinaryOpTypeAdd {
 		if !ToBool(left) {
 			return BoolValue{Val: false}, nil
 		}
-	} else if e.Op == "||" {
+	} else if e.Op == BinaryOpTypeOr {
 		if ToBool(left) {
 			return BoolValue{Val: true}, nil
 		}
@@ -360,39 +442,39 @@ func (e *BinaryOpExpr) Eval(ctx *EvalContext) (Value, error) {
 	}
 
 	switch e.Op {
-	case "==":
+	case BinaryOpTypeEq:
 		return BoolValue{Val: left.Equals(right)}, nil
-	case "!=":
+	case BinaryOpTypeNeq:
 		return BoolValue{Val: !left.Equals(right)}, nil
-	case "<":
+	case BinaryOpTypeLt:
 		return BoolValue{Val: ToNumber(left) < ToNumber(right)}, nil
-	case ">":
+	case BinaryOpTypeGt:
 		return BoolValue{Val: ToNumber(left) > ToNumber(right)}, nil
-	case "<=":
+	case BinaryOpTypeLte:
 		return BoolValue{Val: ToNumber(left) <= ToNumber(right)}, nil
-	case ">=":
+	case BinaryOpTypeGte:
 		return BoolValue{Val: ToNumber(left) >= ToNumber(right)}, nil
-	case "&&":
+	case BinaryOpTypeAnd:
 		return BoolValue{Val: ToBool(left) && ToBool(right)}, nil
-	case "||":
+	case BinaryOpTypeOr:
 		return BoolValue{Val: ToBool(left) || ToBool(right)}, nil
-	case "+":
+	case BinaryOpTypeAdd:
 		// Handle string concatenation or numeric addition
 		if left.Type() == TypeString || right.Type() == TypeString {
 			return StringValue{Val: ToString(left) + ToString(right)}, nil
 		}
 		return NumberValue{Val: ToNumber(left) + ToNumber(right)}, nil
-	case "-":
+	case BinaryOpTypeSub:
 		return NumberValue{Val: ToNumber(left) - ToNumber(right)}, nil
-	case "*":
+	case BinaryOpTypeMul:
 		return NumberValue{Val: ToNumber(left) * ToNumber(right)}, nil
-	case "/":
+	case BinaryOpTypeDiv:
 		r := ToNumber(right)
 		if r == 0 {
 			return nil, fmt.Errorf("division by zero")
 		}
 		return NumberValue{Val: ToNumber(left) / r}, nil
-	case "%":
+	case BinaryOpTypeMod:
 		r := ToNumber(right)
 		if r == 0 {
 			return nil, fmt.Errorf("modulo by zero")
@@ -403,9 +485,29 @@ func (e *BinaryOpExpr) Eval(ctx *EvalContext) (Value, error) {
 	}
 }
 
+func (e *BinaryOpExpr) Definition() ExpressionDef {
+	return ExpressionDef{
+		Name:        "BinaryOperation",
+		Description: "Binary operation expression. Combine two expressions with operators: arithmetic (+, -, *, /, %), comparison (==, !=, <, >, <=, >=), or logical (&&, ||).",
+		Examples: []string{
+			"${{ 42 + 10 }}",
+			"${{ \"hello\" + \"world\" }}",
+			"${{ inputs.falsey && steps.step_foo.outputs.age >= 18 }}",
+			"${{ inputs.count > 0 ? inputs.count : \"none\" }}",
+		},
+	}
+}
+
+type UnaryOpType string
+
+const (
+	UnaryOpTypeNot UnaryOpType = "!"
+	UnaryOpTypeNeg UnaryOpType = "-"
+)
+
 // UnaryOpExpr represents a unary operation
 type UnaryOpExpr struct {
-	Op   string
+	Op   UnaryOpType
 	Expr Expression
 }
 
@@ -416,12 +518,23 @@ func (e *UnaryOpExpr) Eval(ctx *EvalContext) (Value, error) {
 	}
 
 	switch e.Op {
-	case "!":
+	case UnaryOpTypeNot:
 		return BoolValue{Val: !ToBool(val)}, nil
-	case "-":
+	case UnaryOpTypeNeg:
 		return NumberValue{Val: -ToNumber(val)}, nil
 	default:
 		return nil, fmt.Errorf("unknown unary operator: %s", e.Op)
+	}
+}
+
+func (e *UnaryOpExpr) Definition() ExpressionDef {
+	return ExpressionDef{
+		Name:        "UnaryOperation",
+		Description: "Unary operation expression. Apply a single operator to an expression: logical NOT (!) or numeric negation (-).",
+		Examples: []string{
+			"${{ !inputs.active }}",
+			"${{ -inputs.count }}",
+		},
 	}
 }
 
@@ -442,6 +555,17 @@ func (e *ConditionalExpr) Eval(ctx *EvalContext) (Value, error) {
 		return e.TrueExpr.Eval(ctx)
 	}
 	return e.FalseExpr.Eval(ctx)
+}
+
+func (e *ConditionalExpr) Definition() ExpressionDef {
+	return ExpressionDef{
+		Name:        "Conditional",
+		Description: "Conditional (ternary) expression. Use format 'condition ? trueValue : falseValue' to select between two values based on a condition.",
+		Examples: []string{
+			"${{ steps.step_foo.outputs.age >= 18 ? \"adult\" : \"minor\" }}",
+			"${{ inputs.count > 0 ? inputs.count : \"none\" }}",
+		},
+	}
 }
 
 // CallExpr represents a function call
@@ -468,6 +592,17 @@ func (e *CallExpr) Eval(ctx *EvalContext) (Value, error) {
 	}
 
 	return GoToValue(result), nil
+}
+
+func (e *CallExpr) Definition() ExpressionDef {
+	return ExpressionDef{
+		Name:        "FunctionCall",
+		Description: "Function call expression. Call built-in or custom functions with arguments using format 'functionName(arg1, arg2, ...)'.",
+		Examples: []string{
+			"${{ length(inputs.my_list) }}",
+			"${{ contains(inputs.my_list, \"search\") }}",
+		},
+	}
 }
 
 // IndexExpr represents array/map indexing
@@ -506,6 +641,17 @@ func (e *IndexExpr) Eval(ctx *EvalContext) (Value, error) {
 	}
 }
 
+func (e *IndexExpr) Definition() ExpressionDef {
+	return ExpressionDef{
+		Name:        "IndexAccess",
+		Description: "Index access expression. Access elements in arrays/lists using numeric indices or maps/objects using string keys with format 'object[index]'.",
+		Examples: []string{
+			"${{ inputs.my_list[0] }}",
+			"${{ steps.step_foo.outputs.map[\"key\"] }}",
+		},
+	}
+}
+
 // DotExpr represents object property access
 type DotExpr struct {
 	Object Expression
@@ -534,11 +680,25 @@ func (e *DotExpr) Eval(ctx *EvalContext) (Value, error) {
 		}
 		return val, nil
 	default:
-		return nil, fmt.Errorf("cannot access field %s on %s", e.Field, obj.Type())
+		log.Debug().
+			Str("object", fmt.Sprintf("%v", obj)).
+			Str("field", e.Field).
+			Msg("accessing field on non-map object")
+		return NilValue{}, nil
 	}
 }
 
-// Type conversion functions
+func (e *DotExpr) Definition() ExpressionDef {
+	return ExpressionDef{
+		Name:        "PropertyAccess",
+		Description: "Dot notation property access expression. Access object properties/fields using format 'object.property'.",
+		Examples: []string{
+			"${{ inputs.name }}",
+			"${{ state.counter }}",
+			"${{ steps.step1.output }}",
+		},
+	}
+}
 
 func ToBool(v Value) bool {
 	switch val := v.(type) {
@@ -658,7 +818,7 @@ func (p *Parser) parseOr() (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+		left = &BinaryOpExpr{Left: left, Op: BinaryOpType(op), Right: right}
 	}
 
 	return left, nil
@@ -677,7 +837,7 @@ func (p *Parser) parseAnd() (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+		left = &BinaryOpExpr{Left: left, Op: BinaryOpType(op), Right: right}
 	}
 
 	return left, nil
@@ -696,7 +856,7 @@ func (p *Parser) parseEquality() (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+		left = &BinaryOpExpr{Left: left, Op: BinaryOpType(op), Right: right}
 	}
 
 	return left, nil
@@ -717,7 +877,7 @@ func (p *Parser) parseComparison() (Expression, error) {
 			if err != nil {
 				return nil, err
 			}
-			left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+			left = &BinaryOpExpr{Left: left, Op: BinaryOpType(op), Right: right}
 		default:
 			return left, nil
 		}
@@ -737,7 +897,7 @@ func (p *Parser) parseAdditive() (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+		left = &BinaryOpExpr{Left: left, Op: BinaryOpType(op), Right: right}
 	}
 
 	return left, nil
@@ -758,7 +918,7 @@ func (p *Parser) parseMultiplicative() (Expression, error) {
 			if err != nil {
 				return nil, err
 			}
-			left = &BinaryOpExpr{Left: left, Op: op, Right: right}
+			left = &BinaryOpExpr{Left: left, Op: BinaryOpType(op), Right: right}
 		default:
 			return left, nil
 		}
@@ -774,7 +934,7 @@ func (p *Parser) parseUnary() (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &UnaryOpExpr{Op: op, Expr: expr}, nil
+		return &UnaryOpExpr{Op: UnaryOpType(op), Expr: expr}, nil
 	case TokenMinus:
 		op := p.current().Value
 		p.advance()
@@ -782,7 +942,7 @@ func (p *Parser) parseUnary() (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &UnaryOpExpr{Op: op, Expr: expr}, nil
+		return &UnaryOpExpr{Op: UnaryOpType(op), Expr: expr}, nil
 	default:
 		return p.parsePostfix()
 	}

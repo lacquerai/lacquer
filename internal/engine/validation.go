@@ -51,13 +51,13 @@ func ValidateWorkflowInputs(workflow *ast.Workflow, providedInputs map[string]an
 	}
 
 	// If workflow has no input definitions, accept any inputs
-	if workflow.Workflow.Inputs == nil {
+	if workflow.Inputs == nil {
 		result.ProcessedInputs = providedInputs
 		return result
 	}
 
 	// Process each defined input parameter
-	for paramName, paramDef := range workflow.Workflow.Inputs {
+	for paramName, paramDef := range workflow.Inputs {
 		providedValue, hasValue := providedInputs[paramName]
 
 		// Check if required parameter is missing
@@ -86,7 +86,7 @@ func ValidateWorkflowInputs(workflow *ast.Workflow, providedInputs map[string]an
 
 	// Check for unexpected input fields
 	for inputName := range providedInputs {
-		if _, defined := workflow.Workflow.Inputs[inputName]; !defined {
+		if _, defined := workflow.Inputs[inputName]; !defined {
 			result.AddError(inputName, "unexpected input field", providedInputs[inputName])
 		}
 	}

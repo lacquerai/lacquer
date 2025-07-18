@@ -39,10 +39,10 @@ func (w *Workflow) GetSteps() []*Step {
 
 // GetInputParam retrieves an input parameter by name
 func (w *Workflow) GetInputParam(name string) (*InputParam, bool) {
-	if w.Workflow == nil || w.Workflow.Inputs == nil {
+	if w.Inputs == nil {
 		return nil, false
 	}
-	param, exists := w.Workflow.Inputs[name]
+	param, exists := w.Inputs[name]
 	return param, exists
 }
 

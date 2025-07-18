@@ -8,12 +8,12 @@ agents:
     provider: anthropic
     model: claude-3-sonnet-20240229
 
+inputs:
+  topic:
+    type: string
+    description: Topic to analyze
+
 workflow:
-  inputs:
-    topic:
-      type: string
-      description: Topic to analyze
-  
   steps:
     - id: analyze
       agent: assistant

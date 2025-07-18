@@ -1,174 +1,690 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/spf13/cobra"
 )
 
+var lacquerAPIBaseURL = os.Getenv("LACQUER_API")
+
+func init() {
+	if lacquerAPIBaseURL == "" {
+		lacquerAPIBaseURL = "https://api.lacquer.ai"
+	}
+}
+
 // initCmd represents the init command
 var initCmd = &cobra.Command{
-	Use:   "init [project-name]",
-	Short: "Initialize a new Lacquer project",
-	Long: `Initialize a new Lacquer project with a basic workflow structure and configuration.
+	Use:   "init",
+	Short: "Initialize a new Lacquer project with interactive setup",
+	Long: `Initialize a new Lacquer project using an interactive setup wizard.
 
-This command creates:
-- Project directory structure
-- Example workflow file
-- Configuration file (.lacquer/config.yaml)
-- README with getting started instructions
-
-Templates available:
-- basic: Simple hello-world workflow
-- research: Multi-step research workflow with web search
-- enterprise: Advanced workflow with error handling and retries
+The wizard will guide you through:
+- Choosing a project name
+- Describing what you want to build
+- Selecting model providers (Anthropic, OpenAI, Claude Code)
+- Choosing your preferred scripting language
 
 Examples:
-  laq init my-project                    # Create project with basic template
-  laq init --template research my-bot    # Create with research template
-  laq init --no-git my-project           # Skip git initialization`,
-	Args: cobra.MaximumNArgs(1),
+  laq init    # Start interactive setup wizard`,
+	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		projectName := "lacquer-project"
-		if len(args) > 0 {
-			projectName = args[0]
-		}
 		runCtx := execcontext.RunContext{
 			Context: cmd.Context(),
 			StdOut:  cmd.OutOrStdout(),
 			StdErr:  cmd.OutOrStderr(),
 		}
-		initializeProject(runCtx, projectName)
+		initializeProjectInteractive(runCtx)
 	},
 }
-
-var (
-	templateName string
-	noGit        bool
-	force        bool
-)
 
 func init() {
 	rootCmd.AddCommand(initCmd)
-
-	initCmd.Flags().StringVarP(&templateName, "template", "t", "basic", "project template (basic, research, enterprise)")
-	initCmd.Flags().BoolVar(&noGit, "no-git", false, "skip git repository initialization")
-	initCmd.Flags().BoolVar(&force, "force", false, "overwrite existing project directory")
 }
 
-// ProjectTemplate represents a project template
-type ProjectTemplate struct {
-	Name        string
-	Description string
-	Files       map[string]string
-}
+type Step int
 
-var templates = map[string]ProjectTemplate{
-	"basic": {
-		Name:        "Basic",
-		Description: "Simple hello-world workflow",
-		Files: map[string]string{
-			"workflow.laq.yaml": basicWorkflow,
-			"README.md":         basicReadme,
-		},
-	},
-	"research": {
-		Name:        "Research",
-		Description: "Multi-step research workflow with web search",
-		Files: map[string]string{
-			"workflow.laq.yaml": researchWorkflow,
-			"README.md":         researchReadme,
-		},
-	},
-	"enterprise": {
-		Name:        "Enterprise",
-		Description: "Advanced workflow with error handling and retries",
-		Files: map[string]string{
-			"workflow.laq.yaml": enterpriseWorkflow,
-			"README.md":         enterpriseReadme,
-		},
-	},
-}
+const (
+	StepProjectName Step = iota
+	StepDescription
+	StepModelProviders
+	StepScriptLanguage
+	StepSummary
+	StepProcessing
+	StepComplete
+)
 
-func initializeProject(runCtx execcontext.RunContext, projectName string) {
-	// Validate project name
-	if !isValidProjectName(projectName) {
-		style.Error(runCtx, "Project name must contain only letters, numbers, hyphens, and underscores")
-		os.Exit(1)
+// Model represents the wizard state
+type model struct {
+	step             Step
+	projectNameInput textinput.Model
+	description      textinput.Model
+	modelProviders   list.Model
+	scriptLanguage   list.Model
+	spinner          spinner.Model
+	width            int
+	height           int
+	err              error
+
+	answers struct {
+		projectName    string
+		description    string
+		modelProviders []string
+		scriptLanguage string
 	}
 
-	// Check if template exists
-	template, exists := templates[templateName]
-	if !exists {
-		style.Error(runCtx, fmt.Sprintf("Unknown template: %s", templateName))
-		fmt.Println("Available templates:")
-		for name, tmpl := range templates {
-			fmt.Printf("  %s: %s\n", name, tmpl.Description)
+	workflowID     string
+	pollComplete   bool
+	generatedFiles map[string]string
+}
+
+// Provider item for lists
+type providerItem struct {
+	name     string
+	selected bool
+}
+
+func (i providerItem) FilterValue() string { return i.name }
+func (i providerItem) Title() string       { return i.name }
+func (i providerItem) Description() string {
+	if i.selected {
+		return "✓ Selected"
+	}
+	return "Not selected"
+}
+
+type languageItem struct {
+	name        string
+	description string
+}
+
+func (i languageItem) FilterValue() string { return i.name }
+func (i languageItem) Title() string       { return i.name }
+func (i languageItem) Description() string { return i.description }
+
+// Initialize the model
+func initialModel() model {
+	// Project name input
+	pni := textinput.New()
+	pni.Placeholder = "Enter project name..."
+	pni.SetValue("lacquer")
+	pni.Focus()
+	pni.CharLimit = 50
+	pni.Width = 50
+
+	// Description input
+	ti := textinput.New()
+	ti.Placeholder = "Describe what you want to build..."
+	ti.CharLimit = 200
+	ti.Width = 50
+
+	providerItems := []list.Item{
+		providerItem{name: "anthropic", selected: false},
+		providerItem{name: "openai", selected: false},
+		providerItem{name: "claude-code", selected: false},
+	}
+
+	providerList := list.New(providerItems, list.NewDefaultDelegate(), 50, 10)
+	providerList.SetShowTitle(false)
+	providerList.SetShowStatusBar(false)
+	providerList.SetFilteringEnabled(false)
+	providerList.SetShowHelp(false)
+	providerList.Styles.Title = titleStyle
+
+	mcpInput := textinput.New()
+	mcpInput.Placeholder = "Enter MCP providers (comma-separated, or leave empty)"
+	mcpInput.CharLimit = 200
+	mcpInput.Width = 50
+
+	languageItems := []list.Item{
+		languageItem{name: "node", description: "Node.js/JavaScript"},
+		languageItem{name: "python", description: "Python"},
+		languageItem{name: "golang", description: "Go"},
+		languageItem{name: "bash", description: "Bash scripts"},
+	}
+
+	languageList := list.New(languageItems, list.NewDefaultDelegate(), 50, 10)
+	languageList.SetShowTitle(false)
+	languageList.SetShowStatusBar(false)
+	languageList.SetFilteringEnabled(false)
+	languageList.SetShowHelp(false)
+	languageList.Styles.Title = titleStyle
+
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
+	return model{
+		step:             StepProjectName,
+		projectNameInput: pni,
+		description:      ti,
+		modelProviders:   providerList,
+		scriptLanguage:   languageList,
+		spinner:          s,
+		generatedFiles:   make(map[string]string),
+	}
+}
+
+// Init implements tea.Model
+func (m model) Init() tea.Cmd {
+	return tea.Batch(
+		textinput.Blink,
+		m.spinner.Tick,
+	)
+}
+
+// Styles
+var (
+	titleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FAFAFA")).
+			Background(lipgloss.Color("#7D56F4")).
+			Padding(0, 1)
+
+	subtitleStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#626262"))
+
+	selectedStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7D56F4")).
+			Bold(true)
+
+	errorStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FF5555")).
+			Bold(true)
+
+	successStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#50FA7B")).
+			Bold(true)
+)
+
+// Update handles messages
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return m, tea.Quit
+		case "enter":
+			return m.handleEnter()
+		case "tab", "shift+tab":
+			return m.handleTab()
+		case " ":
+			if m.step == StepModelProviders {
+				return m.toggleProvider()
+			}
 		}
-		os.Exit(1)
+
+	case spinner.TickMsg:
+		if m.step == StepProcessing {
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, tea.Batch(cmd, m.pollWorkflow())
+		}
+
+	case initResponseMsg:
+		m.workflowID = msg.workflowID
+		return m, m.pollWorkflow()
+
+	case pollResultMsg:
+		return m.handlePollResult(msg)
+
+	case errorMsg:
+		m.err = msg.err
+		return m, nil
 	}
 
-	// Check if directory exists
-	if _, err := os.Stat(projectName); err == nil && !force {
-		style.Error(runCtx, fmt.Sprintf("Directory %s already exists, use --force to overwrite", projectName))
-		os.Exit(1)
+	switch m.step {
+	case StepProjectName:
+		m.projectNameInput, cmd = m.projectNameInput.Update(msg)
+	case StepDescription:
+		m.description, cmd = m.description.Update(msg)
+	case StepModelProviders:
+		m.modelProviders, cmd = m.modelProviders.Update(msg)
+	case StepScriptLanguage:
+		m.scriptLanguage, cmd = m.scriptLanguage.Update(msg)
 	}
 
-	style.Info(runCtx, fmt.Sprintf("Creating new Lacquer project: %s", projectName))
-	style.Info(runCtx, fmt.Sprintf("Using template: %s", template.Name))
+	return m, cmd
+}
 
+// Handle enter key
+func (m model) handleEnter() (tea.Model, tea.Cmd) {
+	switch m.step {
+	case StepProjectName:
+		projectName := strings.TrimSpace(m.projectNameInput.Value())
+		if projectName == "" {
+			return m, nil
+		}
+		if !isValidProjectName(projectName) {
+			return m, nil
+		}
+		if _, err := os.Stat(projectName); err == nil {
+			return m, nil
+		}
+		m.answers.projectName = projectName
+		m.step = StepDescription
+		m.description.Focus()
+		return m, nil
+
+	case StepDescription:
+		if strings.TrimSpace(m.description.Value()) == "" {
+			return m, nil
+		}
+		m.answers.description = m.description.Value()
+		m.step = StepModelProviders
+		return m, nil
+
+	case StepModelProviders:
+		// Collect selected providers
+		m.answers.modelProviders = []string{}
+		for _, item := range m.modelProviders.Items() {
+			if provider, ok := item.(providerItem); ok && provider.selected {
+				m.answers.modelProviders = append(m.answers.modelProviders, provider.name)
+			}
+		}
+
+		m.step = StepScriptLanguage
+		return m, nil
+	case StepScriptLanguage:
+		if selectedItem, ok := m.scriptLanguage.SelectedItem().(languageItem); ok {
+			m.answers.scriptLanguage = selectedItem.name
+		}
+		if m.answers.scriptLanguage == "" {
+			return m, nil
+		}
+		m.step = StepSummary
+		return m, nil
+
+	case StepSummary:
+		return m.startProcessing()
+
+	case StepComplete:
+		return m, tea.Quit
+	}
+
+	return m, nil
+}
+
+// Handle tab key
+func (m model) handleTab() (tea.Model, tea.Cmd) {
+	switch m.step {
+	case StepDescription:
+		// Move to next step if description is filled
+		if strings.TrimSpace(m.description.Value()) != "" {
+			return m.handleEnter()
+		}
+	}
+	return m, nil
+}
+
+// Toggle provider selection
+func (m model) toggleProvider() (tea.Model, tea.Cmd) {
+	if selectedItem, ok := m.modelProviders.SelectedItem().(providerItem); ok {
+		selectedItem.selected = !selectedItem.selected
+
+		// Update the item in the list
+		index := m.modelProviders.Index()
+		items := m.modelProviders.Items()
+		items[index] = selectedItem
+		m.modelProviders.SetItems(items)
+	}
+	return m, nil
+}
+
+// Start processing (API calls)
+func (m model) startProcessing() (tea.Model, tea.Cmd) {
+	m.step = StepProcessing
+	return m, tea.Batch(
+		m.spinner.Tick,
+		m.callInitAPI(),
+	)
+}
+
+// API message types
+type initResponseMsg struct {
+	workflowID string
+}
+
+type pollResultMsg struct {
+	status   string
+	workflow string
+	scripts  []fileContent
+	tools    []fileContent
+}
+
+type fileContent struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
+type errorMsg struct {
+	err error
+}
+
+// Call init API
+func (m model) callInitAPI() tea.Cmd {
+	return func() tea.Msg {
+		requestData := map[string]interface{}{
+			"description":     m.answers.description,
+			"model_providers": m.answers.modelProviders,
+			"script_language": m.answers.scriptLanguage,
+			"project_name":    m.answers.projectName,
+		}
+
+		jsonData, err := json.Marshal(requestData)
+		if err != nil {
+			return errorMsg{err: fmt.Errorf("failed to marshal request: %w", err)}
+		}
+
+		resp, err := http.Post(
+			lacquerAPIBaseURL+"/v1/init",
+			"application/json",
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			return errorMsg{err: fmt.Errorf("failed to call init API: %w", err)}
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return errorMsg{err: fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))}
+		}
+
+		var result struct {
+			WorkflowID string `json:"workflow_id"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return errorMsg{err: fmt.Errorf("failed to decode response: %w", err)}
+		}
+
+		return initResponseMsg{workflowID: result.WorkflowID}
+	}
+}
+
+// Poll workflow results
+func (m model) pollWorkflow() tea.Cmd {
+	return tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
+		if m.workflowID == "" {
+			return nil
+		}
+
+		resp, err := http.Get(lacquerAPIBaseURL + "/v1/workflow/" + m.workflowID + "/results")
+		if err != nil {
+			return errorMsg{err: fmt.Errorf("failed to poll workflow: %w", err)}
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return errorMsg{err: fmt.Errorf("polling error %d", resp.StatusCode)}
+		}
+
+		var result struct {
+			Status   string        `json:"status"`
+			Workflow string        `json:"workflow"`
+			Scripts  []fileContent `json:"scripts"`
+			Tools    []fileContent `json:"tools"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return errorMsg{err: fmt.Errorf("failed to decode poll response: %w", err)}
+		}
+
+		return pollResultMsg{
+			status:   result.Status,
+			workflow: result.Workflow,
+			scripts:  result.Scripts,
+			tools:    result.Tools,
+		}
+	})
+}
+
+// Handle poll result
+func (m model) handlePollResult(msg pollResultMsg) (tea.Model, tea.Cmd) {
+	if msg.status == "done" {
+		// Save files and complete
+		if err := m.saveGeneratedFiles(msg); err != nil {
+			m.err = err
+			return m, nil
+		}
+		m.step = StepComplete
+		m.pollComplete = true
+		return m, nil
+	}
+
+	// Continue polling if not done
+	return m, m.pollWorkflow()
+}
+
+// Save generated files
+func (m model) saveGeneratedFiles(msg pollResultMsg) error {
 	// Create project directory
-	if err := os.MkdirAll(projectName, 0755); err != nil {
-		style.Error(runCtx, fmt.Sprintf("Failed to create project directory: %v", err))
-		os.Exit(1)
+	if err := os.MkdirAll(m.answers.projectName, 0755); err != nil {
+		return fmt.Errorf("failed to create project directory: %w", err)
 	}
 
-	// Create .lacquer directory
-	lacquerDir := filepath.Join(projectName, ".lacquer")
-	if err := os.MkdirAll(lacquerDir, 0755); err != nil {
-		style.Error(runCtx, fmt.Sprintf("Failed to create .lacquer directory: %v", err))
-		os.Exit(1)
+	// Save main workflow
+	if msg.workflow != "" {
+		workflowPath := filepath.Join(m.answers.projectName, "workflow.laq.yml")
+		if err := os.WriteFile(workflowPath, []byte(msg.workflow), 0644); err != nil {
+			return fmt.Errorf("failed to save workflow: %w", err)
+		}
+		m.generatedFiles["workflow.laq.yml"] = workflowPath
 	}
 
-	// Create config file
-	configPath := filepath.Join(lacquerDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(defaultConfig), 0644); err != nil {
-		style.Error(runCtx, fmt.Sprintf("Failed to create config file: %v", err))
-		os.Exit(1)
-	}
+	// Save scripts
+	if len(msg.scripts) > 0 {
+		scriptsDir := filepath.Join(m.answers.projectName, "scripts")
+		if err := os.MkdirAll(scriptsDir, 0755); err != nil {
+			return fmt.Errorf("failed to create scripts directory: %w", err)
+		}
 
-	// Create template files
-	for filename, content := range template.Files {
-		filePath := filepath.Join(projectName, filename)
-		content = strings.ReplaceAll(content, "{{PROJECT_NAME}}", projectName)
-
-		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-			style.Error(runCtx, fmt.Sprintf("Failed to create %s: %v", filename, err))
-			os.Exit(1)
+		for _, script := range msg.scripts {
+			scriptPath := filepath.Join(scriptsDir, script.Name)
+			if err := os.WriteFile(scriptPath, []byte(script.Content), 0755); err != nil {
+				return fmt.Errorf("failed to save script %s: %w", script.Name, err)
+			}
+			m.generatedFiles["scripts/"+script.Name] = scriptPath
 		}
 	}
 
-	// Initialize git repository
-	if !noGit {
-		if err := initGitRepository(projectName); err != nil {
-			style.Warning(runCtx, fmt.Sprintf("Failed to initialize git repository: %v", err))
-		} else {
-			style.Info(runCtx, "Initialized git repository")
+	// Save tools
+	if len(msg.tools) > 0 {
+		toolsDir := filepath.Join(m.answers.projectName, "tools")
+		if err := os.MkdirAll(toolsDir, 0755); err != nil {
+			return fmt.Errorf("failed to create tools directory: %w", err)
+		}
+
+		for _, tool := range msg.tools {
+			toolPath := filepath.Join(toolsDir, tool.Name)
+			if err := os.WriteFile(toolPath, []byte(tool.Content), 0755); err != nil {
+				return fmt.Errorf("failed to save tool %s: %w", tool.Name, err)
+			}
+			m.generatedFiles["tools/"+tool.Name] = toolPath
 		}
 	}
 
-	style.Success(runCtx, fmt.Sprintf("Project %s created successfully!", projectName))
-	fmt.Fprintf(runCtx, "Next steps:\n")
-	fmt.Fprintf(runCtx, "  cd %s\n", projectName)
-	fmt.Fprintf(runCtx, "  laq validate workflow.laq.yaml\n")
-	fmt.Fprintf(runCtx, "  laq run workflow.laq.yaml\n")
-	fmt.Fprintf(runCtx, "\n")
-	fmt.Printf("Learn more at https://lacquer.ai/docs\n")
+	return nil
+}
+
+// View renders the current state
+func (m model) View() string {
+	if m.err != nil {
+		return errorStyle.Render("Error: "+m.err.Error()) + "\n\nPress 'q' to quit."
+	}
+
+	switch m.step {
+	case StepProjectName:
+		return m.renderProjectNameStep()
+	case StepDescription:
+		return m.renderDescriptionStep()
+	case StepModelProviders:
+		return m.renderModelProvidersStep()
+	case StepScriptLanguage:
+		return m.renderScriptLanguageStep()
+	case StepSummary:
+		return m.renderSummaryStep()
+	case StepProcessing:
+		return m.renderProcessingStep()
+	case StepComplete:
+		return m.renderCompleteStep()
+	}
+
+	return ""
+}
+
+func (m model) renderProjectNameStep() string {
+	return fmt.Sprintf(
+		"%s\n\n%s\n\n%s\n\n%s",
+		titleStyle.Render("Lacquer Project Setup"),
+		subtitleStyle.Render("Give your Lacquer project a name:"),
+		m.projectNameInput.View(),
+		"Press Enter to continue, Ctrl+C to quit",
+	)
+}
+
+func (m model) renderDescriptionStep() string {
+	return fmt.Sprintf(
+		"%s\n\n%s\n\n%s\n\n%s",
+		titleStyle.Render("Lacquer Project Setup"),
+		subtitleStyle.Render("What do you want to build?"),
+		m.description.View(),
+		"Press Enter to continue, Ctrl+C to quit",
+	)
+}
+
+func (m model) renderModelProvidersStep() string {
+	selected := []string{}
+	for _, item := range m.modelProviders.Items() {
+		if provider, ok := item.(providerItem); ok && provider.selected {
+			selected = append(selected, provider.name)
+		}
+	}
+
+	selectedText := "None selected"
+	if len(selected) > 0 {
+		selectedText = strings.Join(selected, ", ")
+	}
+
+	return fmt.Sprintf(
+		"%s\n\n%s\n\n%s\n\n%s\n\n%s",
+		titleStyle.Render("Model Providers"),
+		subtitleStyle.Render("Select the model providers you want to use or leave empty for lacquer to choose the best one for you (use Space to toggle, Enter to continue):"),
+		m.modelProviders.View(),
+		"Selected: "+selectedStyle.Render(selectedText),
+		"Press Space to select/deselect, Enter to continue",
+	)
+}
+
+func (m model) renderScriptLanguageStep() string {
+	selected := "None selected"
+	if selectedItem, ok := m.scriptLanguage.SelectedItem().(languageItem); ok {
+		selected = selectedItem.name
+	}
+
+	return fmt.Sprintf(
+		"%s\n\n%s\n\n%s\n\n%s\n\n%s",
+		titleStyle.Render("Script Language"),
+		subtitleStyle.Render("Choose your preferred language for scripts and/or local tools to be written in:"),
+		m.scriptLanguage.View(),
+		"Selected: "+selectedStyle.Render(selected),
+		"Press Enter to continue",
+	)
+}
+
+func (m model) renderSummaryStep() string {
+	var summaryBuilder strings.Builder
+
+	// Project name
+	summaryBuilder.WriteString(fmt.Sprintf("%s: %s\n",
+		selectedStyle.Render("Project Name"),
+		m.answers.projectName))
+
+	// Description
+	summaryBuilder.WriteString(fmt.Sprintf("%s: %s\n",
+		selectedStyle.Render("Description"),
+		m.answers.description))
+
+	// Model providers
+	providers := "None selected"
+	if len(m.answers.modelProviders) > 0 {
+		providers = strings.Join(m.answers.modelProviders, ", ")
+	} else {
+		providers = "Auto-select best provider"
+	}
+	summaryBuilder.WriteString(fmt.Sprintf("%s: %s\n",
+		selectedStyle.Render("Model Providers"),
+		providers))
+
+	// Script language
+	summaryBuilder.WriteString(fmt.Sprintf("%s: %s\n",
+		selectedStyle.Render("Script Language"),
+		m.answers.scriptLanguage))
+
+	return fmt.Sprintf(
+		"%s\n\n%s\n\n%s\n\n%s",
+		titleStyle.Render("Project Summary"),
+		subtitleStyle.Render("Please review your selections:"),
+		summaryBuilder.String(),
+		"Press Enter to generate your project, Ctrl+C to quit",
+	)
+}
+
+func (m model) renderProcessingStep() string {
+	return fmt.Sprintf(
+		"%s\n\n%s %s\n\n%s",
+		titleStyle.Render("Generating Project"),
+		m.spinner.View(),
+		"Generating your workflow...",
+		"This may take a few moments. Please wait.",
+	)
+}
+
+func (m model) renderCompleteStep() string {
+	var filesList strings.Builder
+	for relativePath := range m.generatedFiles {
+		filesList.WriteString(fmt.Sprintf("  ✓ %s\n", relativePath))
+	}
+
+	return fmt.Sprintf(
+		"%s\n\n%s\n\n%s\n%s\n\n%s\n  cd %s\n  laq validate main.laq.yml\n  laq run main.laq.yml\n\nPress Enter to exit.",
+		successStyle.Render("Project Created Successfully!"),
+		"Generated files:",
+		filesList.String(),
+		"Next steps:",
+		m.answers.projectName,
+	)
+}
+
+// Main initialization function
+func initializeProjectInteractive(runCtx execcontext.RunContext) {
+	// Run the interactive wizard
+	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		style.Error(runCtx, fmt.Sprintf("Failed to run setup wizard: %v", err))
+		os.Exit(1)
+	}
 }
 
 func isValidProjectName(name string) bool {
@@ -185,327 +701,3 @@ func isValidProjectName(name string) bool {
 
 	return true
 }
-
-func initGitRepository(projectDir string) error {
-	// Create .gitignore
-	gitignorePath := filepath.Join(projectDir, ".gitignore")
-	gitignoreContent := `# Lacquer
-.lacquer/state/
-.lacquer/cache/
-*.log
-
-# Dependencies
-node_modules/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-`
-
-	if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
-		return err
-	}
-
-	// TODO: Initialize git repository when we have git command available
-	// For now, just create .gitignore
-	return nil
-}
-
-// Template content
-const defaultConfig = `# Lacquer Configuration File
-# This file contains default settings for your Lacquer project
-
-# Logging configuration
-log_level: info
-
-# Output format (text, json, yaml)
-output: text
-
-# Default model configuration
-defaults:
-  model: gpt-4
-  temperature: 0.7
-  max_tokens: 2000
-
-# Environment variables to load
-env_files:
-  - .env
-  - .env.local
-
-# API keys and secrets (use environment variables)
-# openai_api_key: ${OPENAI_API_KEY}
-# anthropic_api_key: ${ANTHROPIC_API_KEY}
-`
-
-const basicWorkflow = `version: "1.0"
-
-metadata:
-  name: "{{PROJECT_NAME}}"
-  description: "A basic Lacquer workflow"
-  author: "Your Name"
-
-agents:
-  assistant:
-    model: gpt-4
-    temperature: 0.7
-    system_prompt: "You are a helpful AI assistant."
-
-workflow:
-  inputs:
-    topic:
-      type: string
-      description: "The topic to discuss"
-      required: true
-      default: "AI and automation"
-
-  steps:
-    - id: greet
-      agent: assistant
-      prompt: "Hello! Let's talk about {{inputs.topic}}. Give me a brief overview."
-      
-    - id: elaborate
-      agent: assistant
-      prompt: "That's interesting! Can you elaborate on the key benefits of {{inputs.topic}}?"
-
-  outputs:
-    greeting: "{{steps.greet.output}}"
-    elaboration: "{{steps.elaborate.output}}"
-`
-
-const basicReadme = `# {{PROJECT_NAME}}
-
-A basic Lacquer workflow project.
-
-## Getting Started
-
-1. **Validate the workflow:**
-` + "```bash" + `
-   laq validate workflow.laq.yaml
-` + "```" + `
-
-2. **Run the workflow:**
-` + "```bash" + `
-   laq run workflow.laq.yaml --input topic="machine learning"
-` + "```" + `
-
-3. **Customize the workflow:**
-   - Edit ` + "`workflow.laq.yaml`" + ` to modify the conversation
-   - Add new agents with different models or configurations
-   - Create additional steps for more complex interactions
-
-## Configuration
-
-The project configuration is stored in ` + "`.lacquer/config.yaml`" + `. You can customize:
-- Default model settings
-- API keys and credentials
-- Logging preferences
-
-## Learn More
-
-- [Lacquer Documentation](https://lacquer.ai/docs)
-- [DSL Reference](https://lacquer.ai/docs/dsl)
-- [Examples](https://lacquer.ai/examples)
-`
-
-const researchWorkflow = `version: "1.0"
-
-metadata:
-  name: "{{PROJECT_NAME}}"
-  description: "Research workflow with web search capabilities"
-  author: "Your Name"
-
-agents:
-  researcher:
-    model: gpt-4
-    temperature: 0.3
-    system_prompt: "You are a thorough researcher who provides accurate, well-sourced information."
-    tools:
-      - name: web_search
-        uses: lacquer/web-search@v1
-
-workflow:
-  inputs:
-    research_topic:
-      type: string
-      description: "Topic to research"
-      required: true
-
-  steps:
-    - id: search
-      agent: researcher
-      prompt: "Search for recent information about {{inputs.research_topic}}"
-      
-    - id: analyze
-      agent: researcher
-      prompt: "Based on the search results, provide a comprehensive analysis of {{inputs.research_topic}}. Include key findings, trends, and implications."
-      
-    - id: summarize
-      agent: researcher
-      prompt: "Create a concise executive summary of the research on {{inputs.research_topic}}"
-
-  outputs:
-    search_results: "{{steps.search.output}}"
-    analysis: "{{steps.analyze.output}}"
-    summary: "{{steps.summarize.output}}"
-`
-
-const researchReadme = `# {{PROJECT_NAME}}
-
-A research-focused Lacquer workflow with web search capabilities.
-
-## Features
-
-- Web search integration
-- Multi-step research process
-- Comprehensive analysis and summarization
-
-## Usage
-
-` + "```bash" + `
-# Research a topic
-laq run workflow.laq.yaml --input research_topic="artificial intelligence trends 2024"
-
-# Validate before running
-laq validate workflow.laq.yaml
-` + "```" + `
-
-## Requirements
-
-This workflow uses the ` + "`lacquer/web-search@v1`" + ` block, which requires:
-- Internet connection
-- Search API configuration (see .lacquer/config.yaml)
-
-## Customization
-
-- Modify agent prompts for different research styles
-- Add more analysis steps
-- Include fact-checking or source verification steps
-- Export results to different formats
-`
-
-const enterpriseWorkflow = `version: "1.0"
-
-metadata:
-  name: "{{PROJECT_NAME}}"
-  description: "Enterprise workflow with error handling and retries"
-  author: "Your Name"
-  version: "1.0.0"
-
-agents:
-  analyst:
-    model: gpt-4
-    temperature: 0.2
-    max_tokens: 2000
-    system_prompt: "You are a professional business analyst."
-    policies:
-      max_retries: 3
-      timeout: 5m
-      cost_limit: "$1.00"
-
-workflow:
-  inputs:
-    business_question:
-      type: string
-      description: "Business question to analyze"
-      required: true
-    
-    priority:
-      type: string
-      description: "Analysis priority level"
-      enum: ["low", "medium", "high", "critical"]
-      default: "medium"
-
-  state:
-    analysis_context: {}
-    retry_count: 0
-
-  steps:
-    - id: initial_analysis
-      agent: analyst
-      prompt: "Analyze this business question: {{inputs.business_question}}. Priority: {{inputs.priority}}"
-      timeout: 2m
-      retry:
-        max_attempts: 3
-        backoff: exponential
-        initial_delay: 1s
-        max_delay: 30s
-      on_error:
-        - log: "Initial analysis failed"
-          fallback: fallback_analysis
-    
-    - id: deep_dive
-      agent: analyst
-      prompt: "Provide a deeper analysis based on the initial findings: {{steps.initial_analysis.output}}"
-      condition: "{{steps.initial_analysis.success}}"
-      
-    - id: recommendations
-      agent: analyst
-      prompt: "Based on the analysis, provide actionable recommendations for: {{inputs.business_question}}"
-      
-    - id: fallback_analysis
-      agent: analyst
-      prompt: "Provide a simplified analysis for: {{inputs.business_question}}"
-      skip_if: "{{steps.initial_analysis.success}}"
-
-  outputs:
-    analysis: "{{steps.initial_analysis.output || steps.fallback_analysis.output}}"
-    deep_analysis: "{{steps.deep_dive.output}}"
-    recommendations: "{{steps.recommendations.output}}"
-    metadata:
-      priority: "{{inputs.priority}}"
-      completed_at: "{{workflow.completed_at}}"
-      retry_count: "{{state.retry_count}}"
-`
-
-const enterpriseReadme = `# {{PROJECT_NAME}}
-
-An enterprise-grade Lacquer workflow with advanced error handling, retries, and monitoring.
-
-## Enterprise Features
-
-- **Error Handling**: Automatic retries with exponential backoff
-- **Cost Controls**: Budget limits and monitoring
-- **Timeout Management**: Step-level timeouts
-- **Conditional Logic**: Dynamic workflow execution
-- **State Management**: Persistent workflow state
-- **Fallback Strategies**: Graceful degradation
-
-## Usage
-
-` + "```bash" + `
-# Run enterprise analysis
-laq run workflow.laq.yaml \
-  --input business_question="How can we improve customer retention?" \
-  --input priority="high"
-
-# Monitor execution
-laq run workflow.laq.yaml --verbose --output json
-` + "```" + `
-
-## Configuration
-
-Enterprise workflows require additional configuration:
-
-1. **Cost Limits**: Set in agent policies
-2. **Retry Policies**: Configured per step
-3. **Monitoring**: Enable structured logging
-4. **Secrets**: Use environment variables for API keys
-
-## Monitoring
-
-- View execution logs: ` + "`laq logs`" + `
-- Check workflow status: ` + "`laq status`" + `
-- Export metrics: ` + "`laq metrics --export`" + `
-
-## Production Deployment
-
-- Use ` + "`laq serve`" + ` for API deployment
-- Configure monitoring and alerting
-- Set up automated testing with ` + "`laq test`" + `
-`

@@ -3,26 +3,26 @@ metadata:
   name: input-min-max-conflict-test
   description: Test workflow with conflicting min/max constraints
 
+inputs:
+  conflicting_number:
+    type: integer
+    minimum: 100
+    maximum: 50  # Invalid: minimum > maximum
+    
+  conflicting_array:
+    type: array
+    min_items: 10
+    max_items: 5  # Invalid: min_items > max_items
+    
+  negative_min_items:
+    type: array
+    min_items: -5  # Invalid: negative min_items
+    
+  negative_max_items:
+    type: array
+    max_items: -10  # Invalid: negative max_items
+      
 workflow:
-  inputs:
-    conflicting_number:
-      type: integer
-      minimum: 100
-      maximum: 50  # Invalid: minimum > maximum
-      
-    conflicting_array:
-      type: array
-      min_items: 10
-      max_items: 5  # Invalid: min_items > max_items
-      
-    negative_min_items:
-      type: array
-      min_items: -5  # Invalid: negative min_items
-      
-    negative_max_items:
-      type: array
-      max_items: -10  # Invalid: negative max_items
-      
   steps:
     - id: validate
       run: echo "Validating inputs"

@@ -1,65 +1,23 @@
 
 Running hello-world workflow (2 steps)
 
-[SET SUFFIX]  Running step say_hello_anthropic (1/2)
-[SPINNER START]
-[SET SUFFIX]   Running step say_hello_anthropic (1/2)
+[Spinner 61bec03]: Running step say_hello_anthropic (1/2)
+[61bec03] + +
    Say hello to John Doe in a creative and friendly way.
 Make it warm and welcoming!
-
-
-IMPORTANT: Respond in JSON using the following schema:
-```json
-{"greeting":{"type":"string","description":"The greet...
-
-[SET SUFFIX]   Running step say_hello_anthropic (1/2)
+[61bec03] +✓ 
+[Finish 61bec03]✓  Running step say_hello_anthropic (1/2)
    ✓ Say hello to John Doe in a creative and friendly way.
 Make it warm and welcoming!
 
-
-IMPORTANT: Respond in JSON using the following schema:
-```json
-{"greeting":{"type":"string","description":"The greet
-
-[SPINNER STOP]
-[FINAL MSG] ✓  Running step say_hello_anthropic (1/2)
-   ✓ Say hello to John Doe in a creative and friendly way.
-Make it warm and welcoming!
-
-
-IMPORTANT: Respond in JSON using the following schema:
-```json
-{"greeting":{"type":"string","description":"The greet
-
-[SET SUFFIX]  Running step say_hello_openai (2/2)
-[SPINNER START]
-[SET SUFFIX]   Running step say_hello_openai (2/2)
+[Spinner e798266]: Running step say_hello_openai (2/2)
+[e798266] + +
    Say hello to John Doe in a creative and friendly way.
 Make it warm and welcoming!
-
-
-IMPORTANT: Respond in JSON using the following schema:
-```json
-{"greeting":{"type":"string","description":"The greet...
-
-[SET SUFFIX]   Running step say_hello_openai (2/2)
+[e798266] +✓ 
+[Finish e798266]✓  Running step say_hello_openai (2/2)
    ✓ Say hello to John Doe in a creative and friendly way.
 Make it warm and welcoming!
-
-
-IMPORTANT: Respond in JSON using the following schema:
-```json
-{"greeting":{"type":"string","description":"The greet
-
-[SPINNER STOP]
-[FINAL MSG] ✓  Running step say_hello_openai (2/2)
-   ✓ Say hello to John Doe in a creative and friendly way.
-Make it warm and welcoming!
-
-
-IMPORTANT: Respond in JSON using the following schema:
-```json
-{"greeting":{"type":"string","description":"The greet
 
 
 ✓ Workflow completed successfully (TIME)

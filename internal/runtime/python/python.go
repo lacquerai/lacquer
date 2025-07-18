@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -57,6 +58,15 @@ func (p *PythonRuntime) Get(ctx context.Context, version string) (string, error)
 
 	if path, exists := p.cache.Get(p.Name(), version); exists {
 		return path, nil
+	}
+
+	// Try Homebrew on macOS if available
+	if p.platform.OS == "darwin" && p.isHomebrewAvailable(ctx) {
+		if path, err := p.installWithHomebrew(ctx, version); err == nil {
+			return path, nil
+		} else {
+			log.Debug().Err(err).Msg("homebrew installation failed, falling back to download")
+		}
 	}
 
 	// Get download URL
@@ -156,15 +166,20 @@ func (p *PythonRuntime) List(ctx context.Context) ([]types.Version, error) {
 	}
 	defer resp.Body.Close()
 
-	var apiResponse pythonAPIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
+	var apiResponse []pythonRelease
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
 	}
 
-	versions := make([]types.Version, 0, len(apiResponse.Results))
+	if err := json.Unmarshal(body, &apiResponse); err != nil {
+		return nil, fmt.Errorf("decoding response: %w: %s", err, string(body))
+	}
+
+	versions := make([]types.Version, 0, len(apiResponse))
 	platformKey := p.getPlatformKey()
 
-	for _, release := range apiResponse.Results {
+	for _, release := range apiResponse {
 		// Extract version from name (e.g., "Python 3.11.5" -> "3.11.5")
 		versionMatch := regexp.MustCompile(`Python\s+(\d+\.\d+\.\d+)`).FindStringSubmatch(release.Name)
 		if len(versionMatch) < 2 {
@@ -354,12 +369,94 @@ func (p *PythonRuntime) buildPython(ctx context.Context, sourceDir string) error
 	return nil
 }
 
-// pythonAPIResponse represents the response from Python's API
-type pythonAPIResponse struct {
-	Count    int             `json:"count"`
-	Next     string          `json:"next"`
-	Previous string          `json:"previous"`
-	Results  []pythonRelease `json:"results"`
+// isHomebrewAvailable checks if Homebrew is installed and available
+func (p *PythonRuntime) isHomebrewAvailable(ctx context.Context) bool {
+	cmd := exec.CommandContext(ctx, "which", "brew")
+	return cmd.Run() == nil
+}
+
+// installWithHomebrew installs Python using Homebrew and returns the Python executable path
+func (p *PythonRuntime) installWithHomebrew(ctx context.Context, version string) (string, error) {
+	// Homebrew formula name for specific Python versions
+	formula := "python@" + version
+
+	// Check if the formula exists and install it
+	installCmd := exec.CommandContext(ctx, "brew", "install", formula)
+	var stderr bytes.Buffer
+	installCmd.Stderr = &stderr
+
+	if err := installCmd.Run(); err != nil {
+		// Try with just "python" if specific version formula doesn't exist
+		if strings.Contains(stderr.String(), "No available formula") {
+			formula = "python"
+			installCmd = exec.CommandContext(ctx, "brew", "install", formula)
+			installCmd.Stderr = &stderr
+			if err := installCmd.Run(); err != nil {
+				return "", fmt.Errorf("homebrew install failed: %w, stderr: %s", err, stderr.String())
+			}
+		} else {
+			return "", fmt.Errorf("homebrew install failed: %w, stderr: %s", err, stderr.String())
+		}
+	}
+
+	// Find the Python executable
+	pythonPath, err := p.findHomebrewPythonPath(ctx, version)
+	if err != nil {
+		return "", fmt.Errorf("finding homebrew python path: %w", err)
+	}
+
+	// Cache the installation by creating a symlink in our cache
+	cachePath := p.cache.Path(p.Name(), version)
+	cacheDir := filepath.Dir(cachePath)
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return "", fmt.Errorf("creating cache dir: %w", err)
+	}
+
+	// Create a symbolic link to the Homebrew installation
+	if err := os.Symlink(filepath.Dir(pythonPath), cachePath); err != nil && !os.IsExist(err) {
+		return "", fmt.Errorf("creating cache symlink: %w", err)
+	}
+
+	return pythonPath, nil
+}
+
+// findHomebrewPythonPath finds the Python executable path from Homebrew installation
+func (p *PythonRuntime) findHomebrewPythonPath(ctx context.Context, version string) (string, error) {
+	// Try versioned python first (python3.11, python3.12, etc.)
+	versionParts := strings.Split(version, ".")
+	if len(versionParts) >= 2 {
+		versionedName := fmt.Sprintf("python%s.%s", versionParts[0], versionParts[1])
+		if path, err := exec.LookPath(versionedName); err == nil {
+			return path, nil
+		}
+	}
+
+	// Try with just major version (python3)
+	if len(versionParts) >= 1 {
+		majorVersionName := fmt.Sprintf("python%s", versionParts[0])
+		if path, err := exec.LookPath(majorVersionName); err == nil {
+			return path, nil
+		}
+	}
+
+	// Fall back to "python3" or "python"
+	for _, pythonCmd := range []string{"python3", "python"} {
+		if path, err := exec.LookPath(pythonCmd); err == nil {
+			// Verify this is the right version by checking its version output
+			out := bytes.Buffer{}
+			cmd := exec.CommandContext(ctx, path, "--version")
+			cmd.Stdout = &out
+			cmd.Stderr = &out
+			if err := cmd.Run(); err == nil {
+				output := strings.TrimSpace(out.String())
+				if strings.Contains(output, version) {
+					return path, nil
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("python %s not found after homebrew installation", version)
 }
 
 // pythonRelease represents a Python release from the API

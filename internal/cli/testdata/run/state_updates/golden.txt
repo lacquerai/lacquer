@@ -1,0 +1,27 @@
+
+Running state-updates workflow (4 steps)
+
+[Spinner 903df5f]: Running step initialize_state (1/4)
+[Finish 903df5f]✓  Running step initialize_state (1/4)
+
+[Spinner ca351a2]: Running step first_calculation (2/4)
+[Finish ca351a2]✓  Running step first_calculation (2/4)
+
+[Spinner 606bf28]: Running step second_calculation (3/4)
+[Finish 606bf28]✓  Running step second_calculation (3/4)
+
+[Spinner 20a99fa]: Running step finalize_state (4/4)
+[Finish 20a99fa]✓  Running step finalize_state (4/4)
+
+
+✓ Workflow completed successfully (TIME)
+
+Outputs
+
+all_operations: initialized|multiply|add
+final_counter: 120
+final_state_result: 120
+total_accumulated: 145
+workflow_metadata: map[current_step:second_calculation final_counter:120 total_operations:24 workflow_name:state-test]
+
+STDERR:

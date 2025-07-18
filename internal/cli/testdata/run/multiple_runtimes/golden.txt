@@ -1,0 +1,22 @@
+
+Running multiple-runtimes workflow (3 steps)
+
+[Spinner fb42eeb]: Running step test_python (1/3)
+[Finish fb42eeb]✓  Running step test_python (1/3)
+
+[Spinner 459394c]: Running step test_node (2/3)
+[Finish 459394c]✓  Running step test_node (2/3)
+
+[Spinner e505563]: Running step test_go (3/3)
+[Finish e505563]✓  Running step test_go (3/3)
+
+
+✓ Workflow completed successfully (TIME)
+
+Outputs
+
+go_result: map[outputs:map[message:Received input: hello go runtime:go version:go1.24.1]]
+node_result: map[outputs:map[message:Received input: hello node runtime:node version:v22.14.0]]
+python_result: map[outputs:map[message:Received input: hello python runtime:python version:3.13.3]]
+
+STDERR:

@@ -148,3 +148,6 @@ laq
 
 #JS
 node_modules
+
+#schema
+schema.json

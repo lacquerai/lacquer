@@ -44,12 +44,6 @@ func NewManager(cacheDir string) (*Manager, error) {
 	}, nil
 }
 
-// RegisterNativeExecutor registers the native executor with a workflow engine
-func (m *Manager) RegisterNativeExecutor(engine WorkflowEngine) {
-	nativeExecutor := NewNativeExecutor(engine)
-	m.registry.Register(RuntimeNative, nativeExecutor)
-}
-
 // LoadBlock loads a block from the given path
 func (m *Manager) LoadBlock(ctx context.Context, path string) (*Block, error) {
 	return m.loader.Load(ctx, path)

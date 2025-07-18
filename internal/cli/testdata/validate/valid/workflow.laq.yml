@@ -9,12 +9,12 @@ requirements:
     - name: go
       version: 1.24.1
 
-workflow:
-  inputs:
-    name:
-      type: string
-      description: Name of the person to greet
+inputs:
+  name:
+    type: string
+    description: Name of the person to greet
   
+workflow:
   steps:
     - id: say_hello
       run: "go run scripts/main.go"

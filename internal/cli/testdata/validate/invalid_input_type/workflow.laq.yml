@@ -3,25 +3,25 @@ metadata:
   name: invalid-input-type-test
   description: Test workflow with invalid input parameter types
 
+inputs:
+  valid_string:
+    type: string
+    description: Valid string input
+    
+  invalid_type:
+    type: number  # Invalid: should be 'integer' not 'number'
+    description: Invalid type name
+    
+  another_invalid:
+    type: bool  # Invalid: should be 'boolean' not 'bool'
+    
+  complex_invalid:
+    type: map  # Invalid: should be 'object' not 'map'
+    
+  valid_types:
+    type: array  # Valid type
+      
 workflow:
-  inputs:
-    valid_string:
-      type: string
-      description: Valid string input
-      
-    invalid_type:
-      type: number  # Invalid: should be 'integer' not 'number'
-      description: Invalid type name
-      
-    another_invalid:
-      type: bool  # Invalid: should be 'boolean' not 'bool'
-      
-    complex_invalid:
-      type: map  # Invalid: should be 'object' not 'map'
-      
-    valid_types:
-      type: array  # Valid type
-      
   steps:
     - id: process
       run: echo "Processing inputs"

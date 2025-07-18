@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -461,9 +462,16 @@ func FormatToolResult(toolResult *ToolResultBlockParam) string {
 func formatInputs(inputs map[string]interface{}) string {
 	sb := strings.Builder{}
 	if len(inputs) > 0 {
+		sortedInputs := make([]string, 0, len(inputs))
+		for key := range inputs {
+			sortedInputs = append(sortedInputs, key)
+		}
+		sort.Strings(sortedInputs)
+
 		sb.WriteString("(")
 		var i int
-		for key, value := range inputs {
+		for _, key := range sortedInputs {
+			value := inputs[key]
 			sb.WriteString(fmt.Sprintf("%s: %v", style.MutedStyle.Render(key), style.MutedStyle.Render(fmt.Sprintf("%v", value))))
 			if i != len(inputs)-1 {
 				sb.WriteString("; ")

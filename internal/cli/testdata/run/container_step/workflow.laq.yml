@@ -4,36 +4,37 @@ metadata:
   description: Test workflow for Docker container execution
   author: lacquer-team
 
-workflow:
-  inputs:
-    message:
-      type: string
-      description: Message to process in container
-      default: "Hello from container!"
-    
-    processing_type:
-      type: string
-      description: Type of processing to perform
-      default: "uppercase"
+inputs:
+  message:
+    type: string
+    description: Message to process in container
+    default: "Hello from container!"
   
+  processing_type:
+    type: string
+    description: Type of processing to perform
+    default: "uppercase"
+  
+workflow:
   steps:
     - id: process_in_container
       container: alpine:latest
+      command:
+        - "sh"
+        - "-c"
+        - "apk add --no-cache --quiet jq && echo $LACQUER_INPUTS | jq -r '.inputs.message' | tr '[:lower:]' '[:upper:]' | jq -n --arg msg \"$(cat)\" '{\"processed_message\": $msg}'"
       with:
-        message: "{{ inputs.message }}"
-        type: "{{ inputs.processing_type }}"
+        message: ${{ inputs.message }}
+        type: ${{ inputs.processing_type }}
       outputs:
         processed_message:
           type: string
           description: The processed message
-        container_info:
-          type: string
-          description: Information about the container
 
-    - id: process_python_container
-      container: python:3.9-alpine
+    - id: process_golang_container
+      container: ./Dockerfile
       with:
-        text: "{{ steps.process_in_container.outputs.processed_message }}"
+        message: ${{ steps.process_in_container.outputs.processed_message }}
         operation: "reverse"
       outputs:
         result:
@@ -41,6 +42,6 @@ workflow:
           description: The reversed text
 
   outputs:
-    original_message: "{{ inputs.message }}"
-    processed_result: "{{ steps.process_in_container.outputs.processed_message }}"
-    final_result: "{{ steps.process_python_container.outputs.result }}"
+    original_message: ${{ inputs.message }}
+    processed_result: ${{ steps.process_in_container.outputs.processed_message }}
+    final_result: ${{ steps.process_golang_container.outputs.result }}
