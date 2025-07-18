@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -37,6 +38,7 @@ This command:
 Examples:
   laq run workflow.laq.yaml                    # Run workflow with default settings
   laq run workflow.laq.yaml --input key=value # Provide input parameters
+  laq run workflow.laq.yaml --input-json '{"key": "value"}' # Provide input parameters as JSON
   laq run workflow.laq.yaml --output json     # JSON output for automation
   laq run workflow.laq.yaml --save-state      # Persist state for debugging`,
 	Args: cobra.ExactArgs(1),
@@ -65,10 +67,16 @@ Examples:
 			StdOut:  cmd.OutOrStdout(),
 			StdErr:  cmd.OutOrStderr(),
 		}
+
 		inputsMap := make(map[string]interface{})
+		if inputJSONRaw != "" {
+			json.Unmarshal([]byte(inputJSONRaw), &inputsMap)
+		}
+
 		for k, v := range inputs {
 			inputsMap[k] = v
 		}
+
 		err := runWorkflow(runCtx, args[0], inputsMap)
 		if err != nil {
 			os.Exit(1)
@@ -78,9 +86,10 @@ Examples:
 
 var (
 	// Input parameters
-	inputs     map[string]string
-	maxRetries int
-	timeout    time.Duration
+	inputs       map[string]string
+	inputJSONRaw string
+	maxRetries   int
+	timeout      time.Duration
 )
 
 func init() {
@@ -88,6 +97,7 @@ func init() {
 
 	// Input flags
 	runCmd.Flags().StringToStringVarP(&inputs, "input", "i", map[string]string{}, "input parameters (key=value)")
+	runCmd.Flags().StringVarP(&inputJSONRaw, "input-json", "j", "", "input parameters as JSON")
 
 	runCmd.Flags().IntVar(&maxRetries, "max-retries", 3, "maximum number of retries for failed steps")
 	runCmd.Flags().DurationVar(&timeout, "timeout", 30*time.Minute, "overall execution timeout")
