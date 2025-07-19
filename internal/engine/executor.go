@@ -191,7 +191,6 @@ func (e *Executor) executeSteps(execCtx *execcontext.ExecutionContext, steps []*
 		stepStart := time.Now()
 		err := e.executeStep(execCtx, step)
 		stepDuration := time.Since(stepStart)
-
 		if err != nil {
 			if err == errStepSkipped {
 				log.Debug().
@@ -325,7 +324,6 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 	} else {
 		stepResult, err = e.collectStepResults(execCtx, step)
 	}
-
 	if err != nil {
 		result.Status = execcontext.StepStatusFailed
 		result.Error = err
@@ -337,42 +335,37 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 	result.Duration = result.EndTime.Sub(start)
 	result.TokenUsage = stepResult.TokenUsage
 	result.Response = stepResult.Response
-
-	if err != nil {
-		result.Status = execcontext.StepStatusFailed
-		result.Error = err
-	} else {
-		result.Status = execcontext.StepStatusCompleted
-		result.Output = stepResult.Output
-
-		for key, value := range stepResult.Output {
-			execCtx.SetState(fmt.Sprintf("steps.%s.%s", step.ID, key), value)
-		}
-
-		// Process state updates for any step type
-		if step.Updates != nil {
-			updates := make(map[string]interface{})
-			for key, value := range step.Updates {
-				rendered, renderErr := e.renderValueRecursively(value, execCtx)
-				if renderErr != nil {
-					log.Warn().
-						Err(renderErr).
-						Str("step_id", step.ID).
-						Str("key", key).
-						Msg("Failed to render state update value")
-					updates[key] = value
-				} else {
-					updates[key] = rendered
-				}
-			}
-			execCtx.UpdateState(updates)
-		}
-	}
-
-	execCtx.SetStepResult(step.ID, result)
 	execCtx.IncrementCurrentStep()
 
-	return err
+	result.Status = execcontext.StepStatusCompleted
+	result.Output = stepResult.Output
+
+	// set the step result before the updates so that we can reference any outputs
+	// of the current step in the updates
+	execCtx.SetStepResult(step.ID, result)
+
+	// Process state updates for any step type
+	if step.Updates != nil {
+		updates := make(map[string]interface{})
+		for key, value := range step.Updates {
+			rendered, renderErr := e.renderValueRecursively(value, execCtx)
+			if renderErr != nil {
+				log.Warn().
+					Err(renderErr).
+					Str("step_id", step.ID).
+					Str("key", key).
+					Msg("Failed to render state update value")
+				updates[key] = value
+				continue
+			}
+
+			updates[key] = rendered
+		}
+
+		execCtx.UpdateState(updates)
+	}
+
+	return nil
 }
 
 type StepResult struct {
@@ -433,6 +426,9 @@ func (e *Executor) parseAgentOutput(step *ast.Step, response string) (map[string
 }
 
 func (e *Executor) executeWhileStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
+	iterationCount := 0
+
+	subExecCtx := execCtx.NewChild(step.Steps)
 	for {
 		condition, err := e.templateEngine.Render(step.While, execCtx)
 		if err != nil {
@@ -443,12 +439,31 @@ func (e *Executor) executeWhileStep(execCtx *execcontext.ExecutionContext, step 
 		if !conditionBool {
 			log.Debug().
 				Str("step_id", step.ID).
-				Msg("While condition evaluated to false, skipping steps")
-			return nil, nil
+				Int("iterations", iterationCount).
+				Msg("While condition evaluated to false, exiting loop")
+			break
 		}
 
-		return e.executeSteps(execCtx, step.Steps)
+		err = e.executeSteps(subExecCtx, step.Steps)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	result := &StepResult{
+		Output: map[string]interface{}{
+			"iterations": iterationCount,
+		},
+		Response: fmt.Sprintf("While loop completed after %d iterations", iterationCount),
+	}
+
+	stepOutputs := make(map[string]interface{}, len(subExecCtx.StepResults))
+	for _, subStep := range subExecCtx.StepResults {
+		stepOutputs[subStep.StepID] = subStep.Output
+	}
+
+	result.Output["steps"] = stepOutputs
+	return result, nil
 }
 
 // executeAgentStep executes a step that uses an AI agent
@@ -815,10 +830,15 @@ func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step
 		inputs[key] = rendered
 	}
 
+	script, err := e.templateEngine.Render(step.Run, execCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render run string: %w", err)
+	}
+
 	tempBlock := &block.Block{
 		Name:    fmt.Sprintf("script-%s", step.ID),
 		Runtime: block.RuntimeBash,
-		Script:  step.Run,
+		Script:  script.(string),
 	}
 
 	outputs, err := e.blockManager.ExecuteRawBlock(execCtx, tempBlock, inputs)
@@ -887,24 +907,8 @@ func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, s
 func (e *Executor) executeActionStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
 	switch step.Action {
 	case "update_state":
-		// Render update values using templates
-		updates := make(map[string]interface{})
-		for key, value := range step.Updates {
-			rendered, err := e.renderValueRecursively(value, execCtx)
-			if err != nil {
-				return nil, fmt.Errorf("failed to render update value for %s: %w", key, err)
-			}
-			updates[key] = rendered
-		}
-
-		execCtx.UpdateState(updates)
-
-		return &StepResult{
-			Output: map[string]interface{}{
-				"updated_keys": getKeys(updates),
-			},
-			Response: fmt.Sprintf("%v", updates),
-		}, nil
+		// nothing to do here, the state is updated by the executor for each step
+		return &StepResult{}, nil
 	default:
 		return nil, fmt.Errorf("unknown action: %s", step.Action)
 	}

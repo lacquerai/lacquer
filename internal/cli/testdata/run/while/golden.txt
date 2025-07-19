@@ -1,0 +1,47 @@
+
+Running while workflow (2 steps)
+
+[Spinner f994a3b]: Running step while_loop (1/2)
+[Spinner f93e04e]: Running step update_state_string (1/2)
+[Finish f93e04e]✓  Running step update_state_string (1/2)
+
+[Spinner 40bbfcc]: Running step update_state (2/2)
+[Finish 40bbfcc]✓  Running step update_state (2/2)
+
+[Spinner 2a44991]: Running step print_text (3/2)
+[Finish 2a44991]✓  Running step print_text (3/2)
+
+[Spinner e3b599e]: Running step update_state_string (1/2)
+[Finish e3b599e]✓  Running step update_state_string (1/2)
+
+[Spinner edd98a3]: Running step update_state (2/2)
+[Finish edd98a3]✓  Running step update_state (2/2)
+
+[Spinner 4e81ed4]: Running step print_text (3/2)
+[Finish 4e81ed4]✓  Running step print_text (3/2)
+
+[Spinner 399ae7e]: Running step update_state_string (1/2)
+[Finish 399ae7e]✓  Running step update_state_string (1/2)
+
+[Spinner 759b809]: Running step update_state (2/2)
+[Finish 759b809]✓  Running step update_state (2/2)
+
+[Spinner b6d3967]: Running step print_text (3/2)
+[Finish b6d3967]✓  Running step print_text (3/2)
+
+[Finish f994a3b]✓  Running step while_loop (1/2)
+
+[Spinner 221a1b5]: Running step print_text (2/2)
+[Finish 221a1b5]✓  Running step print_text (2/2)
+
+
+✓ Workflow completed successfully (TIME)
+
+Outputs
+
+iterations: 3
+second_iterations: begin, 0, 1, 2 inner
+
+text: begin, 0, 1, 2
+
+STDERR:

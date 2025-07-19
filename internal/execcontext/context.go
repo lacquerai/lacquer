@@ -15,6 +15,8 @@ import (
 
 // ExecutionContext contains all the state and metadata for a workflow execution
 type ExecutionContext struct {
+	Parent *ExecutionContext
+
 	// Workflow information
 	Workflow  *ast.Workflow
 	RunID     string
@@ -34,7 +36,6 @@ type ExecutionContext struct {
 	// Environment and metadata
 	Environment map[string]string
 	Metadata    map[string]interface{}
-	Matrix      map[string]interface{}
 
 	// Execution control
 	Context RunContext
@@ -98,7 +99,6 @@ func NewExecutionContext(ctx RunContext, workflow *ast.Workflow, inputs map[stri
 		Cwd:         wd,
 		Environment: utils.GetEnvironmentVars(),
 		Metadata:    utils.BuildMetadata(workflow),
-		Matrix:      make(map[string]interface{}),
 		Context:     ctx,
 		Logger:      logger,
 		TotalSteps:  len(workflow.Workflow.Steps),
@@ -122,6 +122,30 @@ func NewExecutionContext(ctx RunContext, workflow *ast.Workflow, inputs map[stri
 	return execContext
 }
 
+// NewChild creates a new execution context for a sub step execution
+// This is used to create an execution context that is scoped to the
+// sub steps and so will not pollute the parent execution context.
+// The parent execution context is used to track the overall execution
+// status, progress and state.
+func (ec *ExecutionContext) NewChild(steps []*ast.Step) *ExecutionContext {
+	return &ExecutionContext{
+		Parent:      ec,
+		Workflow:    ec.Workflow,
+		RunID:       ec.RunID,
+		StartTime:   time.Now(),
+		Cwd:         ec.Cwd,
+		Inputs:      ec.Inputs,
+		State:       make(map[string]interface{}),
+		Outputs:     make(map[string]interface{}),
+		StepResults: make(map[string]*StepResult),
+		Context:     ec.Context,
+		Logger:      ec.Logger,
+		TotalSteps:  len(steps),
+		Environment: ec.Environment,
+		Metadata:    ec.Metadata,
+	}
+}
+
 // GetInput returns an input parameter value
 func (ec *ExecutionContext) GetInput(key string) (interface{}, bool) {
 	ec.mu.RLock()
@@ -133,6 +157,10 @@ func (ec *ExecutionContext) GetInput(key string) (interface{}, bool) {
 
 // GetState returns a state variable value
 func (ec *ExecutionContext) GetState(key string) (interface{}, bool) {
+	if ec.Parent != nil {
+		return ec.Parent.GetState(key)
+	}
+
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
 
@@ -166,20 +194,13 @@ func (ec *ExecutionContext) getNestedValue(target map[string]interface{}, key st
 	return value, exists
 }
 
-// SetState updates a state variable
-func (ec *ExecutionContext) SetState(key string, value interface{}) {
-	ec.mu.Lock()
-	defer ec.mu.Unlock()
-
-	ec.setNestedValue(ec.State, key, value)
-	ec.Logger.Debug().
-		Str("key", key).
-		Interface("value", value).
-		Msg("State updated")
-}
-
 // UpdateState updates multiple state variables
 func (ec *ExecutionContext) UpdateState(updates map[string]interface{}) {
+	if ec.Parent != nil {
+		ec.Parent.UpdateState(updates)
+		return
+	}
+
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
 
@@ -219,6 +240,10 @@ func (ec *ExecutionContext) setNestedValue(target map[string]interface{}, key st
 
 // GetAllState returns a copy of all state variables
 func (ec *ExecutionContext) GetAllState() map[string]interface{} {
+	if ec.Parent != nil {
+		return ec.Parent.GetAllState()
+	}
+
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
 

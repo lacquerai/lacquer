@@ -52,7 +52,7 @@ func (te *TemplateEngine) Render(template string, execCtx *execcontext.Execution
 			return "", fmt.Errorf("failed to evaluate expression %s: %w", rawExpression, err)
 		}
 
-		if len(matches) == 1 {
+		if len(matches) == 1 && template == fullMatch {
 			return value, nil
 		}
 

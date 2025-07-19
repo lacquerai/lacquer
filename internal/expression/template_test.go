@@ -551,49 +551,6 @@ func TestTemplateEngine_ComplexWorkflowScenarios(t *testing.T) {
 		}
 	})
 
-	t.Run("Matrix strategy simulation", func(t *testing.T) {
-		workflow := &ast.Workflow{
-			Version: "1.0",
-			Workflow: &ast.WorkflowDef{
-				Steps: []*ast.Step{
-					{ID: "test", Agent: "agent1", Prompt: "Test"},
-				},
-			},
-		}
-
-		execCtx := NewExecutionContext(context.Background(), workflow, nil)
-
-		// Simulate matrix strategy
-		execCtx.Matrix = map[string]interface{}{
-			"os":      "ubuntu-latest",
-			"version": "3.9",
-			"arch":    "x64",
-		}
-
-		testCases := []struct {
-			template string
-			expected string
-		}{
-			{
-				template: "Running on: {{ matrix().os }}",
-				expected: "Running on: ubuntu-latest",
-			},
-			{
-				template: "{{ startsWith(matrix().os, 'ubuntu') ? 'Linux environment' : 'Other environment' }}",
-				expected: "Linux environment",
-			},
-			{
-				template: "Config: {{ format('{0}-{1}-{2}', matrix().os, matrix().version, matrix().arch) }}",
-				expected: "Config: ubuntu-latest-3.9-x64",
-			},
-		}
-
-		for _, tc := range testCases {
-			result, err := te.Render(tc.template, execCtx)
-			require.NoError(t, err)
-			assert.Equal(t, tc.expected, result)
-		}
-	})
 }
 
 func TestTemplateEngine_ErrorHandlingIntegration(t *testing.T) {

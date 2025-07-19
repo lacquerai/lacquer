@@ -412,6 +412,10 @@ func Test_MultipleRuntimes(t *testing.T) {
 	newSingleDirectoryRunTest(t)
 }
 
+func Test_While(t *testing.T) {
+	newSingleDirectoryRunTest(t)
+}
+
 func newSingleDirectoryRunTest(t *testing.T) {
 	t.Helper()
 

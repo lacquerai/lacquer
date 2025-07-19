@@ -3,11 +3,11 @@ metadata:
   name: while
   description: Test workflow for while loop
 
-state:
-  iterations: 0
-  text: ""
 
 workflow:
+  state:
+    iterations: 0
+    text: "begin"
   steps:
     - id: while_loop
       while: ${{ state.iterations < 3 }}
@@ -15,15 +15,20 @@ workflow:
         - id: update_state_string
           action: update_state
           updates:
-            text: "${{ state.text }}: ${{ state.iterations }}\n"
-        - id: print_text
-          run: "echo {{ state.text }}"
+            text: "${{ state.text }}, ${{ state.iterations }}"
         - id: update_state
           action: update_state
           updates:
             iterations: ${{ state.iterations + 1 }}
+        - id: print_text
+          run: |
+            echo "${{ state.text }}" inner
+
+    - id: print_text
+      run: |
+        echo "${{ state.text }}"
 
   outputs:
     iterations: ${{ state.iterations }}
     text: ${{ state.text }}
-    second_iterations: ${{ steps.while_loop.steps.print_text[1].outputs }}
+    second_iterations: ${{ steps.while_loop.steps.print_text.outputs.output }}

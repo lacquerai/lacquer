@@ -14,7 +14,7 @@ import (
 var (
 	ValidProviders = []string{"anthropic", "openai", "local"}
 	ValidRuntimes  = []string{"go", "node", "python"}
-	ValidStepTypes = []string{"agent", "uses", "run", "container", "action"}
+	ValidStepTypes = []string{"agent", "uses", "run", "container", "action", "while"}
 	ValidToolTypes = []string{"uses", "script", "mcp"}
 )
 
@@ -516,6 +516,10 @@ func (v *Validator) validateStep(step *Step, path string) {
 		stepTypes["containter"] = true
 	}
 
+	if step.While != "" {
+		stepTypes["while"] = true
+	}
+
 	if len(stepTypes) == 0 {
 		v.result.AddError(path, fmt.Sprintf("step must specify either %s", ListToReadable(ValidStepTypes)))
 	} else if len(stepTypes) > 1 {
@@ -563,6 +567,35 @@ func (v *Validator) validateStep(step *Step, path string) {
 				v.result.AddFieldError(path, "container", err.Error())
 			}
 		}
+	}
+
+	if step.While != "" {
+		v.validateWhileStep(path, step)
+	}
+}
+
+func (v *Validator) validateWhileStep(path string, step *Step) {
+	// Validate that while condition is provided
+	if step.While == "" {
+		v.result.AddFieldError(path, "while", "while step must have a condition")
+		return
+	}
+
+	// Validate that steps array is provided and not empty
+	if len(step.Steps) == 0 {
+		v.result.AddFieldError(path, "steps", "while step must have sub-steps")
+		return
+	}
+
+	// Recursively validate sub-steps
+	stepIDs := make(map[string]bool)
+	for i, subStep := range step.Steps {
+		subStepPath := fmt.Sprintf("%s.steps[%d]", path, i)
+		v.validateStep(subStep, subStepPath)
+		if stepIDs[subStep.ID] {
+			v.result.AddError(subStepPath, fmt.Sprintf("duplicate step ID: %s", subStep.ID))
+		}
+		stepIDs[subStep.ID] = true
 	}
 }
 

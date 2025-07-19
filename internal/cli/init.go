@@ -677,7 +677,7 @@ func (m model) renderCompleteStep() string {
 	}
 
 	return fmt.Sprintf(
-		"%s\n\n%s\n\n%s\n%s\n\n%s\n  cd %s\n  laq validate main.laq.yml\n  laq run main.laq.yml\n\nPress Enter to exit.",
+		"%s\n\n%s\n\n%s\n\n%s\n  cd %s\n  laq validate main.laq.yml\n  laq run main.laq.yml\n\nPress Enter to exit.",
 		successStyle.Render("Project Created Successfully!"),
 		"Generated files:",
 		filesList.String(),

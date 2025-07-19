@@ -266,26 +266,6 @@ func TestFunctionRegistry_ContextFunctions(t *testing.T) {
 		assert.Equal(t, 0, len(needs)) // Empty for single-job workflows
 	})
 
-	t.Run("matrix function", func(t *testing.T) {
-		// Test with empty matrix
-		result, err := fr.Call("matrix", []interface{}{}, execCtx)
-		require.NoError(t, err)
-
-		matrix := result.(map[string]interface{})
-		assert.Equal(t, 0, len(matrix))
-
-		// Test with matrix data
-		execCtx.Matrix = map[string]interface{}{
-			"os":      "ubuntu",
-			"version": "20.04",
-		}
-		result, err = fr.Call("matrix", []interface{}{}, execCtx)
-		require.NoError(t, err)
-
-		matrix = result.(map[string]interface{})
-		assert.Equal(t, "ubuntu", matrix["os"])
-		assert.Equal(t, "20.04", matrix["version"])
-	})
 }
 
 func TestFunctionRegistry_ObjectFunctions(t *testing.T) {

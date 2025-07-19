@@ -425,17 +425,6 @@ func (e *BinaryOpExpr) Eval(ctx *EvalContext) (Value, error) {
 		return nil, err
 	}
 
-	// Short-circuit evaluation for logical operators
-	if e.Op == BinaryOpTypeAdd {
-		if !ToBool(left) {
-			return BoolValue{Val: false}, nil
-		}
-	} else if e.Op == BinaryOpTypeOr {
-		if ToBool(left) {
-			return BoolValue{Val: true}, nil
-		}
-	}
-
 	right, err := e.Right.Eval(ctx)
 	if err != nil {
 		return nil, err
