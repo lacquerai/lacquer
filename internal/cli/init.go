@@ -383,14 +383,23 @@ type errorMsg struct {
 	err error
 }
 
+type initRequest struct {
+	Description    string   `json:"description"`
+	ModelProviders []string `json:"model_providers"`
+	ScriptLanguage string   `json:"script_language"`
+	ProjectName    string   `json:"project_name"`
+	Version        string   `json:"version"`
+}
+
 // Call init API
 func (m model) callInitAPI() tea.Cmd {
 	return func() tea.Msg {
-		requestData := map[string]interface{}{
-			"description":     m.answers.description,
-			"model_providers": m.answers.modelProviders,
-			"script_language": m.answers.scriptLanguage,
-			"project_name":    m.answers.projectName,
+		requestData := initRequest{
+			Description:    m.answers.description,
+			ModelProviders: m.answers.modelProviders,
+			ScriptLanguage: m.answers.scriptLanguage,
+			ProjectName:    m.answers.projectName,
+			Version:        getVersion(),
 		}
 
 		jsonData, err := json.Marshal(requestData)

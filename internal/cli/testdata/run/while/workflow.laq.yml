@@ -1,0 +1,29 @@
+version: "1.0"
+metadata:
+  name: while
+  description: Test workflow for while loop
+
+state:
+  iterations: 0
+  text: ""
+
+workflow:
+  steps:
+    - id: while_loop
+      while: ${{ state.iterations < 3 }}
+      steps:
+        - id: update_state_string
+          action: update_state
+          updates:
+            text: "${{ state.text }}: ${{ state.iterations }}\n"
+        - id: print_text
+          run: "echo {{ state.text }}"
+        - id: update_state
+          action: update_state
+          updates:
+            iterations: ${{ state.iterations + 1 }}
+
+  outputs:
+    iterations: ${{ state.iterations }}
+    text: ${{ state.text }}
+    second_iterations: ${{ steps.while_loop.steps.print_text[1].outputs }}

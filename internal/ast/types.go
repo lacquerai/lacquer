@@ -369,6 +369,12 @@ type Step struct {
 	// ID is a unique identifier for this step within the workflow, used for referencing
 	// in conditions and dependencies
 	ID string `yaml:"id" json:"id" jsonschema:"required"`
+	// While specifies a condition that must be true for the step to execute. The expression
+	// must evaluate to a boolean.
+	While string `yaml:"while,omitempty" json:"while,omitempty" jsonschema:"oneof_required=while"`
+	// Steps defines a list of sub steps to execute in sequence. In general it is discouraged to use
+	// sub steps unless you are using a while loop or some other control flow mechanism.
+	Steps []*Step `yaml:"steps,omitempty" json:"steps,omitempty"`
 	// Agent specifies which AI agent to use for this step (references an agent defined in the agents section)
 	Agent string `yaml:"agent,omitempty" json:"agent,omitempty" jsonschema:"oneof_required=agent"`
 	// Prompt provides instructions or questions for the AI agent to process

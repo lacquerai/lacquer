@@ -123,13 +123,13 @@ func (p *OpenAIProvider) Generate(ctx provider.GenerateContext, request *provide
 	}
 
 	response, err := p.client.Chat.Completions.New(ctx.Context, openai.ChatCompletionNewParams{
-		Model:       request.Model,
-		Messages:    p.buildOpenAIRequest(request),
-		Temperature: openai.Float(temperature),
-		MaxTokens:   openai.Int(maxTokens),
-		TopP:        openai.Float(topP),
-		N:           openai.Int(1),
-		Tools:       tools,
+		Model:               request.Model,
+		Messages:            p.buildOpenAIRequest(request),
+		Temperature:         openai.Float(temperature),
+		MaxCompletionTokens: openai.Int(maxTokens),
+		TopP:                openai.Float(topP),
+		N:                   openai.Int(1),
+		Tools:               tools,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create OpenAI completion: %w", err)

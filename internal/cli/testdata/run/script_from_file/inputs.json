@@ -1,5 +1,0 @@
-{
-  "sample_text": "Testing EXTERNAL script execution with numbers 42 and 99",
-  "numbers": [5, 15, 25, 35, 45],
-  "math_operation": "max"
-}

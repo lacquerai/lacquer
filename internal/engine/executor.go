@@ -151,8 +151,36 @@ func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progre
 		}
 	}
 
-	// Execute workflow steps sequentially
-	for i, step := range execCtx.Workflow.Workflow.Steps {
+	if err := e.executeSteps(execCtx, execCtx.Workflow.Workflow.Steps); err != nil {
+		return err
+	}
+
+	if err := e.collectWorkflowOutputs(execCtx); err != nil {
+		log.Error().
+			Err(err).
+			Str("run_id", execCtx.RunID).
+			Msg("Failed to collect workflow outputs")
+		return err
+	}
+
+	if e.progressChan != nil {
+		e.progressChan <- events.ExecutionEvent{
+			Type:      events.EventWorkflowCompleted,
+			Timestamp: time.Now(),
+			RunID:     execCtx.RunID,
+		}
+	}
+
+	log.Info().
+		Str("run_id", execCtx.RunID).
+		Dur("duration", time.Since(execCtx.StartTime)).
+		Msg("Workflow execution completed successfully")
+
+	return nil
+}
+
+func (e *Executor) executeSteps(execCtx *execcontext.ExecutionContext, steps []*ast.Step) error {
+	for i, step := range steps {
 		if execCtx.IsCancelled() {
 			log.Info().Str("run_id", execCtx.RunID).Msg("Workflow execution cancelled")
 			break
@@ -229,29 +257,6 @@ func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progre
 		}
 	}
 
-	// Collect workflow outputs if defined
-	if err := e.collectWorkflowOutputs(execCtx); err != nil {
-		log.Error().
-			Err(err).
-			Str("run_id", execCtx.RunID).
-			Msg("Failed to collect workflow outputs")
-		return err
-	}
-
-	// Send workflow completed event
-	if e.progressChan != nil {
-		e.progressChan <- events.ExecutionEvent{
-			Type:      events.EventWorkflowCompleted,
-			Timestamp: time.Now(),
-			RunID:     execCtx.RunID,
-		}
-	}
-
-	log.Info().
-		Str("run_id", execCtx.RunID).
-		Dur("duration", time.Since(execCtx.StartTime)).
-		Msg("Workflow execution completed successfully")
-
 	return nil
 }
 
@@ -314,47 +319,33 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 		}
 	}
 
-	var stepOutput map[string]interface{}
-	var stepResponse string
-	var tokenUsage *execcontext.TokenUsage
+	var stepResult *StepResult
+	if step.IsWhileStep() {
+		stepResult, err = e.executeWhileStep(execCtx, step)
+	} else {
+		stepResult, err = e.collectStepResults(execCtx, step)
+	}
 
-	switch {
-	case step.IsAgentStep():
-		stepResponse, tokenUsage, err = e.executeAgentStep(execCtx, step)
-		if err == nil {
-			stepOutput, err = e.parseAgentOutput(step, stepResponse)
-		}
-
-	case step.IsBlockStep():
-		stepOutput, err = e.executeBlockStep(execCtx, step)
-
-	case step.IsScriptStep():
-		stepOutput, err = e.executeScriptStep(execCtx, step)
-
-	case step.IsContainerStep():
-		stepOutput, err = e.executeContainerStep(execCtx, step)
-
-	case step.IsActionStep():
-		stepOutput, err = e.executeActionStep(execCtx, step)
-
-	default:
-		err = fmt.Errorf("unknown step type for step %s", step.ID)
+	if err != nil {
+		result.Status = execcontext.StepStatusFailed
+		result.Error = err
+		return err
 	}
 
 	// Update step result
 	result.EndTime = time.Now()
 	result.Duration = result.EndTime.Sub(start)
-	result.TokenUsage = tokenUsage
-	result.Response = stepResponse
+	result.TokenUsage = stepResult.TokenUsage
+	result.Response = stepResult.Response
 
 	if err != nil {
 		result.Status = execcontext.StepStatusFailed
 		result.Error = err
 	} else {
 		result.Status = execcontext.StepStatusCompleted
-		result.Output = stepOutput
+		result.Output = stepResult.Output
 
-		for key, value := range stepOutput {
+		for key, value := range stepResult.Output {
 			execCtx.SetState(fmt.Sprintf("steps.%s.%s", step.ID, key), value)
 		}
 
@@ -379,11 +370,42 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 	}
 
 	execCtx.SetStepResult(step.ID, result)
-
-	// Increment current step index after processing the step
 	execCtx.IncrementCurrentStep()
 
 	return err
+}
+
+type StepResult struct {
+	Output     map[string]interface{}
+	TokenUsage *execcontext.TokenUsage
+	Response   string
+}
+
+func (e *Executor) collectStepResults(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
+	var result *StepResult
+	var err error
+
+	switch {
+	case step.IsAgentStep():
+		result, err = e.executeAgentStep(execCtx, step)
+
+	case step.IsBlockStep():
+		result, err = e.executeBlockStep(execCtx, step)
+
+	case step.IsScriptStep():
+		result, err = e.executeScriptStep(execCtx, step)
+
+	case step.IsContainerStep():
+		result, err = e.executeContainerStep(execCtx, step)
+
+	case step.IsActionStep():
+		result, err = e.executeActionStep(execCtx, step)
+
+	default:
+		err = fmt.Errorf("unknown step type for step %s", step.ID)
+	}
+
+	return result, err
 }
 
 func (e *Executor) parseAgentOutput(step *ast.Step, response string) (map[string]interface{}, error) {
@@ -410,15 +432,48 @@ func (e *Executor) parseAgentOutput(step *ast.Step, response string) (map[string
 	return stepOutput, nil
 }
 
+func (e *Executor) executeWhileStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
+	for {
+		condition, err := e.templateEngine.Render(step.While, execCtx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to render while condition: %w", err)
+		}
+
+		conditionBool := utils.SafeBool(condition)
+		if !conditionBool {
+			log.Debug().
+				Str("step_id", step.ID).
+				Msg("While condition evaluated to false, skipping steps")
+			return nil, nil
+		}
+
+		return e.executeSteps(execCtx, step.Steps)
+	}
+}
+
 // executeAgentStep executes a step that uses an AI agent
-func (e *Executor) executeAgentStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (string, *execcontext.TokenUsage, error) {
+func (e *Executor) executeAgentStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
 	// Get the agent configuration
 	agent, exists := execCtx.Workflow.GetAgent(step.Agent)
 	if !exists {
-		return "", nil, fmt.Errorf("agent %s not found", step.Agent)
+		return nil, fmt.Errorf("agent %s not found", step.Agent)
 	}
 
-	return e.executeAgentStepWithTools(execCtx, step, agent)
+	response, tokenUsage, err := e.executeAgentStepWithTools(execCtx, step, agent)
+	if err != nil {
+		return nil, err
+	}
+
+	output, err := e.parseAgentOutput(step, response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &StepResult{
+		Output:     output,
+		Response:   response,
+		TokenUsage: tokenUsage,
+	}, nil
 }
 
 // executeAgentStepWithTools executes an agent step with tool support
@@ -706,7 +761,7 @@ func (e *Executor) executeToolCalls(execCtx *execcontext.ExecutionContext, toolC
 }
 
 // executeBlockStep executes a step that uses a reusable block
-func (e *Executor) executeBlockStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
+func (e *Executor) executeBlockStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
 	log.Debug().
 		Str("step_id", step.ID).
 		Str("block", step.Uses).
@@ -735,13 +790,16 @@ func (e *Executor) executeBlockStep(execCtx *execcontext.ExecutionContext, step 
 		return nil, fmt.Errorf("block execution failed: %w", err)
 	}
 
-	return map[string]interface{}{
-		"outputs": result.Outputs,
+	return &StepResult{
+		Output: map[string]interface{}{
+			"outputs": result.Outputs,
+		},
+		Response: fmt.Sprintf("%v", result.Outputs),
 	}, nil
 }
 
 // executeScriptStep executes a step that runs a Go script
-func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
+func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
 	log.Debug().
 		Str("step_id", step.ID).
 		Str("script", step.Run).
@@ -768,13 +826,16 @@ func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step
 		return nil, fmt.Errorf("script execution failed: %w", err)
 	}
 
-	return map[string]interface{}{
-		"outputs": outputs,
+	return &StepResult{
+		Output: map[string]interface{}{
+			"outputs": outputs,
+		},
+		Response: fmt.Sprintf("%v", outputs),
 	}, nil
 }
 
 // executeContainerStep executes a step that runs a Docker container
-func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
+func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
 	log.Debug().
 		Str("step_id", step.ID).
 		Str("container", step.Container).
@@ -814,13 +875,16 @@ func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, s
 		return nil, fmt.Errorf("container execution failed: %w", err)
 	}
 
-	return map[string]interface{}{
-		"outputs": outputs,
+	return &StepResult{
+		Output: map[string]interface{}{
+			"outputs": outputs,
+		},
+		Response: fmt.Sprintf("%v", outputs),
 	}, nil
 }
 
 // executeActionStep executes a step that performs a system action
-func (e *Executor) executeActionStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (map[string]interface{}, error) {
+func (e *Executor) executeActionStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
 	switch step.Action {
 	case "update_state":
 		// Render update values using templates
@@ -835,8 +899,11 @@ func (e *Executor) executeActionStep(execCtx *execcontext.ExecutionContext, step
 
 		execCtx.UpdateState(updates)
 
-		return map[string]interface{}{
-			"updated_keys": getKeys(updates),
+		return &StepResult{
+			Output: map[string]interface{}{
+				"updated_keys": getKeys(updates),
+			},
+			Response: fmt.Sprintf("%v", updates),
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown action: %s", step.Action)

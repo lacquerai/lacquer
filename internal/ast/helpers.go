@@ -88,6 +88,11 @@ func (s *Step) IsActionStep() bool {
 	return s.Action != ""
 }
 
+// IsWhileStep returns true if this is a while loop step
+func (s *Step) IsWhileStep() bool {
+	return s.While != ""
+}
+
 // IsScriptStep returns true if this is a script execution step
 func (s *Step) IsScriptStep() bool {
 	return s.Run != ""
