@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -391,9 +392,6 @@ func (e *Executor) collectStepResults(execCtx *execcontext.ExecutionContext, ste
 	case step.IsContainerStep():
 		result, err = e.executeContainerStep(execCtx, step)
 
-	case step.IsActionStep():
-		result, err = e.executeActionStep(execCtx, step)
-
 	default:
 		err = fmt.Errorf("unknown step type for step %s", step.ID)
 	}
@@ -683,6 +681,7 @@ func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, messages []
 	if err != nil {
 		return nil, fmt.Errorf("failed to render system prompt: %w", err)
 	}
+	os.WriteFile("anthropic_prompt.txt", []byte(systemPrompt.(string)), 0644)
 
 	request := &provider.Request{
 		Model:        agent.Model,
@@ -735,9 +734,14 @@ func (e *Executor) executeToolCalls(execCtx *execcontext.ExecutionContext, toolC
 
 		// Execute the tool
 		result, err := e.toolRegistry.ExecuteTool(execCtx, toolCall.Name, toolCall.Input)
-		if err != nil {
+		if err != nil || result.Error != "" {
+			msg := result.Error
+			if err != nil {
+				msg = err.Error()
+			}
+
 			log.Warn().
-				Err(err).
+				Err(errors.New(msg)).
 				Str("tool", toolCall.Name).
 				Msg("Tool execution failed")
 
@@ -747,7 +751,7 @@ func (e *Executor) executeToolCalls(execCtx *execcontext.ExecutionContext, toolC
 				provider.Message{
 					Role: "user",
 					Content: []provider.ContentBlockParamUnion{
-						provider.NewToolResultBlock(toolCall.ID, err.Error(), &isError),
+						provider.NewToolResultBlock(toolCall.ID, msg, &isError),
 					},
 				},
 			)
@@ -901,17 +905,6 @@ func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, s
 		},
 		Response: fmt.Sprintf("%v", outputs),
 	}, nil
-}
-
-// executeActionStep executes a step that performs a system action
-func (e *Executor) executeActionStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
-	switch step.Action {
-	case "update_state":
-		// nothing to do here, the state is updated by the executor for each step
-		return &StepResult{}, nil
-	default:
-		return nil, fmt.Errorf("unknown action: %s", step.Action)
-	}
 }
 
 // evaluateSkipCondition evaluates whether a step should be skipped

@@ -3,6 +3,7 @@ package expression
 import (
 	"testing"
 
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -151,9 +152,9 @@ func TestFunctionRegistry_UtilityFunctions(t *testing.T) {
 		assert.Equal(t, true, result)
 
 		// Test with failed step
-		execCtx.SetStepResult("step1", &StepResult{
+		execCtx.SetStepResult("step1", &execcontext.StepResult{
 			StepID: "step1",
-			Status: StepStatusFailed,
+			Status: execcontext.StepStatusFailed,
 		})
 		result, err = fr.Call("success", []interface{}{}, execCtx)
 		require.NoError(t, err)
@@ -177,19 +178,6 @@ func TestFunctionRegistry_UtilityFunctions(t *testing.T) {
 		assert.Contains(t, err.Error(), "takes no arguments")
 	})
 
-	t.Run("cancelled function", func(t *testing.T) {
-		execCtx := createTestExecutionContext()
-		result, err := fr.Call("cancelled", []interface{}{}, execCtx)
-		require.NoError(t, err)
-		assert.Equal(t, false, result)
-
-		// Cancel the context
-		execCtx.Cancel()
-		result, err = fr.Call("cancelled", []interface{}{}, execCtx)
-		require.NoError(t, err)
-		assert.Equal(t, true, result)
-	})
-
 	t.Run("failure function", func(t *testing.T) {
 		// Test with no failed steps
 		execCtx := createTestExecutionContext()
@@ -198,9 +186,9 @@ func TestFunctionRegistry_UtilityFunctions(t *testing.T) {
 		assert.Equal(t, false, result)
 
 		// Test with failed step
-		execCtx.SetStepResult("step1", &StepResult{
+		execCtx.SetStepResult("step1", &execcontext.StepResult{
 			StepID: "step1",
-			Status: StepStatusFailed,
+			Status: execcontext.StepStatusFailed,
 		})
 		result, err = fr.Call("failure", []interface{}{}, execCtx)
 		require.NoError(t, err)

@@ -59,9 +59,6 @@ func BuildMetadata(workflow *ast.Workflow) map[string]interface{} {
 	if workflow.Metadata != nil {
 		metadata["name"] = workflow.Metadata.Name
 		metadata["description"] = workflow.Metadata.Description
-		metadata["author"] = workflow.Metadata.Author
-		metadata["version"] = workflow.Metadata.Version
-		metadata["tags"] = workflow.Metadata.Tags
 	}
 
 	metadata["workflow_version"] = workflow.Version

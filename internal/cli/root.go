@@ -30,7 +30,7 @@ var rootCmd = &cobra.Command{
 
 The laq CLI tool enables developers to create, validate, and run AI workflows using a declarative YAML-based syntax.
 
-Visit https://lacquer.ai for documentation and examples.`,
+Visit https://lacquer.ai/docs for documentation and examples.`,
 	Version: getVersion(),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		initLogging()

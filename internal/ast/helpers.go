@@ -83,11 +83,6 @@ func (s *Step) IsBlockStep() bool {
 	return s.Uses != ""
 }
 
-// IsActionStep returns true if this is a system action step
-func (s *Step) IsActionStep() bool {
-	return s.Action != ""
-}
-
 // IsWhileStep returns true if this is a while loop step
 func (s *Step) IsWhileStep() bool {
 	return s.While != ""
@@ -110,8 +105,6 @@ func (s *Step) GetStepType() string {
 		return "agent"
 	case s.IsBlockStep():
 		return "block"
-	case s.IsActionStep():
-		return "action"
 	case s.IsScriptStep():
 		return "script"
 	case s.IsContainerStep():

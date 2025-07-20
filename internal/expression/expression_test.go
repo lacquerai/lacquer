@@ -2,9 +2,11 @@ package expression
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -451,7 +453,7 @@ func TestExpressionEvaluator_TypeConversions(t *testing.T) {
 
 // Helper functions for tests
 
-func createTestExecutionContext() *ExecutionContext {
+func createTestExecutionContext() *execcontext.ExecutionContext {
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -461,11 +463,14 @@ func createTestExecutionContext() *ExecutionContext {
 		},
 	}
 
-	ctx := context.Background()
-	return NewExecutionContext(ctx, workflow, nil)
+	return execcontext.NewExecutionContext(execcontext.RunContext{
+		Context: context.Background(),
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}, workflow, nil, "")
 }
 
-func createTestExecutionContextWithData() *ExecutionContext {
+func createTestExecutionContextWithData() *execcontext.ExecutionContext {
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Workflow: &ast.WorkflowDef{
@@ -484,6 +489,9 @@ func createTestExecutionContextWithData() *ExecutionContext {
 		"name":  "test",
 	}
 
-	ctx := context.Background()
-	return NewExecutionContext(ctx, workflow, inputs)
+	return execcontext.NewExecutionContext(execcontext.RunContext{
+		Context: context.Background(),
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}, workflow, inputs, "")
 }

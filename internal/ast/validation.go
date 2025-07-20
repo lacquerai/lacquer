@@ -504,10 +504,6 @@ func (v *Validator) validateStep(step *Step, path string) {
 		stepTypes["uses"] = true
 	}
 
-	if step.Action != "" {
-		stepTypes["action"] = true
-	}
-
 	if step.Run != "" {
 		stepTypes["run"] = true
 	}
@@ -534,17 +530,6 @@ func (v *Validator) validateStep(step *Step, path string) {
 
 	if step.Agent != "" || step.Prompt != "" {
 		v.validateAgentStep(path, step)
-	}
-
-	if step.Action != "" {
-		validActions := []string{"human_input", "update_state"}
-		if !contains(validActions, step.Action) {
-			v.result.AddFieldError(path, "action", fmt.Sprintf("invalid action: %s", step.Action))
-		}
-
-		if step.Action == "update_state" && len(step.Updates) == 0 {
-			v.result.AddFieldError(path, "updates", "update_state action requires updates field")
-		}
 	}
 
 	if step.Uses != "" {

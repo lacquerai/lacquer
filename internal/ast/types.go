@@ -150,7 +150,7 @@ var (
 type Runtime struct {
 	// Name specifies the runtime.
 	Name RuntimeType `yaml:"name" json:"name" jsonschema:"enum=node,enum=go,enum=python,default=go"`
-	// Version optionally specifies a version constraint for the runtime (e.g., ">=18.0.0", "3.9")
+	// Version optionally specifies a version constraint for the runtime (e.g., "18.0.0", "3.9")
 	// Leave empty to install the latest version.
 	Version string `yaml:"version,omitempty" json:"version,omitempty"`
 }
@@ -161,12 +161,6 @@ type WorkflowMetadata struct {
 	Name string `yaml:"name" json:"name" validate:"required"`
 	// Description provides a detailed explanation of what the workflow does and its purpose
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
-	// Author identifies who created or maintains this workflow
-	Author string `yaml:"author,omitempty" json:"author,omitempty"`
-	// Tags are keywords that help categorize and search for workflows
-	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
-	// Version tracks the version of this specific workflow
-	Version string `yaml:"version,omitempty" json:"version,omitempty"`
 
 	Position Position `yaml:"-" json:"-"`
 }
@@ -392,8 +386,6 @@ type Step struct {
 	Command []string `yaml:"command,omitempty" json:"command,omitempty"`
 	// With provides input parameters for the referenced script, workflow or block
 	With map[string]interface{} `yaml:"with,omitempty" json:"with,omitempty"`
-	// Action specifies a built-in action to perform (e.g., "update_state", "set_output")
-	Action string `yaml:"action,omitempty" json:"action,omitempty" jsonschema:"enum=update_state,enum=set_output"`
 	// Updates defines changes to make to the workflow state when this step completes
 	Updates map[string]interface{} `yaml:"updates,omitempty" json:"updates,omitempty"`
 	// Condition determines whether this step should execute based on workflow state or previous step results.

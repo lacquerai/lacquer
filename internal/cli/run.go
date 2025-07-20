@@ -69,7 +69,16 @@ Examples:
 		}
 
 		inputsMap := make(map[string]interface{})
-		if inputJSONRaw != "" {
+
+		if inputFile != "" {
+			file, err := os.Open(inputFile)
+			if err != nil {
+				fmt.Fprintf(cmd.OutOrStderr(), "failed to open input file: %s\n", err)
+				os.Exit(1)
+			}
+			json.NewDecoder(file).Decode(&inputsMap)
+			file.Close()
+		} else if inputJSONRaw != "" {
 			json.Unmarshal([]byte(inputJSONRaw), &inputsMap)
 		}
 
@@ -87,6 +96,7 @@ Examples:
 var (
 	// Input parameters
 	inputs       map[string]string
+	inputFile    string
 	inputJSONRaw string
 	maxRetries   int
 	timeout      time.Duration
@@ -98,6 +108,7 @@ func init() {
 	// Input flags
 	runCmd.Flags().StringToStringVarP(&inputs, "input", "i", map[string]string{}, "input parameters (key=value)")
 	runCmd.Flags().StringVarP(&inputJSONRaw, "input-json", "j", "", "input parameters as JSON")
+	runCmd.Flags().StringVarP(&inputFile, "input-file", "f", "", "input parameters from file")
 
 	runCmd.Flags().IntVar(&maxRetries, "max-retries", 3, "maximum number of retries for failed steps")
 	runCmd.Flags().DurationVar(&timeout, "timeout", 30*time.Minute, "overall execution timeout")
@@ -121,6 +132,8 @@ func runWorkflow(ctx execcontext.RunContext, workflowFile string, inputs map[str
 			}
 
 			printValidationSummary(ctx, summary)
+		default:
+			printGenericError(ctx, err)
 		}
 
 		return err
@@ -211,4 +224,8 @@ func printValidationErrors(w io.Writer, validationResult *engine.InputValidation
 	}
 
 	fmt.Fprintf(w, "\n💡 Please check your input parameters and try again.\n")
+}
+
+func printGenericError(ctx execcontext.RunContext, err error) {
+	fmt.Fprintf(ctx.StdErr, "\n%s Error: %s\n", style.ErrorIcon(), style.ErrorStyle.Render(err.Error()))
 }

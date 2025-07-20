@@ -9,7 +9,7 @@ import (
 	"github.com/lacquerai/lacquer/internal/execcontext"
 )
 
-var expressionPattern = regexp.MustCompile(`\$\{\{\s*(.*?)\s*\}\}`)
+var expressionPattern = regexp.MustCompile(`(\$)?\$\{\{\s*(.*?)\s*\}\}`)
 
 // TemplateEngine handles variable interpolation and template rendering
 type TemplateEngine struct {
@@ -45,11 +45,16 @@ func (te *TemplateEngine) Render(template string, execCtx *execcontext.Execution
 		}
 
 		fullMatch := match[0]                        // Full match including {{ }}
-		rawExpression := strings.TrimSpace(match[1]) // Expression content
+		rawExpression := strings.TrimSpace(match[2]) // Expression content
+		isEscaped := match[1] != ""
+		if isEscaped {
+			result = strings.Replace(result, fullMatch, strings.TrimPrefix(fullMatch, match[1]), 1)
+			continue
+		}
 
 		value, err := te.expressionEvaluator.Evaluate(rawExpression, execCtx)
 		if err != nil {
-			return "", fmt.Errorf("failed to evaluate expression %s: %w", rawExpression, err)
+			return "", fmt.Errorf("failed to evaluate expression %s: %w", fullMatch, err)
 		}
 
 		if len(matches) == 1 && template == fullMatch {
@@ -154,7 +159,6 @@ func (vr *VariableResolver) ResolveVariable(varPath string, execCtx *execcontext
 		}
 
 		return result.Output, nil
-
 	case "metadata":
 		if len(parts) < 2 {
 			return nil, fmt.Errorf("metadata variable requires a field name")

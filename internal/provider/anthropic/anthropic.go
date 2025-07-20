@@ -17,6 +17,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	maxTokenMap = map[string]int{
+		"claude-opus-4":     64000,
+		"claude-sonnet-4":   64000,
+		"claude-3-7-sonne":  64000,
+		"claude-3-5-sonnet": 8192,
+		"claude-3-5-haiku":  8192,
+		"claude-3-opus":     4096,
+		"claude-3-haiku":    4096,
+	}
+)
+
 // Provider implements the ModelProvider interface using Anthropic's API
 type Provider struct {
 	name   string
@@ -212,7 +224,7 @@ func (p *Provider) Generate(gtx provider.GenerateContext, request *provider.Requ
 	}
 
 	// Make the API call with retries
-	response, err := p.client.Messages.New(gtx.Context, anthropicReq)
+	response, err := p.client.Messages.New(gtx.Context, anthropicReq, option.WithRequestTimeout(time.Minute*10))
 	if err != nil {
 		return nil, nil, fmt.Errorf("Anthropic API call failed: %w", err)
 	}
@@ -299,7 +311,15 @@ func (p *Provider) Close() error {
 
 // buildAnthropicRequest converts a ModelRequest to an AnthropicRequest
 func (p *Provider) buildAnthropicRequest(request *provider.Request) (anthropic.MessageNewParams, error) {
-	maxTokens := 4096
+	maxTokens := 8192
+
+	for model, tokens := range maxTokenMap {
+		if strings.HasPrefix(request.Model, model) {
+			maxTokens = tokens
+			break
+		}
+	}
+
 	if request.MaxTokens != nil {
 		maxTokens = *request.MaxTokens
 	}

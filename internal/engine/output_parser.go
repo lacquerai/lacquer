@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"os"
 	"regexp"
 	"strings"
 
@@ -42,7 +43,6 @@ func (p *OutputParser) ParseStepOutput(step *ast.Step, response string) (map[str
 // create a more robust type that conforms to the user specified schema
 // but for now this is fine.
 func (p *OutputParser) extractJSON(response string) map[string]interface{} {
-	// Try to find JSON in code blocks first
 	matches := p.codeBlockPattern.FindStringSubmatch(response)
 	if len(matches) > 1 {
 		response = matches[1]
@@ -50,17 +50,20 @@ func (p *OutputParser) extractJSON(response string) map[string]interface{} {
 
 	// Clean up the response
 	response = strings.TrimSpace(response)
+	os.WriteFile("response.txt", []byte(response), 0644)
 
 	// Try to parse as JSON
 	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(response), &result); err == nil {
+	err := json.Unmarshal([]byte(response), &result)
+	if err == nil {
 		return result
 	}
 
 	// Try to find JSON-like structures in the text
 	jsonMatches := p.jsonPattern.FindAllString(response, -1)
 	for _, match := range jsonMatches {
-		if err := json.Unmarshal([]byte(match), &result); err == nil {
+		err := json.Unmarshal([]byte(match), &result)
+		if err == nil {
 			return result
 		}
 	}

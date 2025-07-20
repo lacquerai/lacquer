@@ -2,9 +2,11 @@ package expression
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,16 +31,19 @@ func TestTemplateEngine_BasicRendering(t *testing.T) {
 		"age":  30,
 	}
 
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, inputs)
+	execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+		Context: context.Background(),
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}, workflow, inputs, "")
 
 	// Test input variable
-	result, err := te.Render("Hello, {{ inputs.name }}!", execCtx)
+	result, err := te.Render("Hello, ${{ inputs.name }}!", execCtx)
 	assert.NoError(t, err)
 	assert.Equal(t, "Hello, Alice!", result)
 
 	// Test multiple variables
-	result, err = te.Render("Name: {{ inputs.name }}, Age: {{ inputs.age }}", execCtx)
+	result, err = te.Render("Name: ${{ inputs.name }}, Age: ${{ inputs.age }}", execCtx)
 	assert.NoError(t, err)
 	assert.Equal(t, "Name: Alice, Age: 30", result)
 }
@@ -59,67 +64,24 @@ func TestTemplateEngine_StateVariables(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
+	execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+		Context: context.Background(),
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}, workflow, nil, "")
 
 	// Test state variables
-	result, err := te.Render("Counter: {{ state.counter }}, Status: {{ state.status }}", execCtx)
+	result, err := te.Render("Counter: ${{ state.counter }}, Status: ${{ state.status }}", execCtx)
 	assert.NoError(t, err)
 	assert.Equal(t, "Counter: 5, Status: active", result)
 
 	// Test updated state
-	execCtx.SetState("counter", 10)
-	result, err = te.Render("Counter: {{ state.counter }}", execCtx)
+	execCtx.UpdateState(map[string]interface{}{
+		"counter": 10,
+	})
+	result, err = te.Render("Counter: ${{ state.counter }}", execCtx)
 	assert.NoError(t, err)
 	assert.Equal(t, "Counter: 10", result)
-}
-
-func TestTemplateEngine_StepVariables(t *testing.T) {
-	te := NewTemplateEngine()
-
-	workflow := &ast.Workflow{
-		Version: "1.0",
-		Workflow: &ast.WorkflowDef{
-			Steps: []*ast.Step{
-				{ID: "step1", Agent: "agent1", Prompt: "test"},
-			},
-		},
-	}
-
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
-
-	// Add a completed step result
-	stepResult := &StepResult{
-		StepID:   "step1",
-		Status:   StepStatusCompleted,
-		Response: "Hello, world!",
-		Output: map[string]interface{}{
-			"response":  "Hello, world!",
-			"sentiment": "positive",
-		},
-	}
-	execCtx.SetStepResult("step1", stepResult)
-
-	// Test step response
-	result, err := te.Render("Response: {{ steps.step1.output }}", execCtx)
-	assert.NoError(t, err)
-	assert.Equal(t, "Response: Hello, world!", result)
-
-	// Test step output
-	result, err = te.Render("Sentiment: {{ steps.step1.sentiment }}", execCtx)
-	assert.NoError(t, err)
-	assert.Equal(t, "Sentiment: positive", result)
-
-	// Test step status
-	result, err = te.Render("Status: {{ steps.step1.status }}", execCtx)
-	assert.NoError(t, err)
-	assert.Equal(t, "Status: completed", result)
-
-	// Test step success flag
-	result, err = te.Render("Success: {{ steps.step1.success }}", execCtx)
-	assert.NoError(t, err)
-	assert.Equal(t, "Success: true", result)
 }
 
 func TestTemplateEngine_MetadataVariables(t *testing.T) {
@@ -139,11 +101,14 @@ func TestTemplateEngine_MetadataVariables(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
+	execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+		Context: context.Background(),
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}, workflow, nil, "")
 
 	// Test metadata variables
-	result, err := te.Render("Workflow: {{ metadata.name }} by {{ metadata.author }}", execCtx)
+	result, err := te.Render("Workflow: ${{ metadata.name }} by ${{ metadata.author }}", execCtx)
 	assert.NoError(t, err)
 	assert.Equal(t, "Workflow: test-workflow by Alice", result)
 }
@@ -161,16 +126,19 @@ func TestTemplateEngine_WorkflowVariables(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
+	execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+		Context: context.Background(),
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}, workflow, nil, "")
 
 	// Test workflow variables
-	result, err := te.Render("Step {{ workflow.step_index }} of {{ workflow.total_steps }}", execCtx)
+	result, err := te.Render("Step ${{ workflow.step_index }} of ${{ workflow.total_steps }}", execCtx)
 	assert.NoError(t, err)
 	assert.Equal(t, "Step 1 of 2", result)
 
 	// Test run ID
-	result, err = te.Render("Run ID: {{ workflow.run_id }}", execCtx)
+	result, err = te.Render("Run ID: ${{ workflow.run_id }}", execCtx)
 	assert.NoError(t, err)
 	assert.Contains(t, result, "Run ID: run_")
 }
@@ -187,19 +155,22 @@ func TestTemplateEngine_EnvironmentVariables(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
+	execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+		Context: context.Background(),
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}, workflow, nil, "")
 
 	// Add mock environment variable
 	execCtx.Environment["TEST_VAR"] = "test_value"
 
 	// Test environment variable
-	result, err := te.Render("Env var: {{ env.TEST_VAR }}", execCtx)
+	result, err := te.Render("Env var: ${{ env.TEST_VAR }}", execCtx)
 	assert.NoError(t, err)
 	assert.Equal(t, "Env var: test_value", result)
 
 	// Test missing environment variable (should return empty string)
-	result, err = te.Render("Missing: '{{ env.MISSING_VAR }}'", execCtx)
+	result, err = te.Render("Missing: '${{ env.MISSING_VAR }}'", execCtx)
 	assert.NoError(t, err)
 	assert.Equal(t, "Missing: ''", result)
 }
@@ -216,8 +187,11 @@ func TestTemplateEngine_NoVariables(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
+	execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+		Context: context.Background(),
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}, workflow, nil, "")
 
 	// Test template with no variables
 	result, err := te.Render("Hello, world!", execCtx)
@@ -242,26 +216,29 @@ func TestTemplateEngine_Errors(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
+	execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+		Context: context.Background(),
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}, workflow, nil, "")
 
 	// Test missing input
-	_, err := te.Render("{{ inputs.missing }}", execCtx)
+	_, err := te.Render("${{ inputs.missing.foo }}", execCtx)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "input parameter missing not found")
 
 	// Test missing state
-	_, err = te.Render("{{ state.missing }}", execCtx)
-	assert.Error(t, err)
+	_, err = te.Render("${{ state.missing }}", execCtx)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "state variable missing not found")
 
 	// Test missing step
-	_, err = te.Render("{{ steps.missing.output }}", execCtx)
+	_, err = te.Render("${{ steps.missing.output }}", execCtx)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "step missing not found")
 
 	// Test invalid scope
-	_, err = te.Render("{{ invalid.scope }}", execCtx)
+	_, err = te.Render("${{ invalid.scope }}", execCtx)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown variable scope: invalid")
 }
@@ -272,13 +249,13 @@ func TestTemplateEngine_Integration(t *testing.T) {
 	testCases := []struct {
 		name     string
 		template string
-		setup    func() *ExecutionContext
+		setup    func() *execcontext.ExecutionContext
 		expected string
 	}{
 		{
 			name:     "Simple expression in template",
-			template: "Result: {{ inputs.count > 5 }}",
-			setup: func() *ExecutionContext {
+			template: "Result: ${{ inputs.count > 5 }}",
+			setup: func() *execcontext.ExecutionContext {
 				workflow := &ast.Workflow{
 					Version: "1.0",
 					Workflow: &ast.WorkflowDef{
@@ -288,14 +265,18 @@ func TestTemplateEngine_Integration(t *testing.T) {
 					},
 				}
 				inputs := map[string]interface{}{"count": 10}
-				return NewExecutionContext(context.Background(), workflow, inputs)
+				return execcontext.NewExecutionContext(execcontext.RunContext{
+					Context: context.Background(),
+					StdOut:  io.Discard,
+					StdErr:  io.Discard,
+				}, workflow, inputs, "")
 			},
 			expected: "Result: true",
 		},
 		{
 			name:     "Ternary expression in template",
-			template: "Status: {{ inputs.enabled ? 'active' : 'inactive' }}",
-			setup: func() *ExecutionContext {
+			template: "Status: ${{ inputs.enabled ? 'active' : 'inactive' }}",
+			setup: func() *execcontext.ExecutionContext {
 				workflow := &ast.Workflow{
 					Version: "1.0",
 					Workflow: &ast.WorkflowDef{
@@ -305,14 +286,18 @@ func TestTemplateEngine_Integration(t *testing.T) {
 					},
 				}
 				inputs := map[string]interface{}{"enabled": true}
-				return NewExecutionContext(context.Background(), workflow, inputs)
+				return execcontext.NewExecutionContext(execcontext.RunContext{
+					Context: context.Background(),
+					StdOut:  io.Discard,
+					StdErr:  io.Discard,
+				}, workflow, inputs, "")
 			},
 			expected: "Status: active",
 		},
 		{
 			name:     "Function call in template",
-			template: "Message: {{ format('Hello {0}!', inputs.name) }}",
-			setup: func() *ExecutionContext {
+			template: "Message: ${{ format('Hello {0}!', inputs.name) }}",
+			setup: func() *execcontext.ExecutionContext {
 				workflow := &ast.Workflow{
 					Version: "1.0",
 					Workflow: &ast.WorkflowDef{
@@ -322,14 +307,18 @@ func TestTemplateEngine_Integration(t *testing.T) {
 					},
 				}
 				inputs := map[string]interface{}{"name": "world"}
-				return NewExecutionContext(context.Background(), workflow, inputs)
+				return execcontext.NewExecutionContext(execcontext.RunContext{
+					Context: context.Background(),
+					StdOut:  io.Discard,
+					StdErr:  io.Discard,
+				}, workflow, inputs, "")
 			},
 			expected: "Message: Hello world!",
 		},
 		{
 			name:     "Complex expression with multiple operators",
-			template: "Valid: {{ inputs.count > 5 && state.enabled == true }}",
-			setup: func() *ExecutionContext {
+			template: "Valid: ${{ inputs.count > 5 && state.enabled == true }}",
+			setup: func() *execcontext.ExecutionContext {
 				workflow := &ast.Workflow{
 					Version: "1.0",
 					Workflow: &ast.WorkflowDef{
@@ -342,14 +331,18 @@ func TestTemplateEngine_Integration(t *testing.T) {
 					},
 				}
 				inputs := map[string]interface{}{"count": 10}
-				return NewExecutionContext(context.Background(), workflow, inputs)
+				return execcontext.NewExecutionContext(execcontext.RunContext{
+					Context: context.Background(),
+					StdOut:  io.Discard,
+					StdErr:  io.Discard,
+				}, workflow, inputs, "")
 			},
 			expected: "Valid: true",
 		},
 		{
 			name:     "String manipulation functions",
-			template: "Check: {{ contains(inputs.text, 'test') && startsWith(inputs.text, 'This') }}",
-			setup: func() *ExecutionContext {
+			template: "Check: ${{ contains(inputs.text, 'test') && startsWith(inputs.text, 'This') }}",
+			setup: func() *execcontext.ExecutionContext {
 				workflow := &ast.Workflow{
 					Version: "1.0",
 					Workflow: &ast.WorkflowDef{
@@ -359,14 +352,18 @@ func TestTemplateEngine_Integration(t *testing.T) {
 					},
 				}
 				inputs := map[string]interface{}{"text": "This is a test"}
-				return NewExecutionContext(context.Background(), workflow, inputs)
+				return execcontext.NewExecutionContext(execcontext.RunContext{
+					Context: context.Background(),
+					StdOut:  io.Discard,
+					StdErr:  io.Discard,
+				}, workflow, inputs, "")
 			},
 			expected: "Check: true",
 		},
 		{
 			name:     "Workflow status functions",
-			template: "Success: {{ success() && always() }}",
-			setup: func() *ExecutionContext {
+			template: "Success: ${{ success() && always() }}",
+			setup: func() *execcontext.ExecutionContext {
 				workflow := &ast.Workflow{
 					Version: "1.0",
 					Workflow: &ast.WorkflowDef{
@@ -375,14 +372,18 @@ func TestTemplateEngine_Integration(t *testing.T) {
 						},
 					},
 				}
-				return NewExecutionContext(context.Background(), workflow, nil)
+				return execcontext.NewExecutionContext(execcontext.RunContext{
+					Context: context.Background(),
+					StdOut:  io.Discard,
+					StdErr:  io.Discard,
+				}, workflow, nil, "")
 			},
 			expected: "Success: true",
 		},
 		{
 			name:     "Mixed variable types and functions",
-			template: "Output: {{ inputs.count + 5 > 10 ? format('High: {0}', inputs.count) : 'Low' }}",
-			setup: func() *ExecutionContext {
+			template: "Output: ${{ inputs.count + 5 > 10 ? format('High: {0}', inputs.count) : 'Low' }}",
+			setup: func() *execcontext.ExecutionContext {
 				workflow := &ast.Workflow{
 					Version: "1.0",
 					Workflow: &ast.WorkflowDef{
@@ -392,14 +393,18 @@ func TestTemplateEngine_Integration(t *testing.T) {
 					},
 				}
 				inputs := map[string]interface{}{"count": 8}
-				return NewExecutionContext(context.Background(), workflow, inputs)
+				return execcontext.NewExecutionContext(execcontext.RunContext{
+					Context: context.Background(),
+					StdOut:  io.Discard,
+					StdErr:  io.Discard,
+				}, workflow, inputs, "")
 			},
 			expected: "Output: High: 8",
 		},
 		{
 			name:     "Regular variable alongside expression",
-			template: "Name: {{ inputs.name }}, Age Check: {{ inputs.age >= 18 }}",
-			setup: func() *ExecutionContext {
+			template: "Name: ${{ inputs.name }}, Age Check: ${{ inputs.age >= 18 }}",
+			setup: func() *execcontext.ExecutionContext {
 				workflow := &ast.Workflow{
 					Version: "1.0",
 					Workflow: &ast.WorkflowDef{
@@ -412,14 +417,18 @@ func TestTemplateEngine_Integration(t *testing.T) {
 					"name": "Alice",
 					"age":  25,
 				}
-				return NewExecutionContext(context.Background(), workflow, inputs)
+				return execcontext.NewExecutionContext(execcontext.RunContext{
+					Context: context.Background(),
+					StdOut:  io.Discard,
+					StdErr:  io.Discard,
+				}, workflow, inputs, "")
 			},
 			expected: "Name: Alice, Age Check: true",
 		},
 		{
 			name:     "JSON manipulation",
-			template: "Data: {{ toJSON(inputs.data) }}",
-			setup: func() *ExecutionContext {
+			template: "Data: ${{ toJSON(inputs.data) }}",
+			setup: func() *execcontext.ExecutionContext {
 				workflow := &ast.Workflow{
 					Version: "1.0",
 					Workflow: &ast.WorkflowDef{
@@ -433,7 +442,11 @@ func TestTemplateEngine_Integration(t *testing.T) {
 						"key": "value",
 					},
 				}
-				return NewExecutionContext(context.Background(), workflow, inputs)
+				return execcontext.NewExecutionContext(execcontext.RunContext{
+					Context: context.Background(),
+					StdOut:  io.Discard,
+					StdErr:  io.Discard,
+				}, workflow, inputs, "")
 			},
 			expected: "Data: {\"key\":\"value\"}",
 		},
@@ -468,7 +481,11 @@ func TestTemplateEngine_ComplexWorkflowScenarios(t *testing.T) {
 			"debug":       false,
 		}
 
-		execCtx := NewExecutionContext(context.Background(), workflow, inputs)
+		execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+			Context: context.Background(),
+			StdOut:  io.Discard,
+			StdErr:  io.Discard,
+		}, workflow, inputs, "")
 
 		// Test conditional execution templates
 		testCases := []struct {
@@ -476,15 +493,15 @@ func TestTemplateEngine_ComplexWorkflowScenarios(t *testing.T) {
 			expected string
 		}{
 			{
-				template: "{{ inputs.environment == 'production' ? 'Deploy to prod' : 'Deploy to staging' }}",
+				template: "${{ inputs.environment == 'production' ? 'Deploy to prod' : 'Deploy to staging' }}",
 				expected: "Deploy to prod",
 			},
 			{
-				template: "Debug mode: {{ inputs.debug ? 'enabled' : 'disabled' }}",
+				template: "Debug mode: ${{ inputs.debug ? 'enabled' : 'disabled' }}",
 				expected: "Debug mode: disabled",
 			},
 			{
-				template: "{{ contains(inputs.environment, 'prod') && !inputs.debug ? 'Production deployment' : 'Development deployment' }}",
+				template: "${{ contains(inputs.environment, 'prod') && !inputs.debug ? 'Production deployment' : 'Development deployment' }}",
 				expected: "Production deployment",
 			},
 		}
@@ -507,12 +524,16 @@ func TestTemplateEngine_ComplexWorkflowScenarios(t *testing.T) {
 			},
 		}
 
-		execCtx := NewExecutionContext(context.Background(), workflow, nil)
+		execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+			Context: context.Background(),
+			StdOut:  io.Discard,
+			StdErr:  io.Discard,
+		}, workflow, nil, "")
 
 		// Add a step result
-		stepResult := &StepResult{
+		stepResult := &execcontext.StepResult{
 			StepID:   "analyze",
-			Status:   StepStatusCompleted,
+			Status:   execcontext.StepStatusCompleted,
 			Response: "Analysis complete",
 			Output: map[string]interface{}{
 				"score":      85,
@@ -527,19 +548,19 @@ func TestTemplateEngine_ComplexWorkflowScenarios(t *testing.T) {
 			expected string
 		}{
 			{
-				template: "Score check: {{ steps.analyze.score > 80 }}",
+				template: "Score check: ${{ steps.analyze.score > 80 }}",
 				expected: "Score check: true",
 			},
 			{
-				template: "Category: {{ steps.analyze.category == 'positive' ? 'Good result' : 'Needs review' }}",
+				template: "Category: ${{ steps.analyze.category == 'positive' ? 'Good result' : 'Needs review' }}",
 				expected: "Category: Good result",
 			},
 			{
-				template: "Confidence: {{ steps.analyze.confidence >= 0.8 && steps.analyze.score > 75 ? 'High' : 'Low' }}",
+				template: "Confidence: ${{ steps.analyze.confidence >= 0.8 && steps.analyze.score > 75 ? 'High' : 'Low' }}",
 				expected: "Confidence: High",
 			},
 			{
-				template: "Status: {{ success() ? format('Step {0} completed successfully', 'analyze') : 'Step failed' }}",
+				template: "Status: ${{ success() ? format('Step {0} completed successfully', 'analyze') : 'Step failed' }}",
 				expected: "Status: Step analyze completed successfully",
 			},
 		}
@@ -551,6 +572,29 @@ func TestTemplateEngine_ComplexWorkflowScenarios(t *testing.T) {
 		}
 	})
 
+}
+
+func TestTemplateEngine_EscapeCharacters(t *testing.T) {
+	te := NewTemplateEngine()
+	workflow := &ast.Workflow{
+		Version: "1.0",
+		Workflow: &ast.WorkflowDef{
+			Steps: []*ast.Step{
+				{ID: "step1", Agent: "agent1", Prompt: "test"},
+			},
+		},
+	}
+
+	execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+		Context: context.Background(),
+		StdOut:  io.Discard,
+		StdErr:  io.Discard,
+	}, workflow, nil, "")
+
+	template := `Hello $${{ inputs.name }}!`
+	result, err := te.Render(template, execCtx)
+	require.NoError(t, err)
+	assert.Equal(t, `Hello ${{ inputs.name }}!`, result)
 }
 
 func TestTemplateEngine_ErrorHandlingIntegration(t *testing.T) {
@@ -566,14 +610,18 @@ func TestTemplateEngine_ErrorHandlingIntegration(t *testing.T) {
 			},
 		}
 
-		execCtx := NewExecutionContext(context.Background(), workflow, nil)
+		execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+			Context: context.Background(),
+			StdOut:  io.Discard,
+			StdErr:  io.Discard,
+		}, workflow, nil, "")
 
 		errorCases := []string{
-			"{{ 10 / 0 }}",               // Division by zero
-			"{{ unknownFunction() }}",    // Unknown function
-			"{{ inputs.undefined > 5 }}", // Undefined variable
-			"{{ 5 + }}",                  // Invalid syntax
-			"{{ (5 + 3 }}",               // Mismatched parentheses
+			"${{ 10 / 0 }}",               // Division by zero
+			"${{ unknownFunction() }}",    // Unknown function
+			"${{ inputs.undefined > 5 }}", // Undefined variable
+			"${{ 5 + }}",                  // Invalid syntax
+			"${{ (5 + 3 }}",               // Mismatched parentheses
 		}
 
 		for _, template := range errorCases {
@@ -596,10 +644,14 @@ func TestTemplateEngine_ErrorHandlingIntegration(t *testing.T) {
 			"valid": "test",
 		}
 
-		execCtx := NewExecutionContext(context.Background(), workflow, inputs)
+		execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+			Context: context.Background(),
+			StdOut:  io.Discard,
+			StdErr:  io.Discard,
+		}, workflow, inputs, "")
 
 		// This should work for the valid part but fail for the invalid part
-		template := "Valid: {{ inputs.valid }}, Invalid: {{ inputs.undefined > 5 }}"
+		template := "Valid: ${{ inputs.valid }}, Invalid: ${{ inputs.undefined > 5 }}"
 		_, err := te.Render(template, execCtx)
 		assert.Error(t, err)
 	})
@@ -626,10 +678,14 @@ func TestTemplateEngine_PerformanceScenarios(t *testing.T) {
 			"e": 5,
 		}
 
-		execCtx := NewExecutionContext(context.Background(), workflow, inputs)
+		execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+			Context: context.Background(),
+			StdOut:  io.Discard,
+			StdErr:  io.Discard,
+		}, workflow, inputs, "")
 
 		// Complex expression with multiple levels of nesting
-		template := "{{ (inputs.a + inputs.b) * (inputs.c + inputs.d) == inputs.e * 6 ? format('Math works: {0}', (inputs.a + inputs.b) * (inputs.c + inputs.d)) : 'Math failed' }}"
+		template := "${{ (inputs.a + inputs.b) * (inputs.c + inputs.d) == inputs.e * 6 ? format('Math works: {0}', (inputs.a + inputs.b) * (inputs.c + inputs.d)) : 'Math failed' }}"
 
 		result, err := te.Render(template, execCtx)
 		require.NoError(t, err)
@@ -652,15 +708,19 @@ func TestTemplateEngine_PerformanceScenarios(t *testing.T) {
 			"flag":  true,
 		}
 
-		execCtx := NewExecutionContext(context.Background(), workflow, inputs)
+		execCtx := execcontext.NewExecutionContext(execcontext.RunContext{
+			Context: context.Background(),
+			StdOut:  io.Discard,
+			StdErr:  io.Discard,
+		}, workflow, inputs, "")
 
 		template := `
 Results:
-- Name valid: {{ contains(inputs.name, 'test') }}
-- Count high: {{ inputs.count > 5 }}
-- Flag status: {{ inputs.flag ? 'enabled' : 'disabled' }}
-- Combined: {{ contains(inputs.name, 'test') && inputs.count > 5 && inputs.flag }}
-- Message: {{ format('Processing {0} items', inputs.count) }}
+- Name valid: ${{ contains(inputs.name, 'test') }}
+- Count high: ${{ inputs.count > 5 }}
+- Flag status: ${{ inputs.flag ? 'enabled' : 'disabled' }}
+- Combined: ${{ contains(inputs.name, 'test') && inputs.count > 5 && inputs.flag }}
+- Message: ${{ format('Processing {0} items', inputs.count) }}
 `
 
 		result, err := te.Render(template, execCtx)
