@@ -1,27 +1,6 @@
 // Package engine provides a public API for executing Lacquer workflows programmatically.
 // This package allows third-party applications to integrate Lacquer workflow execution
 // capabilities directly into their codebase.
-//
-// The main functionality includes:
-//   - Running workflows from YAML definition files
-//   - Configuring execution options through functional parameters
-//   - Monitoring workflow progress through event listeners
-//
-// Example usage:
-//
-//	inputs := map[string]interface{}{
-//		"message": "Hello, World!",
-//	}
-//
-//	// Run a simple workflow
-//	outputs, err := RunWorkflow("workflow.laq.yml", inputs)
-//	if err != nil {
-//		log.Fatal(err)
-//	}
-//
-//	// Run with progress monitoring
-//	listener := &MyProgressListener{}
-//	outputs, err = RunWorkflow("workflow.laq.yml", inputs, WithProgressListener(listener))
 package engine
 
 import (
@@ -120,7 +99,7 @@ func WithProgressListener(listener events.Listener) Option {
 //		"threshold": 0.8,
 //	}
 //
-//	outputs, err := RunWorkflow("data-processing.laq.yml", inputs)
+//	outputs, err := RunWorkflow(context.Background(), "data-processing.laq.yml", inputs)
 //	if err != nil {
 //		return fmt.Errorf("workflow failed: %w", err)
 //	}
@@ -130,11 +109,12 @@ func WithProgressListener(listener events.Listener) Option {
 //	// With progress monitoring
 //	listener := &MyProgressListener{}
 //	outputs, err = RunWorkflow(
+//		context.Background(),
 //		"complex-workflow.laq.yml",
 //		inputs,
 //		WithProgressListener(listener),
 //	)
-func RunWorkflow(workflowFile string, inputs map[string]interface{}, options ...Option) (map[string]interface{}, error) {
+func RunWorkflow(ctx context.Context, workflowFile string, inputs map[string]interface{}, options ...Option) (map[string]interface{}, error) {
 	runner := engine.NewRunner(nil)
 
 	for _, option := range options {
@@ -142,7 +122,7 @@ func RunWorkflow(workflowFile string, inputs map[string]interface{}, options ...
 	}
 
 	result, err := runner.RunWorkflow(execcontext.RunContext{
-		Context: context.Background(),
+		Context: ctx,
 		StdOut:  io.Discard,
 		StdErr:  io.Discard,
 	}, workflowFile, inputs)
