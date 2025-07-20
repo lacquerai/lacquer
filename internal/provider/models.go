@@ -8,10 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lacquerai/lacquer/internal/events"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/lacquerai/lacquer/internal/tools"
+	pkgEvents "github.com/lacquerai/lacquer/pkg/events"
 )
 
 type GenerateContext struct {
@@ -27,7 +27,7 @@ type LocalModelProvider interface {
 // Provider defines the interface for AI model providers
 type Provider interface {
 	// Generate generates a response from the model
-	Generate(ctx GenerateContext, request *Request, progressChan chan<- events.ExecutionEvent) ([]Message, *execcontext.TokenUsage, error)
+	Generate(ctx GenerateContext, request *Request, progressChan chan<- pkgEvents.ExecutionEvent) ([]Message, *execcontext.TokenUsage, error)
 
 	// GetName returns the provider name
 	GetName() string
@@ -388,7 +388,7 @@ func (mp *MockProvider) SetResponse(prompt, response string) {
 }
 
 // Generate generates a mock response
-func (mp *MockProvider) Generate(gtx GenerateContext, request *Request, progressChan chan<- events.ExecutionEvent) ([]Message, *execcontext.TokenUsage, error) {
+func (mp *MockProvider) Generate(gtx GenerateContext, request *Request, progressChan chan<- pkgEvents.ExecutionEvent) ([]Message, *execcontext.TokenUsage, error) {
 	// Check for specific response
 	if response, exists := mp.responses[request.GetPrompt()]; exists {
 		return []Message{

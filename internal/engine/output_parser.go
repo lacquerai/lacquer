@@ -2,7 +2,6 @@ package engine
 
 import (
 	"encoding/json"
-	"os"
 	"regexp"
 	"strings"
 
@@ -50,7 +49,6 @@ func (p *OutputParser) extractJSON(response string) map[string]interface{} {
 
 	// Clean up the response
 	response = strings.TrimSpace(response)
-	os.WriteFile("response.txt", []byte(response), 0644)
 
 	// Try to parse as JSON
 	var result map[string]interface{}

@@ -8,49 +8,18 @@ import (
 
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/ast"
+
+	pkgEvents "github.com/lacquerai/lacquer/pkg/events"
 )
 
-// ExecutionEventType represents the type of execution event
-type ExecutionEventType string
-
-const (
-	EventWorkflowStarted     ExecutionEventType = "workflow_started"
-	EventWorkflowCompleted   ExecutionEventType = "workflow_completed"
-	EventWorkflowFailed      ExecutionEventType = "workflow_failed"
-	EventStepStarted         ExecutionEventType = "step_started"
-	EventStepProgress        ExecutionEventType = "step_progress"
-	EventStepCompleted       ExecutionEventType = "step_completed"
-	EventStepFailed          ExecutionEventType = "step_failed"
-	EventStepSkipped         ExecutionEventType = "step_skipped"
-	EventStepRetrying        ExecutionEventType = "step_retrying"
-	EventStepActionStarted   ExecutionEventType = "step_action_started"
-	EventStepActionCompleted ExecutionEventType = "step_action_completed"
-	EventStepActionFailed    ExecutionEventType = "step_action_failed"
-)
-
-// ExecutionEvent represents an event during workflow execution
-type ExecutionEvent struct {
-	Type      ExecutionEventType     `json:"type"`
-	Timestamp time.Time              `json:"timestamp"`
-	RunID     string                 `json:"run_id"`
-	StepID    string                 `json:"step_id,omitempty"`
-	ActionID  string                 `json:"action_id,omitempty"`
-	StepIndex int                    `json:"step_index,omitempty"`
-	Duration  time.Duration          `json:"duration,omitempty"`
-	Error     string                 `json:"error,omitempty"`
-	Attempt   int                    `json:"attempt,omitempty"`
-	Text      string                 `json:"text,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-}
-
-func NewToolUseEvent(stepID, actionID string, toolName string, runID string, text string) ExecutionEvent {
+func NewToolUseEvent(stepID, actionID string, toolName string, runID string, text string) pkgEvents.ExecutionEvent {
 	input := text
 	if input == "" {
 		input = generateRandomUsageText(toolName)
 	}
 
-	return ExecutionEvent{
-		Type:      EventStepActionStarted,
+	return pkgEvents.ExecutionEvent{
+		Type:      pkgEvents.EventStepActionStarted,
 		ActionID:  actionID,
 		Text:      input,
 		Timestamp: time.Now(),
@@ -59,9 +28,9 @@ func NewToolUseEvent(stepID, actionID string, toolName string, runID string, tex
 	}
 }
 
-func NewToolUseCompletedEvent(stepID, actionID string, toolName string, runID string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionCompleted,
+func NewToolUseCompletedEvent(stepID, actionID string, toolName string, runID string) pkgEvents.ExecutionEvent {
+	return pkgEvents.ExecutionEvent{
+		Type:      pkgEvents.EventStepActionCompleted,
 		ActionID:  actionID,
 		Text:      generateRandomUsageText(toolName),
 		Timestamp: time.Now(),
@@ -70,9 +39,9 @@ func NewToolUseCompletedEvent(stepID, actionID string, toolName string, runID st
 	}
 }
 
-func NewToolUseFailedEvent(step *ast.Step, actionID string, toolName string, runID string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionFailed,
+func NewToolUseFailedEvent(step *ast.Step, actionID string, toolName string, runID string) pkgEvents.ExecutionEvent {
+	return pkgEvents.ExecutionEvent{
+		Type:      pkgEvents.EventStepActionFailed,
 		ActionID:  actionID,
 		Timestamp: time.Now(),
 		RunID:     runID,
@@ -80,7 +49,7 @@ func NewToolUseFailedEvent(step *ast.Step, actionID string, toolName string, run
 	}
 }
 
-func NewPromptAgentEvent(stepID, actionID string, runID string, prompt ...string) ExecutionEvent {
+func NewPromptAgentEvent(stepID, actionID string, runID string, prompt ...string) pkgEvents.ExecutionEvent {
 	text := generateRandomPromptingText()
 	if len(prompt) > 0 {
 		text = strings.Join(prompt, "\n")
@@ -88,8 +57,8 @@ func NewPromptAgentEvent(stepID, actionID string, runID string, prompt ...string
 			text = text[:200] + "..."
 		}
 	}
-	return ExecutionEvent{
-		Type:      EventStepActionStarted,
+	return pkgEvents.ExecutionEvent{
+		Type:      pkgEvents.EventStepActionStarted,
 		ActionID:  actionID,
 		Text:      text,
 		Timestamp: time.Now(),
@@ -98,9 +67,9 @@ func NewPromptAgentEvent(stepID, actionID string, runID string, prompt ...string
 	}
 }
 
-func NewAgentCompletedEvent(step *ast.Step, actionID string, runID string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionCompleted,
+func NewAgentCompletedEvent(step *ast.Step, actionID string, runID string) pkgEvents.ExecutionEvent {
+	return pkgEvents.ExecutionEvent{
+		Type:      pkgEvents.EventStepActionCompleted,
 		ActionID:  actionID,
 		Timestamp: time.Now(),
 		RunID:     runID,
@@ -108,9 +77,9 @@ func NewAgentCompletedEvent(step *ast.Step, actionID string, runID string) Execu
 	}
 }
 
-func NewAgentFailedEvent(step *ast.Step, actionID string, runID string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionFailed,
+func NewAgentFailedEvent(step *ast.Step, actionID string, runID string) pkgEvents.ExecutionEvent {
+	return pkgEvents.ExecutionEvent{
+		Type:      pkgEvents.EventStepActionFailed,
 		ActionID:  actionID,
 		Timestamp: time.Now(),
 		RunID:     runID,
@@ -118,9 +87,9 @@ func NewAgentFailedEvent(step *ast.Step, actionID string, runID string) Executio
 	}
 }
 
-func NewGenericActionEvent(stepID, actionID string, runID string, text string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionStarted,
+func NewGenericActionEvent(stepID, actionID string, runID string, text string) pkgEvents.ExecutionEvent {
+	return pkgEvents.ExecutionEvent{
+		Type:      pkgEvents.EventStepActionStarted,
 		ActionID:  actionID,
 		Text:      text,
 		Timestamp: time.Now(),
@@ -129,9 +98,9 @@ func NewGenericActionEvent(stepID, actionID string, runID string, text string) E
 	}
 }
 
-func NewGenericActionCompletedEvent(stepID, actionID string, runID string) ExecutionEvent {
-	return ExecutionEvent{
-		Type:      EventStepActionCompleted,
+func NewGenericActionCompletedEvent(stepID, actionID string, runID string) pkgEvents.ExecutionEvent {
+	return pkgEvents.ExecutionEvent{
+		Type:      pkgEvents.EventStepActionCompleted,
 		ActionID:  actionID,
 		Timestamp: time.Now(),
 		RunID:     runID,

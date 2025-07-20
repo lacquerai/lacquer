@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lacquerai/lacquer/internal/events"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/provider"
+	pkgEvents "github.com/lacquerai/lacquer/pkg/events"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/rs/zerolog/log"
@@ -85,7 +85,7 @@ func NewProvider(config *OpenAIConfig) (*OpenAIProvider, error) {
 }
 
 // Generate generates a response using the OpenAI API
-func (p *OpenAIProvider) Generate(ctx provider.GenerateContext, request *provider.Request, progressChan chan<- events.ExecutionEvent) ([]provider.Message, *execcontext.TokenUsage, error) {
+func (p *OpenAIProvider) Generate(ctx provider.GenerateContext, request *provider.Request, progressChan chan<- pkgEvents.ExecutionEvent) ([]provider.Message, *execcontext.TokenUsage, error) {
 	tools := make([]openai.ChatCompletionToolParam, len(request.Tools), 0)
 	for _, tool := range request.Tools {
 		parameters, err := json.Marshal(tool.Parameters)

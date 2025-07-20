@@ -9,30 +9,29 @@ import (
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/ast"
-	"github.com/lacquerai/lacquer/internal/events"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/parser"
 	"github.com/lacquerai/lacquer/internal/style"
+	pkgEvents "github.com/lacquerai/lacquer/pkg/events"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
 
 // ExecutionResult represents the result of running a workflow
 type ExecutionResult struct {
-	WorkflowFile  string                 `json:"workflow_file" yaml:"workflow_file"`
-	RunID         string                 `json:"run_id" yaml:"run_id"`
-	Status        string                 `json:"status" yaml:"status"`
-	StartTime     time.Time              `json:"start_time" yaml:"start_time"`
-	EndTime       time.Time              `json:"end_time,omitempty" yaml:"end_time,omitempty"`
-	Duration      time.Duration          `json:"duration" yaml:"duration"`
-	StepsExecuted int                    `json:"steps_executed" yaml:"steps_executed"`
-	StepsTotal    int                    `json:"steps_total" yaml:"steps_total"`
-	StepResults   []StepExecutionResult  `json:"step_results,omitempty" yaml:"step_results,omitempty"`
-	Inputs        map[string]interface{} `json:"inputs" yaml:"inputs"`
-	Outputs       map[string]interface{} `json:"outputs,omitempty" yaml:"outputs,omitempty"`
-	FinalState    map[string]interface{} `json:"final_state,omitempty" yaml:"final_state,omitempty"`
-	Error         string                 `json:"error,omitempty" yaml:"error,omitempty"`
-	TokenUsage    *TokenUsageSummary     `json:"token_usage,omitempty" yaml:"token_usage,omitempty"`
+	WorkflowFile string                 `json:"workflow_file" yaml:"workflow_file"`
+	RunID        string                 `json:"run_id" yaml:"run_id"`
+	Status       string                 `json:"status" yaml:"status"`
+	StartTime    time.Time              `json:"start_time" yaml:"start_time"`
+	EndTime      time.Time              `json:"end_time,omitempty" yaml:"end_time,omitempty"`
+	Duration     time.Duration          `json:"duration" yaml:"duration"`
+	StepsTotal   int                    `json:"steps_total" yaml:"steps_total"`
+	StepResults  []StepExecutionResult  `json:"step_results,omitempty" yaml:"step_results,omitempty"`
+	Inputs       map[string]interface{} `json:"inputs" yaml:"inputs"`
+	Outputs      map[string]interface{} `json:"outputs,omitempty" yaml:"outputs,omitempty"`
+	FinalState   map[string]interface{} `json:"final_state,omitempty" yaml:"final_state,omitempty"`
+	Error        string                 `json:"error,omitempty" yaml:"error,omitempty"`
+	TokenUsage   *TokenUsageSummary     `json:"token_usage,omitempty" yaml:"token_usage,omitempty"`
 }
 
 // StepExecutionResult represents the result of executing a single step
@@ -114,13 +113,17 @@ type ActionState struct {
 }
 
 type Runner struct {
-	progressTracker ProgressTracker
+	progressListener pkgEvents.Listener
 }
 
-func NewRunner(progressTracker ProgressTracker) *Runner {
+func NewRunner(progressListener pkgEvents.Listener) *Runner {
 	return &Runner{
-		progressTracker: progressTracker,
+		progressListener: progressListener,
 	}
+}
+
+func (r *Runner) SetProgressListener(listener pkgEvents.Listener) {
+	r.progressListener = listener
 }
 
 func (r *Runner) RunWorkflowRaw(execCtx *execcontext.ExecutionContext, workflow *ast.Workflow, startTime time.Time, prefix ...string) (*ExecutionResult, error) {
@@ -165,7 +168,6 @@ func (r *Runner) RunWorkflowRaw(execCtx *execcontext.ExecutionContext, workflow 
 		log.Info().
 			Str("run_id", execCtx.RunID).
 			Dur("duration", result.Duration).
-			Int("steps", result.StepsExecuted).
 			Msg("Workflow execution completed successfully")
 	}
 
@@ -227,16 +229,20 @@ func (r *Runner) RunWorkflow(ctx execcontext.RunContext, workflowFile string, in
 	// Create executor with configuration
 	wd := filepath.Dir(workflow.SourceFile)
 	execCtx := execcontext.NewExecutionContext(ctx, workflow, workflowInputs, wd)
+	if v, ok := r.progressListener.(*CLIProgressTracker); ok {
+		v.totalSteps = len(workflow.Workflow.Steps)
+	}
+
 	return r.RunWorkflowRaw(execCtx, workflow, startTime, prefix...)
 }
 
 func (r *Runner) executeWithProgress(executor *Executor, execCtx *execcontext.ExecutionContext, result *ExecutionResult) error {
 	// Create a progress channel for real-time updates
-	progressChan := make(chan events.ExecutionEvent, 100)
+	progressChan := make(chan pkgEvents.ExecutionEvent, 100)
 	defer close(progressChan)
 
-	if r.progressTracker != nil {
-		go r.progressTracker.StartTracking(progressChan, result)
+	if r.progressListener != nil {
+		go r.progressListener.StartListening(progressChan)
 	}
 
 	err := executor.ExecuteWorkflow(execCtx, progressChan)
@@ -244,78 +250,65 @@ func (r *Runner) executeWithProgress(executor *Executor, execCtx *execcontext.Ex
 }
 
 func (r *Runner) Close() {
-	if r.progressTracker != nil {
-		r.progressTracker.StopTracking(nil)
+	if r.progressListener != nil {
+		r.progressListener.StopListening()
 	}
 }
 
-type ProgressTracker interface {
-	StartTracking(progressChan <-chan events.ExecutionEvent, result *ExecutionResult)
-	StopTracking(result *ExecutionResult)
-}
-
-// NoopProgressTracker is a progress tracker that does nothing
-type NoopProgressTracker struct{}
-
-func (n *NoopProgressTracker) StartTracking(progressChan <-chan events.ExecutionEvent, result *ExecutionResult) {
-}
-
-func (n *NoopProgressTracker) StopTracking(result *ExecutionResult) {}
-
 // ProgressTracker manages the visual progress display for all steps
 type CLIProgressTracker struct {
-	steps  map[string]*StepProgressState
-	mu     sync.RWMutex
-	writer io.Writer
-	done   chan struct{}
-	prefix string
+	steps      map[string]*StepProgressState
+	mu         sync.RWMutex
+	writer     io.Writer
+	totalSteps int
+	done       chan struct{}
+	prefix     string
 }
 
 // NewProgressTracker creates a new progress tracker
-func NewProgressTracker(writer io.Writer, prefix string) *CLIProgressTracker {
+func NewProgressTracker(writer io.Writer, prefix string, totalSteps int) *CLIProgressTracker {
 	return &CLIProgressTracker{
-		steps:  make(map[string]*StepProgressState),
-		writer: writer,
-		done:   make(chan struct{}),
-		prefix: prefix,
+		steps:      make(map[string]*StepProgressState),
+		writer:     writer,
+		totalSteps: totalSteps,
+		done:       make(chan struct{}),
+		prefix:     prefix,
 	}
 }
 
 // Start begins the progress tracking
-func (pt *CLIProgressTracker) StartTracking(progressChan <-chan events.ExecutionEvent, result *ExecutionResult) {
+func (pt *CLIProgressTracker) StartListening(progressChan <-chan pkgEvents.ExecutionEvent) {
 	// Process events - spinners handle their own animation
 	for event := range progressChan {
 		switch event.Type {
-		case events.EventStepStarted:
-			result.StepsExecuted++
-			pt.startStep(event.StepID, event.StepIndex, result.StepsTotal)
-
-		case events.EventStepCompleted:
+		case pkgEvents.EventStepStarted:
+			pt.startStep(event.StepID, event.StepIndex, pt.totalSteps)
+		case pkgEvents.EventStepCompleted:
 			pt.completeStep(event.StepID, event.Duration)
 
-		case events.EventStepFailed:
+		case pkgEvents.EventStepFailed:
 			pt.failStep(event.StepID, event.Duration, event.Error)
 
-		case events.EventStepRetrying:
+		case pkgEvents.EventStepRetrying:
 			pt.retryStep(event.StepID, event.Attempt)
 
-		case events.EventStepProgress:
+		case pkgEvents.EventStepProgress:
 			pt.updateStepProgress(event.StepID, event.ActionID, event.Text)
 
-		case events.EventStepActionStarted:
+		case pkgEvents.EventStepActionStarted:
 			pt.createActionSpinner(event.StepID, event.ActionID, event.Text)
 
-		case events.EventStepActionCompleted:
+		case pkgEvents.EventStepActionCompleted:
 			pt.completeActionSpinner(event.StepID, event.ActionID)
 
-		case events.EventStepActionFailed:
+		case pkgEvents.EventStepActionFailed:
 			pt.failActionSpinner(event.StepID, event.ActionID)
 		}
 	}
 }
 
 // Stop halts the progress tracker and ensures all spinners are stopped
-func (pt *CLIProgressTracker) StopTracking(result *ExecutionResult) {
+func (pt *CLIProgressTracker) StopListening() {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 

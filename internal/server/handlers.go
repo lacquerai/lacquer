@@ -12,8 +12,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/engine"
-	"github.com/lacquerai/lacquer/internal/events"
 	"github.com/lacquerai/lacquer/internal/execcontext"
+	pkgEvents "github.com/lacquerai/lacquer/pkg/events"
 	"github.com/rs/zerolog/log"
 )
 
@@ -193,13 +193,13 @@ func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	// Send final status if execution is complete
 	if status.Status != "running" {
-		finalEvent := events.ExecutionEvent{
-			Type:      events.EventWorkflowCompleted,
+		finalEvent := pkgEvents.ExecutionEvent{
+			Type:      pkgEvents.EventWorkflowCompleted,
 			Timestamp: time.Now(),
 			RunID:     runID,
 		}
 		if status.Status == "failed" {
-			finalEvent.Type = events.EventWorkflowFailed
+			finalEvent.Type = pkgEvents.EventWorkflowFailed
 			finalEvent.Error = status.Error
 		}
 		eventJSON, _ := json.Marshal(finalEvent)

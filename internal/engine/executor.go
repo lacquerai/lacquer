@@ -24,6 +24,7 @@ import (
 	"github.com/lacquerai/lacquer/internal/tools/mcp"
 	"github.com/lacquerai/lacquer/internal/tools/script"
 	"github.com/lacquerai/lacquer/internal/utils"
+	pkgEvents "github.com/lacquerai/lacquer/pkg/events"
 	"github.com/rs/zerolog/log"
 )
 
@@ -38,7 +39,7 @@ type Executor struct {
 	toolRegistry   *tools.Registry
 	config         *ExecutorConfig
 	outputParser   *OutputParser
-	progressChan   chan<- events.ExecutionEvent
+	progressChan   chan<- pkgEvents.ExecutionEvent
 	blockManager   *block.Manager
 	runner         *Runner
 
@@ -134,7 +135,7 @@ func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *a
 }
 
 // ExecuteWorkflow runs a workflow with progress events sent to the given channel
-func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progressChan chan<- events.ExecutionEvent) error {
+func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progressChan chan<- pkgEvents.ExecutionEvent) error {
 	e.execCtx = execCtx
 	e.progressChan = progressChan
 	log.Info().
@@ -145,8 +146,8 @@ func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progre
 
 	// Send workflow started event
 	if e.progressChan != nil {
-		e.progressChan <- events.ExecutionEvent{
-			Type:      events.EventWorkflowStarted,
+		e.progressChan <- pkgEvents.ExecutionEvent{
+			Type:      pkgEvents.EventWorkflowStarted,
 			Timestamp: time.Now(),
 			RunID:     execCtx.RunID,
 		}
@@ -165,8 +166,8 @@ func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progre
 	}
 
 	if e.progressChan != nil {
-		e.progressChan <- events.ExecutionEvent{
-			Type:      events.EventWorkflowCompleted,
+		e.progressChan <- pkgEvents.ExecutionEvent{
+			Type:      pkgEvents.EventWorkflowCompleted,
 			Timestamp: time.Now(),
 			RunID:     execCtx.RunID,
 		}
@@ -209,8 +210,8 @@ func (e *Executor) executeSteps(execCtx *execcontext.ExecutionContext, steps []*
 
 			// Send step failed event
 			if e.progressChan != nil {
-				e.progressChan <- events.ExecutionEvent{
-					Type:      events.EventStepFailed,
+				e.progressChan <- pkgEvents.ExecutionEvent{
+					Type:      pkgEvents.EventStepFailed,
 					Timestamp: time.Now(),
 					RunID:     execCtx.RunID,
 					StepID:    step.ID,
@@ -233,8 +234,8 @@ func (e *Executor) executeSteps(execCtx *execcontext.ExecutionContext, steps []*
 
 			// Send workflow failed event
 			if e.progressChan != nil {
-				e.progressChan <- events.ExecutionEvent{
-					Type:      events.EventWorkflowFailed,
+				e.progressChan <- pkgEvents.ExecutionEvent{
+					Type:      pkgEvents.EventWorkflowFailed,
 					Timestamp: time.Now(),
 					RunID:     execCtx.RunID,
 					Error:     err.Error(),
@@ -245,8 +246,8 @@ func (e *Executor) executeSteps(execCtx *execcontext.ExecutionContext, steps []*
 		} else {
 			// Send step completed event
 			if e.progressChan != nil {
-				e.progressChan <- events.ExecutionEvent{
-					Type:      events.EventStepCompleted,
+				e.progressChan <- pkgEvents.ExecutionEvent{
+					Type:      pkgEvents.EventStepCompleted,
 					Timestamp: time.Now(),
 					RunID:     execCtx.RunID,
 					StepID:    step.ID,
@@ -310,8 +311,8 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 	}
 
 	if e.progressChan != nil {
-		e.progressChan <- events.ExecutionEvent{
-			Type:      events.EventStepStarted,
+		e.progressChan <- pkgEvents.ExecutionEvent{
+			Type:      pkgEvents.EventStepStarted,
 			Timestamp: time.Now(),
 			RunID:     execCtx.RunID,
 			StepID:    step.ID,
@@ -681,7 +682,6 @@ func (e *Executor) createAnthropicRequestWithTools(agent *ast.Agent, messages []
 	if err != nil {
 		return nil, fmt.Errorf("failed to render system prompt: %w", err)
 	}
-	os.WriteFile("anthropic_prompt.txt", []byte(systemPrompt.(string)), 0644)
 
 	request := &provider.Request{
 		Model:        agent.Model,

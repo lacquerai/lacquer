@@ -16,6 +16,7 @@ import (
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/provider"
 	"github.com/lacquerai/lacquer/internal/style"
+	pkgEvents "github.com/lacquerai/lacquer/pkg/events"
 	"github.com/rs/zerolog/log"
 )
 
@@ -26,7 +27,7 @@ type ClaudeCodeProvider struct {
 	executablePath string
 	workingDir     string
 	config         *ClaudeCodeConfig
-	progressChan   chan<- events.ExecutionEvent
+	progressChan   chan<- pkgEvents.ExecutionEvent
 }
 
 // ClaudeCodeConfig contains configuration for Claude Code provider
@@ -118,7 +119,7 @@ type Usage struct {
 type StreamingOptions struct {
 	ShowToolUse  bool
 	ShowThinking bool
-	ProgressChan chan<- events.ExecutionEvent
+	ProgressChan chan<- pkgEvents.ExecutionEvent
 }
 
 // Default configuration for Claude Code
@@ -184,7 +185,7 @@ func (p *ClaudeCodeProvider) isLocal() bool {
 }
 
 // Generate generates a response using Claude Code with streaming enabled by default
-func (p *ClaudeCodeProvider) Generate(ctx provider.GenerateContext, request *provider.Request, progressChan chan<- events.ExecutionEvent) ([]provider.Message, *execcontext.TokenUsage, error) {
+func (p *ClaudeCodeProvider) Generate(ctx provider.GenerateContext, request *provider.Request, progressChan chan<- pkgEvents.ExecutionEvent) ([]provider.Message, *execcontext.TokenUsage, error) {
 	p.progressChan = progressChan
 
 	response, err := p.sendRequestWithOptions(ctx, request)
@@ -584,9 +585,9 @@ func detectClaudeCodeExecutable(configPath string) (string, error) {
 	return "", fmt.Errorf("Claude Code executable not found. Please install Claude Code CLI or set executable_path in configuration")
 }
 
-func (p *ClaudeCodeProvider) progress(message string) events.ExecutionEvent {
-	return events.ExecutionEvent{
-		Type: events.EventStepProgress,
+func (p *ClaudeCodeProvider) progress(message string) pkgEvents.ExecutionEvent {
+	return pkgEvents.ExecutionEvent{
+		Type: pkgEvents.EventStepProgress,
 		Metadata: map[string]interface{}{
 			"message": message,
 		},

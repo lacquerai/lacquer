@@ -16,9 +16,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/lacquerai/lacquer/internal/ast"
-	"github.com/lacquerai/lacquer/internal/engine"
-	"github.com/lacquerai/lacquer/internal/events"
 	"github.com/lacquerai/lacquer/internal/parser"
+	pkgEvents "github.com/lacquerai/lacquer/pkg/events"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
@@ -104,16 +103,16 @@ func (r *WorkflowRegistry) Count() int {
 
 // ExecutionStatus represents the status of a workflow execution
 type ExecutionStatus struct {
-	RunID      string                  `json:"run_id"`
-	WorkflowID string                  `json:"workflow_id"`
-	Status     string                  `json:"status"`
-	StartTime  time.Time               `json:"start_time"`
-	EndTime    *time.Time              `json:"end_time,omitempty"`
-	Duration   time.Duration           `json:"duration"`
-	Inputs     map[string]any          `json:"inputs"`
-	Outputs    map[string]any          `json:"outputs,omitempty"`
-	Error      string                  `json:"error,omitempty"`
-	Progress   []events.ExecutionEvent `json:"progress,omitempty"`
+	RunID      string                     `json:"run_id"`
+	WorkflowID string                     `json:"workflow_id"`
+	Status     string                     `json:"status"`
+	StartTime  time.Time                  `json:"start_time"`
+	EndTime    *time.Time                 `json:"end_time,omitempty"`
+	Duration   time.Duration              `json:"duration"`
+	Inputs     map[string]any             `json:"inputs"`
+	Outputs    map[string]any             `json:"outputs,omitempty"`
+	Error      string                     `json:"error,omitempty"`
+	Progress   []pkgEvents.ExecutionEvent `json:"progress,omitempty"`
 
 	// WebSocket connections for streaming
 	clients   map[*websocket.Conn]bool
@@ -179,16 +178,13 @@ func NewExecutionManagerWithRegistry(maxConcurrency int, registerer prometheus.R
 	return em
 }
 
-func (em *ExecutionManager) StartTracking(progressChan <-chan events.ExecutionEvent, result *engine.ExecutionResult) {
-	runID := result.RunID
-
+func (em *ExecutionManager) StartListening(progressChan <-chan pkgEvents.ExecutionEvent) {
 	for event := range progressChan {
-		event.RunID = runID
-		em.AddProgressEvent(runID, event)
+		em.AddProgressEvent(event.RunID, event)
 	}
 }
 
-func (em *ExecutionManager) StopTracking(result *engine.ExecutionResult) {
+func (em *ExecutionManager) StopListening() {
 	// nothing to do here
 }
 
@@ -210,7 +206,7 @@ func (em *ExecutionManager) StartExecution(runID, workflowID string, cancel cont
 		Status:     "running",
 		StartTime:  time.Now(),
 		Inputs:     inputs,
-		Progress:   make([]events.ExecutionEvent, 0),
+		Progress:   make([]pkgEvents.ExecutionEvent, 0),
 		clients:    make(map[*websocket.Conn]bool),
 		cancel:     cancel,
 	}
@@ -271,7 +267,7 @@ func (em *ExecutionManager) GetExecution(runID string) (*ExecutionStatus, bool) 
 }
 
 // AddProgressEvent adds a progress event to an execution
-func (em *ExecutionManager) AddProgressEvent(runID string, event events.ExecutionEvent) {
+func (em *ExecutionManager) AddProgressEvent(runID string, event pkgEvents.ExecutionEvent) {
 	em.mu.RLock()
 	status, exists := em.executions[runID]
 	em.mu.RUnlock()
