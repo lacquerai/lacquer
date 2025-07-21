@@ -2,6 +2,15 @@
 
 Agents are the core execution units in Lacquer workflows. They represent AI models configured with specific parameters, prompts, and tools to perform tasks.
 
+## Table of Contents
+
+- [Basic Agent Definition](#basic-agent-definition)
+- [Agent Properties](#agent-properties)
+- [Provider-Specific Configuration](#provider-specific-configuration)
+- [Agent Output Parsing](#agent-output-parsing)
+- [Best Practices](#best-practices)
+- [Examples](#examples)
+
 ## Basic Agent Definition
 
 ```yaml
@@ -15,14 +24,15 @@ agents:
 ## Agent Properties
 
 ### provider
+
 **Required**: Yes (when using a model)  
 **Type**: String  
 **Description**: The AI provider for this agent.
 
-Supported providers:
-- `openai` 
-- `anthropic`
-- `local`
+**Supported providers:**
+- `openai` - OpenAI models (GPT-4, GPT-3.5, etc.)
+- `anthropic` - Anthropic models (Claude family)
+- `local` - Local models (currently only `claude-code`)
 
 ```yaml
 agents:
@@ -40,11 +50,12 @@ agents:
 ```
 
 ### model
-**Required**: Yes
+
+**Required**: Yes  
 **Type**: String  
 **Description**: The AI model to use for this agent.
 
-**Note**: Available models are dynamically fetched from each provider's API. The models listed below are examples and may change over time. Lacquer automatically caches the available models list for 24 hours.
+> **Note**: Available models are dynamically fetched from each provider's API. The models listed below are examples and may change over time. Lacquer automatically caches the available models list for 24 hours.
 
 Example models by provider:
 - **OpenAI**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, ...
@@ -59,10 +70,14 @@ agents:
 ```
 
 ### temperature
+
 **Required**: No  
 **Type**: Float (0.0 - 2.0)  
 **Default**: Model-specific default  
-**Description**: Controls randomness in responses. Lower values (0.0-0.5) are more focused, higher values (0.5-2.0) are more creative.
+**Description**: Controls randomness in responses.
+
+- **Lower values (0.0-0.5)**: More focused and deterministic
+- **Higher values (0.5-2.0)**: More creative and varied
 
 ```yaml
 agents:
@@ -78,9 +93,10 @@ agents:
 ```
 
 ### system_prompt
+
 **Required**: No  
 **Type**: String  
-**Description**: Sets the agent's behavior and expertise.
+**Description**: Sets the agent's behavior, expertise, and constraints.
 
 ```yaml
 agents:
@@ -95,9 +111,10 @@ agents:
 ```
 
 ### max_tokens
+
 **Required**: No  
 **Type**: Integer  
-**Description**: Maximum tokens in the response.
+**Description**: Maximum number of tokens in the response. Useful for controlling response length and API costs.
 
 ```yaml
 agents:
@@ -108,9 +125,10 @@ agents:
 ```
 
 ### top_p
+
 **Required**: No  
 **Type**: Float (0.0 - 1.0)  
-**Description**: Alternative to temperature for controlling randomness.
+**Description**: Alternative to temperature for controlling randomness using nucleus sampling.
 
 ```yaml
 agents:
@@ -121,9 +139,12 @@ agents:
 ```
 
 ### tools
+
 **Required**: No  
 **Type**: Array  
-**Description**: Tools available to the agent. See [Tool Integration](./tools.md) for details.
+**Description**: Tools available to the agent for extending capabilities.
+
+For detailed tool configuration, see [Tool Integration](./tools.md).
 
 ```yaml
 agents:
@@ -135,9 +156,9 @@ agents:
         script: "go run scripts/web_search.go"
 ```
 
-## Agent Configuration
+## Provider-Specific Configuration
 
-All agent properties must be explicitly defined:
+Different providers may support different models and features. Here's what you need to know:
 
 ```yaml
 agents:
@@ -150,7 +171,7 @@ agents:
       Provide evidence-based analysis with credible sources.
 ```
 
-## Agent Examples
+## Examples
 
 ### Research Agent
 ```yaml
@@ -312,17 +333,50 @@ You can access:
 - `${{ steps.analyze.outputs.status }}` → "success"
 - `${{ steps.analyze.outputs.items }}` → ["A", "B", "C"]
 
-## Agent Best Practices
+## Best Practices
 
-1. **Use descriptive names**: `legal_advisor` instead of `agent1`
-2. **Set appropriate temperature**: Lower for factual tasks, higher for creative tasks
-3. **Write clear system prompts**: Be specific about the agent's role and constraints
-4. **Limit tools**: Only provide tools the agent actually needs
-5. **Consider token limits**: Set `max_tokens` to control costs and response length
-6. **Test different models**: Different models excel at different tasks
+### 1. Use Descriptive Names
 
-## Next Steps
+Choose agent names that clearly indicate their purpose:
+- ✅ `legal_advisor`, `content_writer`, `data_analyzer`
+- ❌ `agent1`, `helper`, `ai`
 
-- Learn about [Workflow Steps](./workflow-steps.md) to use agents in your workflow
-- Explore [Tool Integration](./tools.md) to extend agent capabilities
-- See [Examples](./examples/agents/) for more agent configurations
+### 2. Set Appropriate Temperature
+
+Match temperature to the task:
+- **Factual tasks** (0.0-0.3): Research, analysis, fact-checking
+- **Balanced tasks** (0.4-0.7): General assistance, summaries
+- **Creative tasks** (0.8-2.0): Creative writing, brainstorming
+
+### 3. Write Clear System Prompts
+
+Be specific about:
+- The agent's role and expertise
+- Expected behavior and constraints
+- Output format preferences
+- Tone and style guidelines
+
+### 4. Optimize Tool Usage
+
+- Only provide tools the agent actually needs
+- Document tool purposes clearly
+- Test tool integration thoroughly
+
+### 5. Manage Token Usage
+
+- Set `max_tokens` to control costs
+- Consider response length requirements
+- Monitor usage for optimization
+
+### 6. Test Different Models
+
+- Different models excel at different tasks
+- Benchmark performance for your use case
+- Consider cost vs. capability trade-offs
+
+## Related Documentation
+
+- [Workflow Steps](./workflow-steps.md) - Use agents in your workflow
+- [Tool Integration](./tools.md) - Extend agent capabilities
+- [Variable Interpolation](./variables.md) - Dynamic agent configuration
+- [Examples](./examples/) - See agents in action

@@ -1,6 +1,16 @@
 # Workflow Steps
 
-Steps are the individual units of execution within a Lacquer workflow. Each step performs a specific task using an agent, block, or system action.
+Steps are the individual units of execution within a Lacquer workflow. Each step performs a specific task using an agent, child workflow, script, or container.
+
+## Table of Contents
+
+- [Basic Step Structure](#basic-step-structure)
+- [Step Properties](#step-properties)
+- [Step Types](#step-types)
+- [Step Execution](#step-execution)
+- [Accessing Step Outputs](#accessing-step-outputs)
+- [Conditional Steps](#conditional-steps)
+- [Best Practices](#best-practices)
 
 ## Basic Step Structure
 
@@ -15,9 +25,12 @@ workflow:
 ## Step Properties
 
 ### id
+
 **Required**: Yes  
 **Type**: String  
 **Description**: Unique identifier for the step within the workflow.
+
+> **Important**: Step IDs must be unique within a workflow and should use lowercase letters, numbers, and underscores.
 
 ```yaml
 steps:
@@ -27,9 +40,10 @@ steps:
 ```
 
 ### agent
-**Required**: Yes (unless using `uses` or `run` or `container`)  
+
+**Required**: Yes (unless using `uses`, `run`, or `container`)  
 **Type**: String  
-**Description**: The agent to use for this step.
+**Description**: References an agent defined in the `agents` section.
 
 ```yaml
 steps:
@@ -39,9 +53,10 @@ steps:
 ```
 
 ### prompt
+
 **Required**: Yes (for agent steps)  
 **Type**: String  
-**Description**: The instruction/prompt for the agent.
+**Description**: The instruction or query for the agent to process.
 
 ```yaml
 steps:
@@ -53,9 +68,12 @@ steps:
 ```
 
 ### run
-**Required**: No
+
+**Required**: No  
 **Type**: String  
-**Description**: Bash script or command to execute.
+**Description**: Shell command or script to execute.
+
+> **Note**: Commands run in a bash shell by default.
 
 ```yaml
 steps:
@@ -66,9 +84,10 @@ steps:
 ```
 
 ### uses
+
 **Required**: No  
 **Type**: String  
-**Description**: Reference to child workflow.
+**Description**: Path to another workflow file to execute as a step.
 
 ```yaml
 steps:
@@ -80,9 +99,10 @@ steps:
 ```
 
 ### container
-**Required**: No
-**Type**: String
-**Description**: Docker container to run.
+
+**Required**: No  
+**Type**: String  
+**Description**: Docker image to run the step in.
 
 ```yaml
 steps:
@@ -91,9 +111,10 @@ steps:
 ```
 
 ### command
-**Required**: No 
-**Type**: Array of strings
-**Description**: Command to run in the container.
+
+**Required**: No (for container steps)  
+**Type**: Array of strings  
+**Description**: Command and arguments to run in the container.
 
 ```yaml
 steps:
@@ -106,9 +127,10 @@ steps:
 ```
 
 ### with
-**Required**: No (only used with `run`, `uses`)
-**Type**: Object
-**Description**: Input parameters for the step.
+
+**Required**: No  
+**Type**: Object  
+**Description**: Input parameters for child workflows or environment variables for scripts.
 
 ```yaml
 steps:
@@ -120,9 +142,9 @@ steps:
 
 ### updates
 
-**Required**: No
-**Type**: Object
-**Description**: Updates to the workflow state when the step completes.
+**Required**: No  
+**Type**: Object  
+**Description**: State variables to update when the step completes successfully.
 
 ```yaml
 steps:
@@ -137,9 +159,10 @@ steps:
 ```
 
 ### outputs
+
 **Required**: No  
 **Type**: Object  
-**Description**: Named outputs from the step.
+**Description**: Defines expected outputs from the step with their types.
 
 ```yaml
 steps:
@@ -190,9 +213,23 @@ steps:
         Authorization: "Bearer ${{ env.API_TOKEN }}"
 ```
 
-### 3. Container Steps
+### 3. Script Steps
 
-Runs commands in Docker containers:
+Execute shell commands or scripts:
+
+```yaml
+steps:
+  - id: process_data
+    run: |
+      echo "Processing data..."
+      python3 process.py --input "$DATA_FILE"
+    with:
+      DATA_FILE: ${{ inputs.file_path }}
+```
+
+### 4. Container Steps
+
+Run commands in Docker containers:
 
 ```yaml
 steps:
@@ -206,7 +243,9 @@ steps:
       data: ${{ inputs.data }}
 ```
 
-## Step Execution Order
+## Step Execution
+
+### Sequential Execution
 
 By default, steps execute sequentially in the order they appear:
 
@@ -248,7 +287,9 @@ steps:
       ${{ join(steps.research.outputs.sources, '\n') }}
 ```
 
-Steps can also reference themselves
+### Self-referencing Steps
+
+Steps can reference their own outputs in updates:
 
 ```yaml
 steps:
@@ -295,9 +336,34 @@ steps:
     prompt: "Improve this content: ${{ inputs.content }}"
 ```
 
-## Complex Step Example
+### Error Handling
 
-Here's a comprehensive example showing various step features:
+Steps fail if:
+- An agent returns an error
+- A script exits with non-zero status
+- A container command fails
+- Output parsing fails for defined outputs
+
+Use conditions to handle failures:
+
+```yaml
+steps:
+  - id: try_process
+    agent: processor
+    prompt: "Attempt to process"
+    outputs:
+      success:
+        type: boolean
+  
+  - id: handle_failure
+    condition: ${{ !steps.try_process.outputs.success }}
+    agent: error_handler
+    prompt: "Handle processing failure"
+```
+
+## Complex Examples
+
+### Multi-Step Research Workflow
 
 ```yaml
 workflow:
@@ -369,16 +435,174 @@ workflow:
         score: ${{ steps.check_research_quality.outputs.score }}
 ```
 
-## Step Best Practices
+### Data Processing Pipeline
 
-1. **Use descriptive IDs**: `analyze_customer_data` not `step1`
-2. **Keep prompts focused**: One task per step
-3. **Define outputs explicitly**: Makes data flow clear
-4. **Validate data early**: Check inputs before processing
-5. **Use child workflows for reusability**: Keep things DRY and maintainable
+```yaml
+workflow:
+  steps:
+    # Load data from source
+    - id: load_data
+      run: "python3 ./scripts/load_data.py"
+      with:
+        source: ${{ inputs.data_source }}
+      outputs:
+        row_count:
+          type: integer
+        columns:
+          type: array
+    
+    # Validate data quality
+    - id: validate
+      agent: data_validator
+      prompt: |
+        Validate data quality:
+        - Rows: ${{ steps.load_data.outputs.row_count }}
+        - Columns: ${{ join(steps.load_data.outputs.columns, ', ') }}
+        
+        Check for missing values, duplicates, and anomalies.
+      outputs:
+        is_valid:
+          type: boolean
+        issues:
+          type: array
+    
+    # Process only if valid
+    - id: transform
+      condition: ${{ steps.validate.outputs.is_valid }}
+      container: python:3.9
+      command:
+        - python
+        - -c
+        - |
+          import pandas as pd
+          # Transform logic here
+          print('{"outputs": {"transformed": true}}')
+    
+    # Generate report
+    - id: report
+      agent: report_generator
+      prompt: |
+        Generate data quality report:
+        - Original rows: ${{ steps.load_data.outputs.row_count }}
+        - Validation: ${{ steps.validate.outputs.is_valid ? 'Passed' : 'Failed' }}
+        - Issues found: ${{ length(steps.validate.outputs.issues) }}
+        ${{ steps.transform.outputs.transformed ? '- Transformation: Complete' : '- Transformation: Skipped' }}
+```
 
-## Next Steps
+## Best Practices
 
-- Learn about [Control Flow](./control-flow.md) for parallel execution and loops
-- Explore [Tool Integration](./tools.md) to extend agent capabilities
-- See [Examples](./examples/agents/) for more agent configurations
+### 1. Use Descriptive Step IDs
+
+Choose IDs that clearly indicate the step's purpose:
+
+```yaml
+# Good
+- id: fetch_user_data
+- id: validate_email_format
+- id: send_confirmation
+
+# Avoid
+- id: step1
+- id: process
+- id: done
+```
+
+### 2. Keep Steps Focused
+
+Each step should have a single, clear responsibility:
+
+```yaml
+# Good: Focused steps
+steps:
+  - id: fetch_data
+    agent: fetcher
+    prompt: "Fetch user data for ID: ${{ inputs.user_id }}"
+  
+  - id: validate_data
+    agent: validator
+    prompt: "Validate the fetched user data"
+
+# Avoid: Multi-purpose steps
+steps:
+  - id: fetch_and_validate
+    agent: processor
+    prompt: "Fetch user data and validate it, then prepare for storage"
+```
+
+### 3. Define Outputs Explicitly
+
+Always define expected outputs for clarity:
+
+```yaml
+steps:
+  - id: analyze
+    agent: analyzer
+    prompt: "Analyze customer sentiment"
+    outputs:
+      sentiment:
+        type: string
+        description: "positive, negative, or neutral"
+      confidence:
+        type: number
+        description: "Confidence score 0-1"
+      keywords:
+        type: array
+        description: "Key phrases detected"
+```
+
+### 4. Handle Edge Cases
+
+Plan for failures and edge cases:
+
+```yaml
+steps:
+  - id: fetch_external
+    agent: fetcher
+    prompt: "Fetch from external API"
+    outputs:
+      data:
+        type: object
+      status:
+        type: string
+  
+  - id: handle_timeout
+    condition: ${{ steps.fetch_external.outputs.status == 'timeout' }}
+    agent: handler
+    prompt: "Use cached data instead"
+  
+  - id: handle_error
+    condition: ${{ steps.fetch_external.outputs.status == 'error' }}
+    agent: notifier
+    prompt: "Alert team about API failure"
+```
+
+### 5. Use Child Workflows for Reusability
+
+Extract common patterns into separate workflows:
+
+```yaml
+# In data-validation.laq.yaml
+workflow:
+  inputs:
+    data:
+      type: object
+  steps:
+    - id: validate
+      agent: validator
+      prompt: "Validate data structure"
+
+# In main workflow
+steps:
+  - id: validate_input
+    uses: "./workflows/data-validation.laq.yaml"
+    with:
+      data: ${{ inputs.user_data }}
+```
+
+## Related Documentation
+
+- [Control Flow](./control-flow.md) - Conditional execution patterns
+- [Variable Interpolation](./variables.md) - Dynamic values in steps
+- [State Management](./state-management.md) - Updating workflow state
+- [Tool Integration](./tools.md) - Extending agent capabilities
+- [Examples](./examples/) - Complete workflow examples

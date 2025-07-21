@@ -2,6 +2,14 @@
 
 Welcome to the comprehensive documentation for Lacquer's workflow DSL (Domain Specific Language). Lacquer provides a declarative, YAML-based syntax for orchestrating AI agent workflows, similar to how GitHub Actions works for CI/CD workflows.
 
+## Overview
+
+Lacquer enables you to:
+- **Orchestrate AI agents** with different models and configurations
+- **Build complex workflows** with conditional logic and state management
+- **Integrate external tools** through scripts and MCP servers
+- **Create reusable components** for common tasks
+
 ## Table of Contents
 
 1. [Workflow Structure](./workflow-structure.md) - Basic workflow anatomy and metadata
@@ -15,7 +23,7 @@ Welcome to the comprehensive documentation for Lacquer's workflow DSL (Domain Sp
 
 ## Quick Start
 
-A minimal Lacquer workflow looks like this:
+Here's a minimal Lacquer workflow to get you started:
 
 ```yaml
 version: "1.0"
@@ -44,7 +52,8 @@ workflow:
     farewell: ${{ steps.greet.output }}
 ```
 
-Run it with:
+To run this workflow:
+
 ```bash
 laq run hello.laq.yaml
 ```
@@ -52,23 +61,54 @@ laq run hello.laq.yaml
 ## Key Concepts
 
 ### Declarative Syntax
+
 Lacquer uses YAML to define workflows declaratively. You describe *what* you want to happen, not *how* to do it.
 
-### Agent-Based
-Workflows are executed by AI agents that you configure with models, prompts, and tools.
+### Agent-Based Architecture
 
-### Composable
-Workflows can reference other workflows for reusability and modularity.
+Workflows are executed by AI agents that you configure with:
+- **Models**: Choose from OpenAI, Anthropic, or local models
+- **Prompts**: Define agent behavior and expertise
+- **Tools**: Extend capabilities with external integrations
 
-### Portable
-Workflows run anywhere - local machines, cloud platforms, or edge devices.
+### Composable Workflows
+
+Workflows can reference other workflows as steps, enabling:
+- **Reusability**: Share common patterns across projects
+- **Modularity**: Break complex workflows into manageable pieces
+- **Maintainability**: Update shared components in one place
+
+### Portable Execution
+
+Workflows run anywhere:
+- **Local machines**: Development and testing
+- **Cloud platforms**: Production deployments
+- **Edge devices**: Distributed processing
 
 ## File Extension Convention
 
-Lacquer workflow files use the `.laq.yaml` extension
+Lacquer workflow files use the `.laq.yaml` extension to distinguish them from regular YAML files.
 
-## Next Steps
+## Getting Started Guide
 
-- Start with [Workflow Structure](./workflow-structure.md) to understand the basic anatomy
-- Learn about [Agents](./agents.md) to configure AI models
-- Explore [Examples](./examples/) for practical workflows
+1. **Learn the Basics**
+   - [Workflow Structure](./workflow-structure.md) - Understand workflow anatomy
+   - [Agents](./agents.md) - Configure AI models and behavior
+   - [Workflow Steps](./workflow-steps.md) - Define execution logic
+
+2. **Add Advanced Features**
+   - [Control Flow](./control-flow.md) - Conditional execution
+   - [Tool Integration](./tools.md) - Extend agent capabilities
+   - [State Management](./state-management.md) - Maintain workflow state
+
+3. **Master Variable Usage**
+   - [Variable Interpolation](./variables.md) - Dynamic values and expressions
+
+4. **Explore Examples**
+   - [Examples Directory](./examples/) - Real-world workflow patterns
+
+## Support and Resources
+
+- **Documentation**: You're here!
+- **GitHub**: Report issues and contribute
+- **Community**: Join discussions and share workflows

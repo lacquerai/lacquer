@@ -1,6 +1,15 @@
 # Tool Integration
 
-Tools extend agent capabilities by providing access to external services, APIs, and custom functionality. Lacquer currently supports two primary tool integration methods: Script Tools and MCP (Model Context Protocol) Servers.
+Tools extend agent capabilities by providing access to external services, APIs, and custom functionality. Lacquer supports two primary tool integration methods: Script Tools and MCP (Model Context Protocol) Servers.
+
+## Table of Contents
+
+- [Basic Tool Structure](#basic-tool-structure)
+- [Tool Properties](#tool-properties)
+- [Script Tools](#script-tools)
+- [MCP Servers](#mcp-servers)
+- [Tool Communication](#tool-communication)
+- [Best Practices](#best-practices)
 
 ## Basic Tool Structure
 
@@ -33,28 +42,34 @@ agents:
 ## Tool Properties
 
 ### name
+
 **Required**: Yes  
 **Type**: String  
 **Description**: Unique identifier for the tool within the agent.
 
 ### description
-**Required**: No  
+
+**Required**: No (but highly recommended)  
 **Type**: String  
-**Description**: Description of the tool, this is used to describe the tool to the agent. Make it as detailed as possible so that the agent can use the tool correctly.
+**Description**: Describes the tool's purpose and capabilities to the agent.
+
+> **Important**: Make descriptions detailed and specific. Agents use this information to decide when and how to use the tool.
 
 ### parameters
-**Required**: Yes (if tool is a local script) 
-**Type**: Object  
-**Description**: Parameters for the tool.
 
-These are the parameters that will be passed to the tool when it is called by the agent. Each parameter has must define a type and a description. It is recommended to make the description as detailed as possible so that the agent can use the tool correctly.
+**Required**: Yes (for script tools)  
+**Type**: Object  
+**Description**: Defines the input parameters that the agent will provide to the tool.
+
+Each parameter must include:
+- `type`: The data type (string, integer, boolean, array, object)
+- `description`: Clear description of the parameter's purpose
 
 ### mcp_server
-**Required**: Yes (if tool is a MCP server)
-**Type**: Object
-**Description**: MCP server configuration.
 
-This is the configuration for the MCP server that will be used to call the tool.
+**Required**: Yes (for MCP tools)  
+**Type**: Object  
+**Description**: Configuration for Model Context Protocol servers.
 
 ```yaml
 tools:
@@ -67,11 +82,11 @@ tools:
       timeout: 1m
 ```
 
-## Tool Integration Methods
+## Script Tools
 
-### 1. Local Script Tools
+Script tools allow you to integrate custom functionality through executable scripts in any language.
 
-When using a local script tool it is important to define the parameters for the tool. This is done by defining the parameters object in the tool configuration. These parameters will be passed to the script when it is called by the agent. For example:
+### Defining Script Tools
 
 ```yaml
 tools:
@@ -89,7 +104,7 @@ tools:
           description: The number of results to return
 ```
 
-This will pass a json object to the script with the following structure:
+When the agent calls this tool, Lacquer passes a JSON object to the script via stdin:
 
 ```json
 {
@@ -100,7 +115,9 @@ This will pass a json object to the script with the following structure:
 }
 ```
 
-Here is an example python script that will print the input data and limit:
+### Example Python Script
+
+Here's a complete example of a Python script that handles tool input and output:
 
 ```python
 #!/usr/bin/env python3
@@ -134,11 +151,20 @@ if __name__ == '__main__':
     main()
 ```
 
-### 2. MCP Servers
+### Script Requirements
 
-Use local or remote MCP servers to extend agent capabilities.
+1. **Read from stdin**: Scripts must read input from standard input
+2. **Output to stdout**: Results must be printed to standard output as JSON
+3. **Handle errors gracefully**: Return error messages in the output
+4. **Be executable**: Ensure proper permissions and shebang lines
 
-#### Local MCP Servers
+## MCP Servers
+
+MCP (Model Context Protocol) servers provide a standardized way to extend agent capabilities with complex tools.
+
+### Local MCP Servers
+
+Run MCP servers locally for development or private tools:
 
 ```yaml
 agents:
@@ -157,7 +183,9 @@ agents:
           timeout: 1m
 ```
 
-#### Remote MCP Servers
+### Remote MCP Servers
+
+Connect to hosted MCP servers for shared functionality:
 
 ```yaml
 
@@ -182,12 +210,198 @@ agents:
           timeout: 30s
 ```
 
-## Tool Best Practices
+## Tool Communication
 
-1. **Clear Tool Names**: Use descriptive names that indicate function
-2. **Comprehensive Documentation**: Document all parameters and outputs using the description property
+### Input Format
 
-## Next Steps
+Tools receive input as JSON with this structure:
 
-- Learn about [State Management](./state-management.md) for stateful tools
-- See [Examples](./examples/tools/) for real-world tool implementations
+```json
+{
+  "inputs": {
+    "parameter1": "value1",
+    "parameter2": "value2"
+  }
+}
+```
+
+### Output Format
+
+Tools must return JSON with this structure:
+
+```json
+{
+  "outputs": {
+    "result": "processed value",
+    "status": "success",
+    "metadata": {}
+  }
+}
+```
+
+### Error Handling
+
+Return errors in the output:
+
+```json
+{
+  "outputs": {
+    "error": "Description of what went wrong",
+    "status": "error"
+  }
+}
+```
+
+## Best Practices
+
+### 1. Write Clear Tool Descriptions
+
+Help agents understand when to use your tool:
+
+```yaml
+# Good
+description: "Search the web for current information. Use this when you need up-to-date data, real-time information, or facts beyond your training data."
+
+# Avoid
+description: "Web search tool"
+```
+
+### 2. Define Comprehensive Parameters
+
+Include all necessary parameter details:
+
+```yaml
+parameters:
+  type: object
+  required: ["query"]  # Specify required parameters
+  properties:
+    query:
+      type: string
+      description: "The search query. Be specific and include relevant keywords."
+    max_results:
+      type: integer
+      description: "Maximum number of results to return (1-10)"
+      default: 5
+    filter:
+      type: string
+      description: "Filter results by: 'news', 'academic', 'general'"
+      enum: ["news", "academic", "general"]
+```
+
+### 3. Handle Errors Gracefully
+
+Always return structured errors:
+
+```python
+try:
+    # Tool logic here
+    result = process_data(inputs)
+    print(json.dumps({
+        'outputs': {
+            'result': result,
+            'status': 'success'
+        }
+    }))
+except Exception as e:
+    print(json.dumps({
+        'outputs': {
+            'error': str(e),
+            'status': 'error',
+            'details': 'Check input parameters and try again'
+        }
+    }))
+```
+
+### 4. Keep Tools Focused
+
+Each tool should do one thing well:
+
+```yaml
+# Good: Focused tools
+tools:
+  - name: fetch_weather
+    description: "Get current weather for a location"
+  - name: fetch_forecast
+    description: "Get weather forecast for next 7 days"
+
+# Avoid: Multi-purpose tools
+tools:
+  - name: weather_tool
+    description: "Get weather, forecast, alerts, and historical data"
+```
+
+### 5. Test Tool Integration
+
+Test your tools independently before integration:
+
+```bash
+# Test script tool
+echo '{"inputs": {"query": "test"}}' | python3 ./tools/search.py
+
+# Verify output format
+# Should return: {"outputs": {...}}
+```
+
+## Common Tool Examples
+
+### Web Search Tool
+
+```yaml
+tools:
+  - name: web_search
+    script: "python3 ./tools/web_search.py"
+    description: "Search the web for current information"
+    parameters:
+      type: object
+      required: ["query"]
+      properties:
+        query:
+          type: string
+          description: "Search query"
+```
+
+### Database Query Tool
+
+```yaml
+tools:
+  - name: query_database
+    script: "go run ./tools/db_query.go"
+    description: "Query the application database"
+    parameters:
+      type: object
+      required: ["sql"]
+      properties:
+        sql:
+          type: string
+          description: "SQL query to execute"
+        limit:
+          type: integer
+          description: "Maximum rows to return"
+          default: 100
+```
+
+### File Processing Tool
+
+```yaml
+tools:
+  - name: process_csv
+    script: "python3 ./tools/csv_processor.py"
+    description: "Analyze and process CSV files"
+    parameters:
+      type: object
+      required: ["file_path", "operation"]
+      properties:
+        file_path:
+          type: string
+          description: "Path to CSV file"
+        operation:
+          type: string
+          description: "Operation to perform"
+          enum: ["summarize", "filter", "aggregate"]
+```
+
+## Related Documentation
+
+- [Agents](./agents.md) - Configure agents with tools
+- [Workflow Steps](./workflow-steps.md) - Use tools in workflows
+- [Examples](./examples/) - See tools in action

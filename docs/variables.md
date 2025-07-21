@@ -1,6 +1,14 @@
-# Variable Interpolation and Outputs
+# Variable Interpolation
 
-Lacquer uses GitHub Actions-style template syntax with `${{ }}` for variable interpolation, allowing dynamic values throughout your workflows. This document covers variable usage, expression types, built-in functions, and best practices.
+Lacquer uses GitHub Actions-style template syntax with `${{ }}` for variable interpolation, allowing dynamic values throughout your workflows. This powerful feature enables you to create flexible, reusable workflows that adapt to different inputs and conditions.
+
+## Table of Contents
+
+- [Variable Syntax](#variable-syntax)
+- [Variable Contexts](#variable-contexts)
+- [Expression Types](#expression-types)
+- [Built-in Functions](#built-in-functions)
+- [Best Practices](#best-practices)
 
 ## Variable Syntax
 
@@ -15,9 +23,9 @@ steps:
     prompt: "Hello ${{ inputs.name }}, welcome to ${{ inputs.location }}!"
 ```
 
-### Variable Contexts
+## Variable Contexts
 
-Lacquer provides several contexts for variable access:
+Lacquer provides several contexts for accessing different types of data:
 
 ```yaml
 steps:
@@ -154,249 +162,271 @@ examples:
 
 ## Built-in Functions
 
-Lacquer provides comprehensive built-in functions for data manipulation:
+Lacquer provides a comprehensive set of built-in functions for data manipulation and workflow control.
 
 ### String Functions
 
-#### `contains(search, item)`
+#### contains(search, item)
 
-Returns true if search contains item.
+Checks if a string contains a substring.
 
-**Parameters:**
-- `search` (string, required): The string to search within
-- `item` (string, required): The substring to look for
+- **Parameters**: `search` (string), `item` (string)
+- **Returns**: boolean
+- **Example**: `${{ contains("hello world", "world") }}` → `true`
 
-**Returns:** `boolean`
+#### startsWith(searchString, searchValue)
 
-**Example:**
-```yaml
-has_world: ${{ contains("hello world", "world") }}  # → true
-```
+Checks if a string starts with a specific value.
 
-#### `startsWith(searchString, searchValue)`
+- **Parameters**: `searchString` (string), `searchValue` (string)
+- **Returns**: boolean
+- **Example**: `${{ startsWith("hello world", "hello") }}` → `true`
 
-Returns true if searchString starts with searchValue.
+#### endsWith(searchString, searchValue)
 
-**Parameters:**
-- `searchString` (string, required): The string to check
-- `searchValue` (string, required): The value to check at the start
+Checks if a string ends with a specific value.
 
-**Returns:** `boolean`
+- **Parameters**: `searchString` (string), `searchValue` (string)
+- **Returns**: boolean
+- **Example**: `${{ endsWith("hello world", "world") }}` → `true`
 
-**Example:**
-```yaml
-starts_hello: ${{ startsWith("hello world", "hello") }}  # → true
-```
-
-#### `endsWith(searchString, searchValue)`
-
-Returns true if searchString ends with searchValue.
-
-**Parameters:**
-- `searchString` (string, required): The string to check
-- `searchValue` (string, required): The value to check at the end
-
-**Returns:** `boolean`
-
-**Example:**
-```yaml
-ends_world: ${{ endsWith("hello world", "world") }}  # → true
-```
-
-#### `format(format, ...args)`
+#### format(format, ...args)
 
 Formats a string with placeholders using {0}, {1}, etc.
 
-**Parameters:**
-- `format` (string, required): The format string with placeholders
-- `args` (any, optional): Values to substitute into placeholders
+- **Parameters**: `format` (string), `args` (any number of values)
+- **Returns**: string
+- **Example**: `${{ format("Hello {0}!", "world") }}` → `"Hello world!"`
 
-**Returns:** `string`
+#### length(value)
 
-**Example:**
-```yaml
-greeting: ${{ format("Hello {0}!", "world") }}  # → "Hello world!"
-formatted_message: ${{ format("{0} has {1} items", inputs.user, inputs.count) }}
-```
+Returns the length of a string, array, or number of object keys.
 
-#### `length(value)`
-
-Returns the length of an array, string, or object.
-
-**Parameters:**
-- `value` (any, required): The value to measure
-
-**Returns:** `number`
-
-**Example:**
-```yaml
-text_length: ${{ length("hello") }}  # → 5
-array_length: ${{ length([1, 2, 3]) }}  # → 3
-```
+- **Parameters**: `value` (string | array | object)
+- **Returns**: number
+- **Example**: `${{ length("hello") }}` → `5`
 
 ### Array Functions
 
-#### `join(array, separator)`
+#### join(array, separator)
 
-Joins array elements with separator.
+Joins array elements into a string.
 
-**Parameters:**
-- `array` (array, required): The array to join
-- `separator` (string, optional): The separator to use (defaults to comma)
-
-**Returns:** `string`
-
-**Example:**
-```yaml
-csv_list: ${{ join(["a", "b", "c"], "-") }}  # → "a-b-c"
-default_join: ${{ join(inputs.items) }}  # Uses comma by default
-```
+- **Parameters**: `array` (array), `separator` (string, optional - defaults to ",")
+- **Returns**: string
+- **Example**: `${{ join(["a", "b", "c"], "-") }}` → `"a-b-c"`
 
 ### Object Functions
 
-#### `keys(object)`
+#### keys(object)
 
-Returns the keys of an object as an array.
+Returns an array of object keys.
 
-**Parameters:**
-- `object` (object, required): The object to get keys from
+- **Parameters**: `object` (object)
+- **Returns**: array
+- **Example**: `${{ keys({a: 1, b: 2}) }}` → `["a", "b"]`
 
-**Returns:** `array`
+#### values(object)
 
-**Example:**
-```yaml
-object_keys: ${{ keys({a: 1, b: 2}) }}  # → ["a", "b"]
-```
+Returns an array of object values.
 
-#### `values(object)`
-
-Returns the values of an object as an array.
-
-**Parameters:**
-- `object` (object, required): The object to get values from
-
-**Returns:** `array`
-
-**Example:**
-```yaml
-object_values: ${{ values({a: 1, b: 2}) }}  # → [1, 2]
-```
+- **Parameters**: `object` (object)
+- **Returns**: array
+- **Example**: `${{ values({a: 1, b: 2}) }}` → `[1, 2]`
 
 ### JSON Functions
 
-#### `toJSON(value)`
+#### toJSON(value)
 
-Converts value to JSON string.
+Converts a value to a JSON string.
 
-**Parameters:**
-- `value` (any, required): The value to convert to JSON
+- **Parameters**: `value` (any)
+- **Returns**: string
+- **Example**: `${{ toJSON({name: "test"}) }}` → `'{"name":"test"}'`
 
-**Returns:** `string`
+#### fromJSON(jsonString)
 
-**Example:**
-```yaml
-json_data: ${{ toJSON({name: "test"}) }}  # → '{"name":"test"}'
-```
+Parses a JSON string to an object.
 
-#### `fromJSON(jsonString)`
-
-Parses JSON string to object.
-
-**Parameters:**
-- `jsonString` (string, required): The JSON string to parse
-
-**Returns:** `object`
-
-**Example:**
-```yaml
-parsed_data: ${{ fromJSON('{"name":"test"}') }}  # → {name: "test"}
-```
+- **Parameters**: `jsonString` (string)
+- **Returns**: any
+- **Example**: `${{ fromJSON('{"name":"test"}') }}` → `{name: "test"}`
 
 ### File System Functions
 
-#### `hashFiles(...paths)`
+#### hashFiles(...paths)
 
-Returns MD5 hash of the specified files.
+Calculates MD5 hash of specified files.
 
-**Parameters:**
-- `paths` (string, required): File paths to hash
+- **Parameters**: `paths` (one or more file paths)
+- **Returns**: string
+- **Example**: `${{ hashFiles("package.json", "yarn.lock") }}` → `"abc123..."`
 
-**Returns:** `string`
+#### glob(pattern)
 
-**Example:**
-```yaml
-file_hash: ${{ hashFiles("package.json", "yarn.lock") }}  # → "abc123..."
-```
+Finds files matching a glob pattern.
 
-#### `glob(pattern)`
-
-Returns files matching the specified glob pattern.
-
-**Parameters:**
-- `pattern` (string, required): The glob pattern to match
-
-**Returns:** `array`
-
-**Example:**
-```yaml
-js_files: ${{ glob("*.js") }}  # → ["file1.js", "file2.js"]
-all_configs: ${{ glob("**/*.config.*") }}
-```
+- **Parameters**: `pattern` (string)
+- **Returns**: array
+- **Example**: `${{ glob("*.js") }}` → `["file1.js", "file2.js"]`
 
 ### Workflow Status Functions
 
-#### `always()`
+#### always()
 
-Always returns true, regardless of previous step status.
+Always returns true (useful for cleanup steps).
 
-**Returns:** `boolean`
+- **Parameters**: none
+- **Returns**: boolean
+- **Example**: `${{ always() }}` → `true`
 
-**Example:**
+#### cancelled()
+
+Checks if the workflow was cancelled.
+
+- **Parameters**: none
+- **Returns**: boolean
+- **Example**: `${{ cancelled() }}` → `false`
+
+#### failure()
+
+Checks if any previous step failed.
+
+- **Parameters**: none
+- **Returns**: boolean
+- **Example**: `${{ failure() }}` → `false`
+
+#### success()
+
+Checks if all previous steps succeeded.
+
+- **Parameters**: none
+- **Returns**: boolean
+- **Example**: `${{ success() }}` → `true`
+
+## Common Patterns
+
+### Default Values
+
+Use conditional expressions to provide defaults:
+
 ```yaml
-always_true: ${{ always() }}  # → true
+steps:
+  - id: process
+    agent: processor
+    prompt: "Process with timeout: ${{ inputs.timeout || 300 }} seconds"
 ```
 
-#### `cancelled()`
+### Safe Property Access
 
-Returns true if workflow was cancelled.
+Check for existence before accessing:
 
-**Returns:** `boolean`
-
-**Example:**
 ```yaml
-is_cancelled: ${{ cancelled() }}  # → false
+condition: ${{ inputs.config && inputs.config.enabled }}
 ```
 
-#### `failure()`
+### String Building
 
-Returns true if any previous step failed.
+Combine multiple values:
 
-**Returns:** `boolean`
-
-**Example:**
 ```yaml
-has_failure: ${{ failure() }}  # → false
+prompt: |
+  User: ${{ inputs.user_name }}
+  Role: ${{ inputs.role || 'guest' }}
+  Permissions: ${{ join(inputs.permissions, ', ') }}
 ```
 
-#### `success()`
+### Dynamic Keys
 
-Returns true if no previous step failed.
+Access properties dynamically:
 
-**Returns:** `boolean`
-
-**Example:**
 ```yaml
-is_success: ${{ success() }}  # → true
+value: ${{ state.data[inputs.key_name] }}
 ```
 
 ## Best Practices
 
-1. **Use meaningful variable names**
-2. **Provide defaults for optional values**
-3. **Handle null/undefined values gracefully**
+### 1. Use Clear Variable Names
 
-## Next Steps
+Choose descriptive names that indicate purpose:
 
-- Explore [Examples](./examples/) to see variables in action
-- Learn about [Workflow Steps](./workflow-steps.md) for more context
-- Check [State Management](./state-management.md) for state handling
+```yaml
+# Good
+${{ steps.validate_email.outputs.is_valid }}
+${{ state.processing_queue_length }}
+
+# Avoid
+${{ steps.s1.outputs.v }}
+${{ state.pql }}
+```
+
+### 2. Provide Sensible Defaults
+
+Use conditional expressions for optional values:
+
+```yaml
+# Good
+timeout: ${{ inputs.timeout || 300 }}
+environment: ${{ inputs.env || 'development' }}
+
+# Avoid
+timeout: ${{ inputs.timeout }}  # May be undefined
+```
+
+### 3. Handle Null/Undefined Gracefully
+
+Check for existence before use:
+
+```yaml
+# Good
+condition: ${{ inputs.user && inputs.user.id }}
+name: ${{ inputs.user ? inputs.user.name : 'Anonymous' }}
+
+# Avoid
+condition: ${{ inputs.user.id }}  # May error if user is null
+```
+
+### 4. Use Functions Appropriately
+
+Choose the right function for the task:
+
+```yaml
+# Checking if array has items
+condition: ${{ length(inputs.items) > 0 }}
+
+# Formatting output
+message: ${{ format("Processing {0} of {1}", state.current, state.total) }}
+
+# Building lists
+summary: "Items: ${{ join(steps.collect.outputs.items, ', ') }}"
+```
+
+### 5. Keep Expressions Simple
+
+Break complex logic into steps:
+
+```yaml
+# Instead of complex inline expressions
+condition: ${{ (inputs.mode == 'auto' && state.confidence > 0.8) || (inputs.mode == 'manual' && inputs.approved) }}
+
+# Use intermediate steps
+steps:
+  - id: check_auto
+    agent: validator
+    prompt: "Check if auto mode conditions met"
+    outputs:
+      can_proceed:
+        type: boolean
+  
+  - id: proceed
+    condition: ${{ steps.check_auto.outputs.can_proceed }}
+    agent: processor
+    prompt: "Process request"
+```
+
+## Related Documentation
+
+- [Workflow Steps](./workflow-steps.md) - Using variables in steps
+- [State Management](./state-management.md) - Working with state variables
+- [Control Flow](./control-flow.md) - Variables in conditions
+- [Examples](./examples/) - See variables in action
