@@ -1,46 +1,21 @@
 # Variable Interpolation and Outputs
 
-Lacquer uses a Jinja2-style template syntax for variable interpolation, allowing dynamic values throughout your workflows. This document covers variable usage, output handling, and available functions.
+Lacquer uses GitHub Actions-style template syntax with `${{ }}` for variable interpolation, allowing dynamic values throughout your workflows. This document covers variable usage, expression types, built-in functions, and best practices.
 
 ## Variable Syntax
 
-### Basic Interpolation
+### Basic Template Syntax
 
-Use double curly braces for variable interpolation:
+All variable interpolation in Lacquer uses the `${{ }}` syntax:
 
 ```yaml
 steps:
   - id: greet
     agent: assistant
-    prompt: "Hello {{ inputs.name }}, welcome to {{ inputs.location }}!"
+    prompt: "Hello ${{ inputs.name }}, welcome to ${{ inputs.location }}!"
 ```
 
-### Accessing Nested Values
-
-Use dot notation for nested objects:
-
-```yaml
-prompt: |
-  Customer: {{ inputs.customer.name }}
-  Email: {{ inputs.customer.contact.email }}
-  Order ID: {{ inputs.order.id }}
-  Total: ${{ inputs.order.total }}
-```
-
-### Array Access
-
-Access array elements by index:
-
-```yaml
-prompt: |
-  First item: {{ inputs.items[0] }}
-  Last item: {{ inputs.items[-1] }}
-  Second category: {{ inputs.categories[1].name }}
-```
-
-## Variable Contexts
-
-### Available Contexts
+### Variable Contexts
 
 Lacquer provides several contexts for variable access:
 
@@ -50,517 +25,378 @@ steps:
     agent: assistant
     prompt: |
       # Workflow inputs
-      Input value: {{ inputs.some_value }}
+      Input value: ${{ inputs.some_value }}
       
       # Step outputs
-      Previous result: {{ steps.previous_step.output }}
-      Specific output: {{ steps.analyzer.outputs.score }}
+      Previous result: ${{ steps.previous_step.output }}
+      Specific output: ${{ steps.analyzer.outputs.score }}
       
       # Workflow state
-      Counter: {{ state.counter }}
-      Status: {{ state.current_status }}
-      
-      # Environment variables
-      API URL: {{ env.API_BASE_URL }}
-      Environment: {{ env.ENVIRONMENT }}
-      
-      # Secrets
-      API Key: {{ secrets.API_KEY }}
-      
-      # Metadata
-      Workflow name: {{ metadata.name }}
-      Author: {{ metadata.author }}
-      
-      # Current context
-      Step index: {{ step_index }}
-      Step ID: {{ step.id }}
-      Timestamp: {{ now() }}
+      Counter: ${{ state.counter }}
+      Status: ${{ state.current_status }}
 ```
 
-## Step Outputs
+## Expression Types
 
-### Defining Outputs
+Lacquer supports various expression types within the `${{ }}` syntax:
 
-Explicitly define step outputs:
+### Literal Values
+
+Use literal values like numbers, strings, booleans, or null:
 
 ```yaml
-steps:
-  - id: analyze_data
-    agent: analyst
-    prompt: "Analyze this dataset: {{ inputs.data }}"
-    outputs:
-      summary: string
-      insights: array
-      metrics:
-        type: object
-        properties:
-          average: float
-          total: integer
-          categories: array
+examples:
+  - Number: ${{ 42 }}
+  - Float: ${{ 3.14 }}
+  - String: ${{ "hello" }}
+  - Boolean: ${{ true }}
+  - Null: ${{ null }}
 ```
 
-### Default Output
+### Variable References
 
-When no outputs are defined, access the default output:
+Access variables using their names:
 
 ```yaml
-steps:
-  - id: generate
-    agent: generator
-    prompt: "Generate content"
-  
-  - id: use_output
-    agent: processor
-    prompt: "Process: {{ steps.generate.output }}"
+examples:
+  - Input: ${{ inputs.name }}
+  - State: ${{ state.counter }}
+  - Step output: ${{ steps.step1.output }}
 ```
 
-### Multiple Outputs
+### Property Access (Dot Notation)
 
-Access specific outputs:
+Access object properties using dot notation:
 
 ```yaml
-steps:
-  - id: multi_output
-    agent: analyzer
-    prompt: "Analyze comprehensively"
-    outputs:
-      summary: string
-      score: float
-      tags: array
-      metadata: object
-  
-  - id: use_outputs
-    agent: reporter
-    prompt: |
-      Summary: {{ steps.multi_output.outputs.summary }}
-      Score: {{ steps.multi_output.outputs.score }}
-      Tags: {{ steps.multi_output.outputs.tags | join(', ') }}
-      Created: {{ steps.multi_output.outputs.metadata.created_at }}
+examples:
+  - Nested input: ${{ inputs.customer.name }}
+  - Deep nesting: ${{ inputs.customer.contact.email }}
+  - Step property: ${{ steps.analyzer.outputs.score }}
 ```
 
-## Filters and Functions
+### Index Access
 
-### String Filters
+Access array elements by index or object properties by key:
 
 ```yaml
-prompt: |
-  # Case conversion
-  Upper: {{ inputs.text | upper }}
-  Lower: {{ inputs.text | lower }}
-  Title: {{ inputs.text | title }}
-  
-  # String manipulation
-  Trimmed: {{ inputs.text | trim }}
-  No spaces: {{ inputs.text | replace(' ', '_') }}
-  First 50 chars: {{ inputs.text | truncate(50) }}
-  
-  # String checks
-  Starts with 'Hello': {{ inputs.text | startswith('Hello') }}
-  Contains 'world': {{ 'world' in inputs.text }}
-  Length: {{ inputs.text | length }}
+examples:
+  - Array element: ${{ inputs.my_list[0] }}
+  - Object key: ${{ steps.step_foo.outputs.map["key"] }}
+  - Dynamic key: ${{ inputs.data[inputs.key_name] }}
 ```
 
-### Array Filters
+### Binary Operations
 
+Combine expressions with operators:
+
+#### Arithmetic Operations
 ```yaml
-prompt: |
-  # Array operations
-  Count: {{ inputs.items | length }}
-  First: {{ inputs.items | first }}
-  Last: {{ inputs.items | last }}
-  
-  # Filtering
-  High scores: {{ inputs.scores | select('>', 80) }}
-  Active users: {{ inputs.users | selectattr('status', 'active') }}
-  
-  # Transformation
-  Sorted: {{ inputs.numbers | sort }}
-  Reversed: {{ inputs.items | reverse }}
-  Unique: {{ inputs.tags | unique }}
-  
-  # Aggregation
-  Sum: {{ inputs.numbers | sum }}
-  Min: {{ inputs.numbers | min }}
-  Max: {{ inputs.numbers | max }}
-  Average: {{ inputs.numbers | average }}
-  
-  # Joining
-  CSV: {{ inputs.items | join(', ') }}
-  Lines: {{ inputs.lines | join('\n') }}
+examples:
+  - Addition: ${{ 42 + 10 }}
+  - String concat: ${{ "hello" + "world" }}
+  - Multiplication: ${{ inputs.price * inputs.quantity }}
+  - Division: ${{ inputs.total / inputs.count }}
+  - Modulo: ${{ inputs.number % 2 }}
 ```
 
-### Object Filters
-
+#### Comparison Operations
 ```yaml
-prompt: |
-  # Object operations
-  Keys: {{ inputs.data | keys }}
-  Values: {{ inputs.data | values }}
-  Items: {{ inputs.data | items }}
-  
-  # Merging
-  Merged: {{ defaults | merge(inputs.overrides) }}
-  
-  # JSON
-  As JSON: {{ inputs.complex_data | json }}
-  Pretty JSON: {{ inputs.complex_data | json(indent=2) }}
+examples:
+  - Equality: ${{ inputs.status == "active" }}
+  - Inequality: ${{ inputs.count != 0 }}
+  - Greater than: ${{ inputs.score > 70 }}
+  - Less than: ${{ inputs.age < 18 }}
+  - Greater/equal: ${{ inputs.score >= 70 }}
+  - Less/equal: ${{ inputs.age <= 65 }}
 ```
 
-### Date and Time
-
+#### Logical Operations
 ```yaml
-prompt: |
-  # Current time
-  Now: {{ now() }}
-  Today: {{ today() }}
-  
-  # Formatting
-  Formatted: {{ now() | strftime('%Y-%m-%d %H:%M:%S') }}
-  Date only: {{ now() | date }}
-  Time only: {{ now() | time }}
-  
-  # Date math
-  Tomorrow: {{ now() | add_days(1) }}
-  Last week: {{ now() | add_days(-7) }}
-  In 2 hours: {{ now() | add_hours(2) }}
-  
-  # Comparisons
-  Is past: {{ inputs.deadline < now() }}
-  Days until: {{ (inputs.deadline - now()) | days }}
+examples:
+  - AND: ${{ inputs.active && inputs.verified }}
+  - OR: ${{ inputs.premium || inputs.vip }}
+  - Complex: ${{ inputs.falsey && steps.step_foo.outputs.age >= 18 }}
 ```
 
-### Conditional Expressions
+### Unary Operations
+
+Apply single operators to expressions:
 
 ```yaml
-prompt: |
-  # Ternary operator
-  Status: {{ 'Active' if inputs.is_active else 'Inactive' }}
-  
-  # Default values
-  Name: {{ inputs.name | default('Anonymous') }}
-  Count: {{ inputs.count | default(0) }}
-  
-  # Null checking
-  Has email: {{ inputs.email is not none }}
-  Empty list: {{ inputs.items | length == 0 }}
+examples:
+  - Logical NOT: ${{ !inputs.active }}
+  - Numeric negation: ${{ -inputs.count }}
+  - Double negation: ${{ !!inputs.maybe_null }}
 ```
 
-## Advanced Interpolation
+### Conditional (Ternary) Expressions
 
-### Complex Expressions
+Use `condition ? trueValue : falseValue` for conditional logic:
 
 ```yaml
-steps:
-  - id: calculate
-    agent: calculator
-    prompt: |
-      # Math operations
-      Total: {{ inputs.price * inputs.quantity }}
-      With tax: {{ (inputs.price * inputs.quantity * 1.08) | round(2) }}
-      Discount: {{ inputs.price * (inputs.discount_percent / 100) }}
-      
-      # Boolean logic
-      Eligible: {{ inputs.age >= 18 and inputs.score > 70 }}
-      Special case: {{ inputs.type == 'premium' or inputs.vip == true }}
-      
-      # List comprehension
-      Doubled: {{ [item * 2 for item in inputs.numbers] }}
-      Filtered: {{ [user.name for user in inputs.users if user.active] }}
+examples:
+  - Simple: ${{ steps.step_foo.outputs.age >= 18 ? "adult" : "minor" }}
+  - With functions: ${{ length(inputs.items) > 0 ? inputs.items : "none" }}
+  - Nested: ${{ inputs.type == "premium" ? "VIP access" : inputs.verified ? "standard access" : "limited access" }}
 ```
 
-### Template Blocks
+### Function Calls
 
-Use template blocks for complex logic:
+Call built-in functions with arguments:
 
 ```yaml
-prompt: |
-  {% if inputs.type == 'detailed' %}
-    Provide a comprehensive analysis including:
-    - Historical data
-    - Trend analysis
-    - Future projections
-  {% elif inputs.type == 'summary' %}
-    Provide a brief summary with key points
-  {% else %}
-    Provide a standard analysis
-  {% endif %}
-  
-  {% for item in inputs.items %}
-    {{ loop.index }}. {{ item.name }} - ${{ item.price }}
-  {% endfor %}
-  
-  Total items: {{ inputs.items | length }}
+examples:
+  - Length check: ${{ length(inputs.my_list) }}
+  - String search: ${{ contains(inputs.text, "search") }}
+  - Array join: ${{ join(inputs.items, ", ") }}
 ```
 
-### Loops in Templates
+## Built-in Functions
 
+Lacquer provides comprehensive built-in functions for data manipulation:
+
+### String Functions
+
+#### `contains(search, item)`
+
+Returns true if search contains item.
+
+**Parameters:**
+- `search` (string, required): The string to search within
+- `item` (string, required): The substring to look for
+
+**Returns:** `boolean`
+
+**Example:**
 ```yaml
-prompt: |
-  # Simple loop
-  {% for user in inputs.users %}
-  - {{ user.name }} ({{ user.email }})
-  {% endfor %}
-  
-  # Loop with index
-  {% for item in inputs.items %}
-  {{ loop.index }}. {{ item.title }}
-     Priority: {{ item.priority }}
-     {% if item.tags %}
-     Tags: {{ item.tags | join(', ') }}
-     {% endif %}
-  {% endfor %}
-  
-  # Conditional loop
-  Active users:
-  {% for user in inputs.users if user.status == 'active' %}
-  - {{ user.name }}
-  {% else %}
-  No active users found
-  {% endfor %}
+has_world: ${{ contains("hello world", "world") }}  # → true
 ```
 
-## Variable Scoping
+#### `startsWith(searchString, searchValue)`
 
-### Global vs Local Variables
+Returns true if searchString starts with searchValue.
 
+**Parameters:**
+- `searchString` (string, required): The string to check
+- `searchValue` (string, required): The value to check at the start
+
+**Returns:** `boolean`
+
+**Example:**
 ```yaml
-workflow:
-  # Global scope
-  inputs:
-    global_setting: string
-  
-  state:
-    global_counter: 0
-  
-  steps:
-    - id: parallel_tasks
-      parallel:
-        for_each: "{{ inputs.tasks }}"
-        as: task  # Local to this parallel block
-        index_as: idx  # Local index
-        steps:
-          - id: process
-            agent: processor
-            prompt: |
-              Global setting: {{ inputs.global_setting }}
-              Local task: {{ task.name }}
-              Local index: {{ idx }}
-              Global counter: {{ state.global_counter }}
+starts_hello: ${{ startsWith("hello world", "hello") }}  # → true
 ```
 
-### Variable Precedence
+#### `endsWith(searchString, searchValue)`
 
-Variables are resolved in this order:
-1. Local loop variables (task, idx)
-2. Step outputs (steps.*.outputs)
-3. Workflow state
-4. Workflow inputs
-5. Environment variables
-6. Default values
+Returns true if searchString ends with searchValue.
 
-## Output Formatting
+**Parameters:**
+- `searchString` (string, required): The string to check
+- `searchValue` (string, required): The value to check at the end
 
-### Structured Outputs
+**Returns:** `boolean`
 
-Define complex output structures:
-
+**Example:**
 ```yaml
-steps:
-  - id: analyze
-    agent: analyst
-    prompt: "Perform analysis"
-    outputs:
-      report:
-        type: object
-        properties:
-          summary: string
-          sections:
-            type: array
-            items:
-              type: object
-              properties:
-                title: string
-                content: string
-                score: float
-      
-      metrics:
-        type: array
-        items:
-          type: object
-          properties:
-            name: string
-            value: float
-            unit: string
+ends_world: ${{ endsWith("hello world", "world") }}  # → true
 ```
 
-### Output Transformation
+#### `format(format, ...args)`
 
-Transform outputs before use:
+Formats a string with placeholders using {0}, {1}, etc.
 
+**Parameters:**
+- `format` (string, required): The format string with placeholders
+- `args` (any, optional): Values to substitute into placeholders
+
+**Returns:** `string`
+
+**Example:**
 ```yaml
-steps:
-  - id: get_data
-    agent: fetcher
-    prompt: "Fetch data"
-    outputs:
-      raw_data: string
-  
-  - id: transform
-    agent: transformer
-    prompt: |
-      Transform this data:
-      {{ steps.get_data.outputs.raw_data | parse_json | selectattr('active') | list }}
+greeting: ${{ format("Hello {0}!", "world") }}  # → "Hello world!"
+formatted_message: ${{ format("{0} has {1} items", inputs.user, inputs.count) }}
 ```
 
-### Output Validation
+#### `length(value)`
 
-Validate outputs match expected format:
+Returns the length of an array, string, or object.
 
+**Parameters:**
+- `value` (any, required): The value to measure
+
+**Returns:** `number`
+
+**Example:**
 ```yaml
-outputs:
-  result:
-    type: object
-    required: ["status", "data"]
-    properties:
-      status:
-        type: string
-        enum: ["success", "failure", "partial"]
-      data:
-        type: array
-        min_items: 1
-      error:
-        type: string
-        required: false
+text_length: ${{ length("hello") }}  # → 5
+array_length: ${{ length([1, 2, 3]) }}  # → 3
 ```
 
-## Workflow Outputs
+### Array Functions
 
-### Defining Workflow Outputs
+#### `join(array, separator)`
 
+Joins array elements with separator.
+
+**Parameters:**
+- `array` (array, required): The array to join
+- `separator` (string, optional): The separator to use (defaults to comma)
+
+**Returns:** `string`
+
+**Example:**
 ```yaml
-workflow:
-  # ... steps ...
-  
-  outputs:
-    # Simple output
-    summary: "{{ steps.summarize.output }}"
-    
-    # Computed output
-    total_score: "{{ steps.scores.outputs.values | sum }}"
-    
-    # Conditional output
-    status: |
-      {{ 'success' if steps.validate.outputs.is_valid else 'failure' }}
-    
-    # Complex output
-    report:
-      title: "{{ inputs.title }}"
-      date: "{{ now() | date }}"
-      sections: "{{ steps.analyze.outputs.sections }}"
-      metrics: |
-        {{
-          {
-            'total': steps.process.outputs.total,
-            'average': steps.process.outputs.total / steps.process.outputs.count,
-            'categories': steps.categorize.outputs.categories
-          }
-        }}
+csv_list: ${{ join(["a", "b", "c"], "-") }}  # → "a-b-c"
+default_join: ${{ join(inputs.items) }}  # Uses comma by default
 ```
 
-### Output Best Practices
+### Object Functions
 
-1. **Use descriptive names**
+#### `keys(object)`
+
+Returns the keys of an object as an array.
+
+**Parameters:**
+- `object` (object, required): The object to get keys from
+
+**Returns:** `array`
+
+**Example:**
 ```yaml
-outputs:
-  analysis_report: "{{ steps.analyze.output }}"  # Good
-  output1: "{{ steps.step1.output }}"  # Avoid
+object_keys: ${{ keys({a: 1, b: 2}) }}  # → ["a", "b"]
 ```
 
-2. **Document output types**
+#### `values(object)`
+
+Returns the values of an object as an array.
+
+**Parameters:**
+- `object` (object, required): The object to get values from
+
+**Returns:** `array`
+
+**Example:**
 ```yaml
-outputs:
-  customer_ids:
-    value: "{{ steps.fetch.outputs.ids }}"
-    description: "List of customer IDs that were processed"
-    type: array
+object_values: ${{ values({a: 1, b: 2}) }}  # → [1, 2]
 ```
 
-3. **Provide defaults for optional outputs**
+### JSON Functions
+
+#### `toJSON(value)`
+
+Converts value to JSON string.
+
+**Parameters:**
+- `value` (any, required): The value to convert to JSON
+
+**Returns:** `string`
+
+**Example:**
 ```yaml
-outputs:
-  error_message: "{{ steps.process.outputs.error | default('No errors') }}"
-  results: "{{ steps.analyze.outputs.results | default([]) }}"
+json_data: ${{ toJSON({name: "test"}) }}  # → '{"name":"test"}'
 ```
 
-## Custom Functions
+#### `fromJSON(jsonString)`
 
-### Registering Custom Functions
+Parses JSON string to object.
 
-Lacquer allows custom functions in templates:
+**Parameters:**
+- `jsonString` (string, required): The JSON string to parse
 
+**Returns:** `object`
+
+**Example:**
 ```yaml
-# Using custom functions
-prompt: |
-  Hashed value: {{ inputs.password | hash('sha256') }}
-  Encoded: {{ inputs.data | base64_encode }}
-  Parsed URL: {{ inputs.url | parse_url }}
-  Distance: {{ calculate_distance(point1, point2) }}
+parsed_data: ${{ fromJSON('{"name":"test"}') }}  # → {name: "test"}
 ```
 
-### Built-in Utility Functions
+### File System Functions
 
+#### `hashFiles(...paths)`
+
+Returns MD5 hash of the specified files.
+
+**Parameters:**
+- `paths` (string, required): File paths to hash
+
+**Returns:** `string`
+
+**Example:**
 ```yaml
-prompt: |
-  # Type checking
-  Is string: {{ inputs.value is string }}
-  Is number: {{ inputs.value is number }}
-  Is array: {{ inputs.value is list }}
-  
-  # Type conversion
-  As integer: {{ inputs.string_number | int }}
-  As float: {{ inputs.string_number | float }}
-  As string: {{ inputs.number | string }}
-  As boolean: {{ inputs.string_bool | bool }}
-  
-  # Utility
-  Random number: {{ random(1, 100) }}
-  UUID: {{ uuid() }}
-  Hash: {{ inputs.text | hash('md5') }}
+file_hash: ${{ hashFiles("package.json", "yarn.lock") }}  # → "abc123..."
 ```
 
-## Debugging Variables
+#### `glob(pattern)`
 
-### Debug Output
+Returns files matching the specified glob pattern.
 
+**Parameters:**
+- `pattern` (string, required): The glob pattern to match
+
+**Returns:** `array`
+
+**Example:**
 ```yaml
-steps:
-  - id: debug_vars
-    agent: debugger
-    prompt: |
-      === Debug Information ===
-      All inputs: {{ inputs | json(indent=2) }}
-      
-      Current state: {{ state | json(indent=2) }}
-      
-      Available steps:
-      {% for step_id in steps.keys() %}
-      - {{ step_id }}: {{ steps[step_id].outputs.keys() | list }}
-      {% endfor %}
-      
-      Environment: {{ env.keys() | list }}
+js_files: ${{ glob("*.js") }}  # → ["file1.js", "file2.js"]
+all_configs: ${{ glob("**/*.config.*") }}
+```
+
+### Workflow Status Functions
+
+#### `always()`
+
+Always returns true, regardless of previous step status.
+
+**Returns:** `boolean`
+
+**Example:**
+```yaml
+always_true: ${{ always() }}  # → true
+```
+
+#### `cancelled()`
+
+Returns true if workflow was cancelled.
+
+**Returns:** `boolean`
+
+**Example:**
+```yaml
+is_cancelled: ${{ cancelled() }}  # → false
+```
+
+#### `failure()`
+
+Returns true if any previous step failed.
+
+**Returns:** `boolean`
+
+**Example:**
+```yaml
+has_failure: ${{ failure() }}  # → false
+```
+
+#### `success()`
+
+Returns true if no previous step failed.
+
+**Returns:** `boolean`
+
+**Example:**
+```yaml
+is_success: ${{ success() }}  # → true
 ```
 
 ## Best Practices
 
 1. **Use meaningful variable names**
 2. **Provide defaults for optional values**
-3. **Validate variable types when needed**
-4. **Document expected input/output formats**
-5. **Use filters to ensure correct types**
-6. **Handle null/undefined values gracefully**
+3. **Handle null/undefined values gracefully**
 
 ## Next Steps
 
-- Create [Examples](./examples/) to see variables in action
-- Review [Best Practices](./best-practices.md) for production workflows
-- Explore [Advanced Patterns](./advanced-patterns.md) for complex scenarios
+- Explore [Examples](./examples/) to see variables in action
+- Learn about [Workflow Steps](./workflow-steps.md) for more context
+- Check [State Management](./state-management.md) for state handling

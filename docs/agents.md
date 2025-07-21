@@ -20,9 +20,9 @@ agents:
 **Description**: The AI provider for this agent.
 
 Supported providers:
-- `openai` - OpenAI models (GPT-4, GPT-3.5, etc.)
-- `anthropic` - Anthropic models (Claude 3 Opus, Sonnet, Haiku)
-- `local` - Local models (via Claude Code CLI)
+- `openai` 
+- `anthropic`
+- `local`
 
 ```yaml
 agents:
@@ -32,26 +32,30 @@ agents:
   
   claude_agent:
     provider: anthropic
-    model: claude-3-opus
+    model: claude-sonnet-4-20250514
+  
+  claude_code_agent:
+    provider: local
+    model: claude-code
 ```
 
 ### model
-**Required**: Yes (unless using `uses` for pre-built agents)  
+**Required**: Yes
 **Type**: String  
 **Description**: The AI model to use for this agent.
 
 **Note**: Available models are dynamically fetched from each provider's API. The models listed below are examples and may change over time. Lacquer automatically caches the available models list for 24 hours.
 
 Example models by provider:
-- **OpenAI**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`
-- **Anthropic**: `claude-3-5-sonnet-20241022`, `claude-3-opus-20240229`, `claude-3-sonnet-20240229`
-- **Local**: Models available through Claude Code CLI
+- **OpenAI**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, ...
+- **Anthropic**: `claude-sonnet-4-20250514`, `claude-3-5-sonnet-20241022`, ...
+- **Local**: only `claude-code` is supported
 
 ```yaml
 agents:
   writer:
     provider: anthropic
-    model: claude-3-opus-20240229
+    model: claude-sonnet-4-20250514
 ```
 
 ### temperature
@@ -128,29 +132,10 @@ agents:
     model: gpt-4
     tools:
       - name: web_search
-        uses: lacquer/web-search@v1
-      - name: calculate
-        script: ./tools/calculator.py
+        script: "go run scripts/web_search.go"
 ```
 
-## Using Pre-built Agents
-
-Lacquer provides pre-built agent configurations through the `uses` syntax:
-
-**Note: Pre-built agent configurations are not currently implemented. Define agents directly:**
-
-```yaml
-agents:
-  researcher:
-    provider: openai
-    model: gpt-4
-    temperature: 0.3
-    system_prompt: |
-      You are a researcher focused on technology and science.
-      Provide thorough, well-sourced information.
-```
-
-### Agent Configuration
+## Agent Configuration
 
 All agent properties must be explicitly defined:
 
@@ -182,7 +167,7 @@ agents:
       - Cites all sources properly
     tools:
       - name: search
-        script: "curl -s \"https://api.example.com/search?q=$1\""
+        script: "go run scripts/web_search.go"
         parameters:
           type: object
           properties:
@@ -261,50 +246,20 @@ agents:
               type: string
 ```
 
-## Agent Best Practices
-
-**Note: Agent inheritance is not currently implemented. Define each agent completely:**
-
-```yaml
-agents:
-  financial_analyst:
-    provider: openai
-    model: gpt-4
-    temperature: 0.2
-    system_prompt: |
-      You are a financial analyst specializing in:
-      - Market analysis
-      - Financial modeling
-      - Risk assessment
-    tools:
-      - name: market_data
-        script: "python3 ./tools/market_data.py"
-        parameters:
-          type: object
-          properties:
-            symbol:
-              type: string
-```
 
 ## Dynamic Agent Configuration
 
-Agents can be configured dynamically using environment variables:
+Agent's system prompt can be configured using inputs:
 
 ```yaml
 agents:
   configurable_agent:
-    model: ${{ env.AI_MODEL }}
+    provider: openai
+    model: gpt-4
     temperature: 0.7
     system_prompt: |
       You are an AI assistant.
-      Environment: ${{ env.ENVIRONMENT }}
-```
-
-## Multi-Model Agents
-
-Define agents that can switch between models based on task requirements:
-
-**Note: Dynamic model selection is not currently implemented. Use fixed model configurations.**
+      Environment: ${{ inputs.environment }}
 ```
 
 ## Agent Output Parsing
@@ -337,9 +292,14 @@ steps:
     agent: analyzer
     prompt: "Analyze this data and return results as JSON"
     outputs:
-      score: integer
-      status: string
-      items: array
+      score:
+        type: integer
+      status:
+        type: string
+      items:
+        type: array
+        items:
+          type: string
 ```
 
 If the agent responds with:
@@ -352,200 +312,6 @@ You can access:
 - `${{ steps.analyze.outputs.status }}` → "success"
 - `${{ steps.analyze.outputs.items }}` → ["A", "B", "C"]
 
-### Example: Natural Language Extraction
-
-```yaml
-steps:
-  - id: review
-    agent: reviewer
-    prompt: "Review this document"
-    outputs:
-      rating: integer
-      approved: boolean
-      issues: array
-```
-
-If the agent responds with:
-```
-After reviewing the document:
-Rating: 8/10
-Approved: yes
-Issues:
-- Missing references
-- Unclear conclusion
-- Grammar errors
-```
-
-Lacquer extracts:
-- `${{ steps.review.outputs.rating }}` → 8
-- `${{ steps.review.outputs.approved }}` → true
-- `${{ steps.review.outputs.issues }}` → ["Missing references", "Unclear conclusion", "Grammar errors"]
-
-### Example: Complex Output Structures
-
-```yaml
-steps:
-  - id: process
-    agent: processor
-    prompt: "Process and categorize items"
-    outputs:
-      summary: string
-      categories: object
-      total_count: integer
-```
-
-### Accessing Outputs
-
-Always available:
-- `${{ steps.step_id.output }}` - Raw agent response
-
-With defined outputs:
-- `${{ steps.step_id.outputs.field_name }}` - Specific parsed field
-
-### Schema-Guided Output Parsing
-
-Lacquer automatically generates JSON schemas from your output definitions and includes them in the agent prompt to ensure more deterministic parsing. This dramatically improves the reliability of structured output extraction.
-
-#### How Schema Guidance Works
-
-When you define outputs, Lacquer:
-1. Generates a JSON schema from your output definitions
-2. Adds schema instructions to the agent prompt
-3. Prioritizes JSON parsing with auto-correction for common issues
-4. Falls back to natural language extraction if needed
-
-#### Example: Schema-Guided Response
-
-```yaml
-steps:
-  - id: analyze_document
-    agent: analyzer
-    prompt: "Analyze this document for key insights"
-    outputs:
-      summary: string
-      confidence: 
-        type: number
-        minimum: 0
-        maximum: 1
-      recommendations:
-        type: array
-        items: string
-      actionable: boolean
-```
-
-**Generated Schema Instructions:**
-```
-IMPORTANT: You must respond with a valid JSON object that matches this exact schema:
-
-{
-  "type": "object",
-  "properties": {
-    "summary": {"type": "string"},
-    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-    "recommendations": {"type": "array", "items": {"type": "string"}},
-    "actionable": {"type": "boolean"}
-  },
-  "required": ["summary", "confidence", "recommendations", "actionable"]
-}
-```
-
-#### Advanced Output Definitions
-
-```yaml
-outputs:
-  # Simple types
-  name: string
-  count: integer
-  score: float
-  active: boolean
-  tags: array
-  
-  # Complex types with validation
-  user_info:
-    type: object
-    description: "User profile information"
-    properties:
-      name: string
-      age: integer
-  
-  status:
-    type: string
-    enum: ["pending", "completed", "failed"]
-  
-  # Array with specific item types
-  scores:
-    type: array
-    items: number
-    minItems: 1
-    maxItems: 10
-  
-  # String with constraints
-  description:
-    type: string
-    minLength: 10
-    maxLength: 500
-    
-  # Optional fields
-  notes:
-    type: string
-    optional: true
-```
-
-#### Automatic JSON Correction
-
-Lacquer automatically fixes common JSON formatting issues:
-- Trailing commas: `{"key": "value",}` → `{"key": "value"}`
-- Single quotes: `{'key': 'value'}` → `{"key": "value"}`
-- Unquoted keys: `{key: "value"}` → `{"key": "value"}`
-
-### Tips for Reliable Output Parsing
-
-1. **Define clear output schemas**: Use specific types and constraints
-   ```yaml
-   outputs:
-     score:
-       type: integer
-       minimum: 0
-       maximum: 100
-     status:
-       type: string
-       enum: ["pass", "fail"]
-   ```
-
-2. **Use descriptive field names**: Clear names improve agent understanding
-   ```yaml
-   outputs:
-     confidence_score: number    # Better than "score"
-     is_valid: boolean          # Better than "valid"
-     error_messages: array      # Better than "errors"
-   ```
-
-3. **Include validation constraints**: Help guide agent responses
-   ```yaml
-   outputs:
-     summary:
-       type: string
-       minLength: 50
-       maxLength: 200
-     priority:
-       type: string
-       enum: ["low", "medium", "high", "critical"]
-   ```
-
-4. **Handle optional fields**: Mark non-required outputs as optional
-   ```yaml
-   outputs:
-     result: string
-     details:
-       type: string
-       optional: true
-   ```
-
-5. **Test with edge cases**: Verify parsing works with various response formats
-   ```yaml
-   condition: "{{ steps.analyze.outputs.score is defined and steps.analyze.outputs.score > 70 }}"
-   ```
-
 ## Agent Best Practices
 
 1. **Use descriptive names**: `legal_advisor` instead of `agent1`
@@ -554,17 +320,6 @@ Lacquer automatically fixes common JSON formatting issues:
 4. **Limit tools**: Only provide tools the agent actually needs
 5. **Consider token limits**: Set `max_tokens` to control costs and response length
 6. **Test different models**: Different models excel at different tasks
-
-## Current Limitations
-
-**Note: Advanced agent policies are not currently implemented.**
-
-Available agent configuration:
-- Basic model parameters (temperature, max_tokens, top_p)
-- System prompts
-- Tool definitions
-- Provider selection
-```
 
 ## Next Steps
 

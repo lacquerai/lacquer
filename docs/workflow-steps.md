@@ -27,7 +27,7 @@ steps:
 ```
 
 ### agent
-**Required**: Yes (unless using `uses` or `action`)  
+**Required**: Yes (unless using `uses` or `run` or `container`)  
 **Type**: String  
 **Description**: The agent to use for this step.
 
@@ -53,7 +53,7 @@ steps:
 ```
 
 ### run
-**Required**: No (for script steps)  
+**Required**: No
 **Type**: String  
 **Description**: Bash script or command to execute.
 
@@ -66,17 +66,74 @@ steps:
 ```
 
 ### uses
-**Required**: No (alternative to agent)  
+**Required**: No  
 **Type**: String  
-**Description**: Reference to a reusable block.
+**Description**: Reference to child workflow.
 
 ```yaml
 steps:
   - id: research
-    uses: "./blocks/research-block.laq.yml"
+    uses: "./workflows/research.laq.yml"
     with:
       topic: ${{ inputs.topic }}
       depth: comprehensive
+```
+
+### container
+**Required**: No
+**Type**: String
+**Description**: Docker container to run.
+
+```yaml
+steps:
+  - id: process_in_container
+    container: alpine:latest
+```
+
+### command
+**Required**: No 
+**Type**: Array of strings
+**Description**: Command to run in the container.
+
+```yaml
+steps:
+  - id: process_in_container
+    container: alpine:latest
+    command:
+      - "sh"
+      - "-c"
+      - "echo 'Processing data'"
+```
+
+### with
+**Required**: No (only used with `run`, `uses`)
+**Type**: Object
+**Description**: Input parameters for the step.
+
+```yaml
+steps:
+  - id: process_in_container
+    run: "go run ./scripts/processor.go"
+    with:
+      data: ${{ inputs.data }}
+```
+
+### updates
+
+**Required**: No
+**Type**: Object
+**Description**: Updates to the workflow state when the step completes.
+
+```yaml
+steps:
+  - id: research
+    agent: researcher
+    prompt: "Research {{ inputs.topic }}"
+    outputs:
+      findings:
+        type: string
+    updates:
+      findings: ${{ steps.research.outputs.findings }}
 ```
 
 ### outputs
@@ -90,9 +147,13 @@ steps:
     agent: analyst
     prompt: "Analyze market trends"
     outputs:
-      trends: array
-      summary: string
-      confidence: float
+      trends: 
+        type: array
+        items: string
+      summary:
+        type: string
+      confidence:
+        type: number
 ```
 
 ## Step Types
@@ -106,20 +167,22 @@ steps:
   - id: generate_ideas
     agent: creative_writer
     prompt: |
-      Generate 5 creative ideas for articles about {{ inputs.topic }}.
+      Generate 5 creative ideas for articles about ${{ inputs.topic }}.
       Format as a numbered list.
     outputs:
-      ideas: array
+      ideas:
+        type: array
+        items: string
 ```
 
-### 2. Block Steps
+### 2. Child Workflow Steps
 
-Uses pre-built or custom blocks:
+Use another workflow as a step:
 
 ```yaml
 steps:
   - id: fetch_data
-    uses: "./blocks/http-client.laq.yml"
+    uses: "./workflows/http-client.laq.yml"
     with:
       url: "https://api.example.com/data"
       method: GET
@@ -185,6 +248,20 @@ steps:
       ${{ join(steps.research.outputs.sources, '\n') }}
 ```
 
+Steps can also reference themselves
+
+```yaml
+steps:
+  - id: research
+    agent: researcher
+    prompt: "Research {{ inputs.topic }}"
+    outputs:
+      findings:
+        type: string
+    updates:
+      findings: ${{ steps.research.outputs.findings }}
+```
+
 ### Default Output
 
 If no specific outputs are defined, use `output` to access the default:
@@ -218,56 +295,6 @@ steps:
     prompt: "Improve this content: ${{ inputs.content }}"
 ```
 
-## Step Context Variables
-
-Steps have access to various context variables:
-
-```yaml
-steps:
-  - id: process
-    agent: processor
-    prompt: |
-      Workflow name: ${{ metadata.name }}
-      Environment: ${{ env.ENVIRONMENT }}
-      Previous output: ${{ steps.previous.output }}
-```
-
-## Step Timeouts
-
-Set execution timeouts for steps:
-
-```yaml
-steps:
-  - id: long_task
-    agent: analyst
-    prompt: "Perform complex analysis"
-    timeout: 5m  # 5 minutes
-  
-  - id: quick_task
-    agent: assistant
-    prompt: "Quick response needed"
-    timeout: 30s  # 30 seconds
-```
-
-## Step Validation
-
-Steps can include validation logic:
-
-```yaml
-steps:
-  - id: validate_input
-    agent: validator
-    prompt: "Validate: {{ inputs.data }}"
-    outputs:
-      is_valid: boolean
-      errors: array
-  
-  - id: process_data
-    condition: ${{ steps.validate_input.outputs.is_valid }}
-    agent: processor
-    prompt: "Process the validated data"
-```
-
 ## Complex Step Example
 
 Here's a comprehensive example showing various step features:
@@ -284,9 +311,14 @@ workflow:
         Focus on recent developments.
       timeout: 3m
       outputs:
-        findings: array
-        sources: array
-        summary: string
+        findings:
+          type: array
+          items: string
+        sources:
+          type: array
+          items: string
+        summary:
+          type: string
     
     # Conditional quality check
     - id: check_research_quality
@@ -295,8 +327,10 @@ workflow:
         Rate the quality of this research (1-10):
         ${{ steps.research_topic.outputs.summary }}
       outputs:
-        score: integer
-        feedback: string
+        score:
+          type: integer
+        feedback:
+          type: string
     
     # Conditional improvement
     - id: enhance_research
@@ -311,7 +345,7 @@ workflow:
     
     # Human approval
     - id: approve_research
-      condition: ${{ env.REQUIRE_APPROVAL == 'true' }}
+      condition: ${{ inputs.require_approval == 'true' }}
       agent: reviewer
       prompt: |
         Please review and approve this research:
@@ -329,7 +363,7 @@ workflow:
     
     # Update workflow state
     - id: track_progress
-      run: "echo 'Article completed'"
+      run: "go run ./scripts/tracker.go"
       with:
         topic: ${{ inputs.topic }}
         score: ${{ steps.check_research_quality.outputs.score }}
@@ -340,13 +374,11 @@ workflow:
 1. **Use descriptive IDs**: `analyze_customer_data` not `step1`
 2. **Keep prompts focused**: One task per step
 3. **Define outputs explicitly**: Makes data flow clear
-4. **Handle errors gracefully**: Use conditions to check for failures
-5. **Set appropriate timeouts**: Prevent hanging workflows
-6. **Validate data early**: Check inputs before processing
-7. **Use blocks for reusability**: Don't repeat complex logic
+4. **Validate data early**: Check inputs before processing
+5. **Use child workflows for reusability**: Keep things DRY and maintainable
 
 ## Next Steps
 
 - Learn about [Control Flow](./control-flow.md) for parallel execution and loops
-- Explore [Blocks](./blocks.md) for reusable components
-- Understand [Error Handling](./error-handling.md) for robust workflows
+- Explore [Tool Integration](./tools.md) to extend agent capabilities
+- See [Examples](./examples/agents/) for more agent configurations

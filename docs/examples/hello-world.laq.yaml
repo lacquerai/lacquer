@@ -3,7 +3,6 @@ version: "1.0"
 metadata:
   name: hello-world
   description: A simple greeting workflow demonstrating basic Lacquer syntax
-  author: lacquer-team
 
 # Define a single agent using GPT-4
 agents:
@@ -13,15 +12,15 @@ agents:
     temperature: 0.7
     system_prompt: You are a friendly assistant who gives warm greetings.
 
+# Define input parameters at root level
+inputs:
+  name:
+    type: string
+    description: Name of the person to greet
+    default: "World"
+
 # Define the workflow
 workflow:
-  # Input parameter - name to greet
-  inputs:
-    name:
-      type: string
-      description: Name of the person to greet
-      default: "World"
-  
   # Single step workflow
   steps:
     - id: say_hello
@@ -29,11 +28,7 @@ workflow:
       prompt: |
         Say hello to ${{ inputs.name }} in a creative and friendly way.
         Make it warm and welcoming!
-    - id: say_goodbye
-      agent: greeter
-      prompt: |
-        Say goodbye to ${{ inputs.name }} in a creative and friendly way.
-        Make it warm and welcoming!
+  
   # Return the greeting as output
   outputs:
     greeting: ${{ steps.say_hello.output }}

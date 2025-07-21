@@ -13,10 +13,10 @@ metadata:
   description: Optional description
 
 inputs:
-  # Input definitions (at root level)
+  # Input definitions for the workflow
 
 agents:
-  # Agent definitions
+  # Agent definitions (optional)
 
 requirements:
   # Runtime requirements (optional)
@@ -72,39 +72,6 @@ metadata:
 ```yaml
 metadata:
   description: Generates blog posts from research topics
-```
-
-#### author
-**Required**: No  
-**Type**: String  
-**Description**: The workflow author's name or email.
-
-```yaml
-metadata:
-  author: jane.doe@example.com
-```
-
-#### tags
-**Required**: No  
-**Type**: Array of strings  
-**Description**: Tags for categorizing and searching workflows.
-
-```yaml
-metadata:
-  tags:
-    - content-creation
-    - research
-    - automation
-```
-
-#### version
-**Required**: No  
-**Type**: String  
-**Description**: The workflow's version, following semantic versioning.
-
-```yaml
-metadata:
-  version: 2.1.0
 ```
 
 ## Agents Section
@@ -214,17 +181,6 @@ inputs:
 **Type**: Matches the parameter type  
 **Description**: Default value if not provided.
 
-### Simplified Input Syntax
-
-For simple cases, you can use the shorthand syntax:
-
-```yaml
-inputs:
-  topic: string              # Required string
-  max_words: integer         # Required integer
-  debug: boolean            # Required boolean
-```
-
 ## Complete Example
 
 Here's a complete workflow showing all structural elements:
@@ -289,16 +245,12 @@ workflow:
 
 - Use `.laq.yaml` extension for all workflow files
 - Use kebab-case for filenames: `my-workflow.laq.yaml`
-- Block definition files should be named `block.laq.yaml`
-- Place example workflows in an `examples/` directory
 
 ## Best Practices
 
 1. **Always include metadata**: Even if optional, metadata helps with workflow management
 2. **Use descriptive names**: Both for the workflow and step IDs
 3. **Document inputs**: Always include descriptions for input parameters
-4. **Version your workflows**: Use semantic versioning in metadata
-5. **Tag appropriately**: Tags help with discovery and organization
 
 ## Next Steps
 
