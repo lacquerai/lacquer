@@ -28,14 +28,14 @@ workflow:
   steps:
     - id: research
       agent: assistant
-      prompt: "Tell me about {{ inputs.topic }}"
+      prompt: "Tell me about ${{ inputs.topic }}"
     
     - id: summarize
       agent: assistant
-      prompt: "Summarize this in 3 bullet points: {{ steps.research.output }}"
+      prompt: "Summarize this in 3 bullet points: ${{ steps.research.output }}"
   
   outputs:
-    summary: "{{ steps.summarize.output }}"
+    summary: "${{ steps.summarize.output }}"
 ```
 
 ```bash
@@ -117,16 +117,16 @@ workflow:
       agent: analyst
       prompt: |
         Analyze this data and provide key insights:
-        {{ inputs.data }}
+        ${{ inputs.data }}
         
     - id: format
       agent: analyst
       prompt: |
         Format these insights as a markdown report:
-        {{ steps.analyze.output }}
+        ${{ steps.analyze.output }}
         
   outputs:
-    report: "{{ steps.format.output }}"
+    report: "${{ steps.format.output }}"
 ```
 
 ### 3. Run It
@@ -198,7 +198,7 @@ steps:
         })
       }
     with:
-      text: "{{ inputs.text }}"
+      text: "${{ inputs.text }}"
 ```
 
 **Docker Container Steps:**
@@ -207,7 +207,7 @@ steps:
   - id: analyze_with_python
     container: ./.docker/python-analysis.dockerfile
     with:
-      text: "{{ inputs.text }}"
+      text: "${{ inputs.text }}"
 ```
 
 Both approaches support full I/O via JSON, making it easy to integrate any tool or language.

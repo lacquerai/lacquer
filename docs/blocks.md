@@ -11,9 +11,9 @@ Use the `uses` syntax to include a block in your workflow:
 ```yaml
 steps:
   - id: search_web
-    uses: lacquer/web-search@v1
+    uses: "./blocks/web-search.laq.yml"
     with:
-      query: "{{ inputs.search_term }}"
+      query: ${{ inputs.search_term }}
       max_results: 10
 ```
 
@@ -22,18 +22,16 @@ steps:
 Blocks can come from multiple sources:
 
 ```yaml
-# Official Lacquer blocks
-- uses: lacquer/web-search@v1
+# Local blocks (currently implemented)
+- uses: "./blocks/my-custom-block.laq.yml"
+- uses: "../shared-blocks/analyzer.laq.yml"
 
-# GitHub-hosted blocks
+# GitHub-hosted blocks (planned)
 - uses: github.com/user/repo@v2.1.0
-
-# Local blocks
-- uses: ./blocks/my-custom-block
-
-# Specific branch/commit
 - uses: github.com/user/repo@main
-- uses: github.com/user/repo@abc123f
+
+# Official Lacquer blocks (planned)
+- uses: lacquer/web-search@v1
 ```
 
 ## Block Definition
@@ -99,15 +97,15 @@ inputs:
 workflow:
   steps:
     - id: research
-      uses: lacquer/web-search@v1
+      uses: "./blocks/web-search.laq.yml"
       with:
-        query: "{{ inputs.topic }}"
+        query: ${{ inputs.topic }}
     
     - id: write
       agent: writer
       prompt: |
-        Write about {{ inputs.topic }} in {{ inputs.style }} style
-        Based on: {{ steps.research.outputs.results }}
+        Write about ${{ inputs.topic }} in ${{ inputs.style }} style
+        Based on: ${{ steps.research.outputs.results }}
 
 outputs:
   content: "{{ steps.write.output }}"
@@ -152,10 +150,8 @@ script: |
   }
 
 outputs:
-  filtered_data:
-    description: Data above threshold
-  count:
-    description: Number of items filtered
+  filtered_data: ${{ steps.process.outputs.filtered_data }}
+  count: ${{ steps.process.outputs.count }}
 ```
 
 ### 3. Docker Runtime

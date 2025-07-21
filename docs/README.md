@@ -52,7 +52,7 @@ Lacquer uses YAML to define workflows declaratively. You describe *what* you wan
 Workflows are executed by AI agents that you configure with models, prompts, and tools.
 
 ### Composable
-Workflows can use pre-built blocks, making complex workflows easy to assemble from tested components.
+Workflows can use local blocks for reusability and modularity.
 
 ### Portable
 Workflows run anywhere - local machines, cloud platforms, or edge devices.

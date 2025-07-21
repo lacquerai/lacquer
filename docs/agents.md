@@ -22,8 +22,7 @@ agents:
 Supported providers:
 - `openai` - OpenAI models (GPT-4, GPT-3.5, etc.)
 - `anthropic` - Anthropic models (Claude 3 Opus, Sonnet, Haiku)
-- `google` - Google models (Gemini Pro, etc.)
-- `local` - Local Claude Code CLI
+- `local` - Local models (via Claude Code CLI)
 
 ```yaml
 agents:
@@ -44,10 +43,9 @@ agents:
 **Note**: Available models are dynamically fetched from each provider's API. The models listed below are examples and may change over time. Lacquer automatically caches the available models list for 24 hours.
 
 Example models by provider:
-- **OpenAI** ([see current models](https://platform.openai.com/docs/models)): `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`
-- **Anthropic** ([see current models](https://docs.anthropic.com/en/docs/models-overview)): `claude-3-opus-20240229`, `claude-3-sonnet-20240229`, `claude-3-haiku-20240307`
-- **Google** ([see current models](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/models)): `gemini-pro`, `gemini-pro-vision`
-- **Local**: `claude-code`
+- **OpenAI**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`
+- **Anthropic**: `claude-3-5-sonnet-20241022`, `claude-3-opus-20240229`, `claude-3-sonnet-20240229`
+- **Local**: Models available through Claude Code CLI
 
 ```yaml
 agents:
@@ -139,31 +137,32 @@ agents:
 
 Lacquer provides pre-built agent configurations through the `uses` syntax:
 
+**Note: Pre-built agent configurations are not currently implemented. Define agents directly:**
+
 ```yaml
 agents:
   researcher:
-    uses: lacquer/researcher@v1
-    with:
-      model: gpt-4
-      temperature: 0.3
-      focus_areas:
-        - technology
-        - science
+    provider: openai
+    model: gpt-4
+    temperature: 0.3
+    system_prompt: |
+      You are a researcher focused on technology and science.
+      Provide thorough, well-sourced information.
 ```
 
-### Overriding Pre-built Agent Properties
+### Agent Configuration
 
-You can override specific properties of pre-built agents:
+All agent properties must be explicitly defined:
 
 ```yaml
 agents:
-  custom_researcher:
-    uses: lacquer/researcher@v1
-    with:
-      temperature: 0.5  # Override default temperature
+  environmental_researcher:
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    temperature: 0.5
     system_prompt: |
       You are a researcher focused on environmental topics.
-      # This overrides the default system prompt
+      Provide evidence-based analysis with credible sources.
 ```
 
 ## Agent Examples
@@ -183,9 +182,12 @@ agents:
       - Cites all sources properly
     tools:
       - name: search
-        uses: lacquer/web-search@v1
-      - name: read_pdf
-        uses: lacquer/pdf-reader@v1
+        script: "curl -s \"https://api.example.com/search?q=$1\""
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
 ```
 
 ### Creative Writer Agent
@@ -219,7 +221,14 @@ agents:
       - Provides constructive feedback
     tools:
       - name: analyze_code
-        uses: lacquer/code-analyzer@v1
+        script: "go run ./tools/code-analyzer.go"
+        parameters:
+          type: object
+          properties:
+            code:
+              type: string
+            language:
+              type: string
 ```
 
 ### Data Analysis Agent
@@ -237,25 +246,31 @@ agents:
       - Provides actionable insights
     tools:
       - name: query_db
-        uses: lacquer/postgresql@v1
+        script: "python3 ./tools/db_query.py"
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
       - name: analyze_csv
-        uses: lacquer/csv-processor@v1
+        script: "python3 ./tools/csv_analyzer.py"
+        parameters:
+          type: object
+          properties:
+            file_path:
+              type: string
 ```
 
-## Agent Inheritance
+## Agent Best Practices
 
-Agents can inherit from other agents:
+**Note: Agent inheritance is not currently implemented. Define each agent completely:**
 
 ```yaml
 agents:
-  base_analyst:
+  financial_analyst:
     provider: openai
     model: gpt-4
     temperature: 0.2
-    system_prompt: You are a thorough analyst
-  
-  financial_analyst:
-    extends: base_analyst
     system_prompt: |
       You are a financial analyst specializing in:
       - Market analysis
@@ -263,7 +278,12 @@ agents:
       - Risk assessment
     tools:
       - name: market_data
-        uses: lacquer/financial-data@v1
+        script: "python3 ./tools/market_data.py"
+        parameters:
+          type: object
+          properties:
+            symbol:
+              type: string
 ```
 
 ## Dynamic Agent Configuration
@@ -273,24 +293,18 @@ Agents can be configured dynamically using environment variables:
 ```yaml
 agents:
   configurable_agent:
-    model: "{{ env.AI_MODEL | default('gpt-4') }}"
-    temperature: "{{ env.AI_TEMPERATURE | default(0.7) | float }}"
+    model: ${{ env.AI_MODEL }}
+    temperature: 0.7
     system_prompt: |
       You are an AI assistant.
-      Environment: {{ env.ENVIRONMENT | default('production') }}
+      Environment: ${{ env.ENVIRONMENT }}
 ```
 
 ## Multi-Model Agents
 
 Define agents that can switch between models based on task requirements:
 
-```yaml
-agents:
-  adaptive_agent:
-    model: "{{ workflow.state.selected_model | default('gpt-4') }}"
-    temperature: 0.5
-    system_prompt: |
-      Adapt your expertise based on the task at hand.
+**Note: Dynamic model selection is not currently implemented. Use fixed model configurations.**
 ```
 
 ## Agent Output Parsing
@@ -334,9 +348,9 @@ If the agent responds with:
 ```
 
 You can access:
-- `{{ steps.analyze.outputs.score }}` → 85
-- `{{ steps.analyze.outputs.status }}` → "success"
-- `{{ steps.analyze.outputs.items }}` → ["A", "B", "C"]
+- `${{ steps.analyze.outputs.score }}` → 85
+- `${{ steps.analyze.outputs.status }}` → "success"
+- `${{ steps.analyze.outputs.items }}` → ["A", "B", "C"]
 
 ### Example: Natural Language Extraction
 
@@ -363,9 +377,9 @@ Issues:
 ```
 
 Lacquer extracts:
-- `{{ steps.review.outputs.rating }}` → 8
-- `{{ steps.review.outputs.approved }}` → true
-- `{{ steps.review.outputs.issues }}` → ["Missing references", "Unclear conclusion", "Grammar errors"]
+- `${{ steps.review.outputs.rating }}` → 8
+- `${{ steps.review.outputs.approved }}` → true
+- `${{ steps.review.outputs.issues }}` → ["Missing references", "Unclear conclusion", "Grammar errors"]
 
 ### Example: Complex Output Structures
 
@@ -383,10 +397,10 @@ steps:
 ### Accessing Outputs
 
 Always available:
-- `{{ steps.step_id.output }}` - Raw agent response
+- `${{ steps.step_id.output }}` - Raw agent response
 
 With defined outputs:
-- `{{ steps.step_id.outputs.field_name }}` - Specific parsed field
+- `${{ steps.step_id.outputs.field_name }}` - Specific parsed field
 
 ### Schema-Guided Output Parsing
 
@@ -541,20 +555,15 @@ Lacquer automatically fixes common JSON formatting issues:
 5. **Consider token limits**: Set `max_tokens` to control costs and response length
 6. **Test different models**: Different models excel at different tasks
 
-## Agent Policies
+## Current Limitations
 
-Configure policies for agent behavior:
+**Note: Advanced agent policies are not currently implemented.**
 
-```yaml
-agents:
-  restricted_agent:
-    model: gpt-4
-    temperature: 0.3
-    policies:
-      max_retries: 3
-      timeout: 30s
-      require_human_approval: true
-      cost_limit: "$0.50"
+Available agent configuration:
+- Basic model parameters (temperature, max_tokens, top_p)
+- System prompts
+- Tool definitions
+- Provider selection
 ```
 
 ## Next Steps

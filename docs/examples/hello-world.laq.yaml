@@ -27,13 +27,13 @@ workflow:
     - id: say_hello
       agent: greeter
       prompt: |
-        Say hello to {{ inputs.name }} in a creative and friendly way.
+        Say hello to ${{ inputs.name }} in a creative and friendly way.
         Make it warm and welcoming!
     - id: say_goodbye
       agent: greeter
       prompt: |
-        Say goodbye to {{ inputs.name }} in a creative and friendly way.
+        Say goodbye to ${{ inputs.name }} in a creative and friendly way.
         Make it warm and welcoming!
   # Return the greeting as output
   outputs:
-    greeting: "{{ steps.say_hello.output }}"
+    greeting: ${{ steps.say_hello.output }}

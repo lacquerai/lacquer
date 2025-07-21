@@ -11,13 +11,18 @@ version: "1.0"
 metadata:
   name: workflow-name
   description: Optional description
-  author: Optional author
+
+inputs:
+  # Input definitions (at root level)
 
 agents:
   # Agent definitions
 
+requirements:
+  # Runtime requirements (optional)
+
 workflow:
-  # Workflow definition
+  # Workflow definition with steps and outputs
 ```
 
 ## Version
@@ -119,15 +124,40 @@ agents:
     temperature: 0.7
 ```
 
+## Inputs Section
+
+The `inputs` section (at the root level) defines parameters for the workflow:
+
+```yaml
+inputs:
+  topic:
+    type: string
+    description: The topic to research
+    required: true
+  max_words:
+    type: integer
+    default: 1000
+```
+
+## Requirements Section
+
+The optional `requirements` section specifies runtime environments:
+
+```yaml
+requirements:
+  runtimes:
+    - name: go
+      version: "1.21"
+    - name: python
+      version: "3.9"
+```
+
 ## Workflow Section
 
-The `workflow` section contains the actual workflow logic including inputs, steps, and outputs.
+The `workflow` section contains the execution logic:
 
 ```yaml
 workflow:
-  inputs:
-    # Input parameters
-  
   state:
     # Workflow state (optional)
   
@@ -138,28 +168,27 @@ workflow:
     # Workflow outputs
 ```
 
-### Workflow Inputs
+### Input Parameters (Root Level)
 
-Define parameters that must be provided when running the workflow.
+Define parameters at the root level of the workflow:
 
 ```yaml
-workflow:
-  inputs:
-    topic:
-      type: string
-      description: The topic to research
-      required: true
-    
-    max_words:
-      type: integer
-      description: Maximum word count
-      default: 1000
-      required: false
-    
-    include_images:
-      type: boolean
-      description: Whether to include images
-      default: false
+inputs:
+  topic:
+    type: string
+    description: The topic to research
+    required: true
+  
+  max_words:
+    type: integer
+    description: Maximum word count
+    default: 1000
+    required: false
+  
+  include_images:
+    type: boolean
+    description: Whether to include images
+    default: false
 ```
 
 #### Input Field Properties
@@ -190,11 +219,10 @@ workflow:
 For simple cases, you can use the shorthand syntax:
 
 ```yaml
-workflow:
-  inputs:
-    topic: string              # Required string
-    max_words: integer         # Required integer
-    debug: boolean            # Required boolean
+inputs:
+  topic: string              # Required string
+  max_words: integer         # Required integer
+  debug: boolean            # Required boolean
 ```
 
 ## Complete Example
@@ -206,12 +234,22 @@ version: "1.0"
 metadata:
   name: research-assistant
   description: Researches topics and creates summaries
-  author: research-team@example.com
-  tags:
-    - research
-    - summary
-    - ai
-  version: 1.0.0
+
+inputs:
+  topic:
+    type: string
+    description: Topic to research
+    required: true
+  
+  depth:
+    type: string
+    description: Research depth (basic, moderate, comprehensive)
+    default: moderate
+  
+  format:
+    type: string
+    description: Output format (text, markdown, html)
+    default: markdown
 
 agents:
   researcher:
@@ -227,39 +265,24 @@ agents:
     system_prompt: You create concise summaries
 
 workflow:
-  inputs:
-    topic:
-      type: string
-      description: Topic to research
-      required: true
-    
-    depth:
-      type: string
-      description: Research depth (basic, moderate, comprehensive)
-      default: moderate
-    
-    format:
-      type: string
-      description: Output format (text, markdown, html)
-      default: markdown
   
   steps:
     - id: research
       agent: researcher
       prompt: |
-        Research the topic: {{ inputs.topic }}
-        Depth level: {{ inputs.depth }}
+        Research the topic: ${{ inputs.topic }}
+        Depth level: ${{ inputs.depth }}
     
     - id: summarize
       agent: summarizer
       prompt: |
-        Create a {{ inputs.format }} summary of:
-        {{ steps.research.output }}
+        Create a ${{ inputs.format }} summary of:
+        ${{ steps.research.output }}
   
   outputs:
-    summary: "{{ steps.summarize.output }}"
-    word_count: "{{ steps.summarize.output | word_count }}"
-    format: "{{ inputs.format }}"
+    summary: ${{ steps.summarize.output }}
+    word_count: ${{ length(steps.summarize.output) }}
+    format: ${{ inputs.format }}
 ```
 
 ## File Naming Conventions

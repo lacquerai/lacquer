@@ -49,20 +49,20 @@ steps:
     agent: summarizer
     prompt: |
       Summarize the following text in 3 bullet points:
-      {{ inputs.text }}
+      ${{ inputs.text }}
 ```
 
-### action
-**Required**: No (only for system actions)  
+### run
+**Required**: No (for script steps)  
 **Type**: String  
-**Description**: System actions like `human_input` or `update_state`.
+**Description**: Bash script or command to execute.
 
 ```yaml
 steps:
-  - id: get_approval
-    action: human_input
-    prompt: "Please review and approve this content"
-    timeout: 1h
+  - id: process_data
+    run: "go run ./scripts/processor.go"
+    with:
+      data: ${{ inputs.raw_data }}
 ```
 
 ### uses
@@ -73,9 +73,9 @@ steps:
 ```yaml
 steps:
   - id: research
-    uses: lacquer/deep-research@v1
+    uses: "./blocks/research-block.laq.yml"
     with:
-      topic: "{{ inputs.topic }}"
+      topic: ${{ inputs.topic }}
       depth: comprehensive
 ```
 
@@ -119,35 +119,28 @@ Uses pre-built or custom blocks:
 ```yaml
 steps:
   - id: fetch_data
-    uses: lacquer/http-request@v1
+    uses: "./blocks/http-client.laq.yml"
     with:
       url: "https://api.example.com/data"
       method: GET
       headers:
-        Authorization: "Bearer {{ secrets.API_TOKEN }}"
+        Authorization: "Bearer ${{ env.API_TOKEN }}"
 ```
 
-### 3. System Action Steps
+### 3. Container Steps
 
-Performs system-level actions:
+Runs commands in Docker containers:
 
 ```yaml
 steps:
-  # Human input
-  - id: human_review
-    action: human_input
-    prompt: "Please review the generated content and provide feedback"
-    timeout: 30m
-    outputs:
-      approved: boolean
-      feedback: string
-  
-  # Update state
-  - id: update_progress
-    action: update_state
-    updates:
-      current_step: "{{ step_index }}"
-      processed_items: "{{ state.processed_items + 1 }}"
+  - id: process_in_container
+    container: alpine:latest
+    command:
+      - "sh"
+      - "-c"
+      - "echo 'Processing data'"
+    with:
+      data: ${{ inputs.data }}
 ```
 
 ## Step Execution Order
@@ -162,11 +155,11 @@ steps:
   
   - id: step2
     agent: agent2
-    prompt: "Second task - uses {{ steps.step1.output }}"
+    prompt: "Second task - uses ${{ steps.step1.output }}"
   
   - id: step3
     agent: agent3
-    prompt: "Third task - uses {{ steps.step2.output }}"
+    prompt: "Third task - uses ${{ steps.step2.output }}"
 ```
 
 ## Accessing Step Outputs
@@ -186,10 +179,10 @@ steps:
     agent: writer
     prompt: |
       Write an article based on these findings:
-      {{ steps.research.outputs.findings | join('\n') }}
+      ${{ join(steps.research.outputs.findings, '\n') }}
       
       Cite these sources:
-      {{ steps.research.outputs.sources | join('\n') }}
+      ${{ join(steps.research.outputs.sources, '\n') }}
 ```
 
 ### Default Output
@@ -204,7 +197,7 @@ steps:
   
   - id: enhance
     agent: enhancer
-    prompt: "Enhance: {{ steps.generate.output }}"
+    prompt: "Enhance: ${{ steps.generate.output }}"
 ```
 
 ## Conditional Steps
@@ -220,9 +213,9 @@ steps:
       score: integer
   
   - id: improve_content
-    condition: "{{ steps.check_quality.outputs.score < 7 }}"
+    condition: ${{ steps.check_quality.outputs.score < 7 }}
     agent: writer
-    prompt: "Improve this content: {{ inputs.content }}"
+    prompt: "Improve this content: ${{ inputs.content }}"
 ```
 
 ## Step Context Variables
@@ -234,11 +227,9 @@ steps:
   - id: process
     agent: processor
     prompt: |
-      Current step index: {{ step_index }}
-      Total steps: {{ total_steps }}
-      Workflow name: {{ metadata.name }}
-      Environment: {{ env.ENVIRONMENT }}
-      Previous output: {{ steps.previous.output }}
+      Workflow name: ${{ metadata.name }}
+      Environment: ${{ env.ENVIRONMENT }}
+      Previous output: ${{ steps.previous.output }}
 ```
 
 ## Step Timeouts
@@ -272,7 +263,7 @@ steps:
       errors: array
   
   - id: process_data
-    condition: "{{ steps.validate_input.outputs.is_valid }}"
+    condition: ${{ steps.validate_input.outputs.is_valid }}
     agent: processor
     prompt: "Process the validated data"
 ```
@@ -288,7 +279,7 @@ workflow:
     - id: research_topic
       agent: researcher
       prompt: |
-        Research "{{ inputs.topic }}" thoroughly.
+        Research "${{ inputs.topic }}" thoroughly.
         Find at least 5 credible sources.
         Focus on recent developments.
       timeout: 3m
@@ -302,49 +293,46 @@ workflow:
       agent: reviewer
       prompt: |
         Rate the quality of this research (1-10):
-        {{ steps.research_topic.outputs.summary }}
+        ${{ steps.research_topic.outputs.summary }}
       outputs:
         score: integer
         feedback: string
     
     # Conditional improvement
     - id: enhance_research
-      condition: "{{ steps.check_research_quality.outputs.score < 8 }}"
+      condition: ${{ steps.check_research_quality.outputs.score < 8 }}
       agent: researcher
       prompt: |
         Enhance the research based on this feedback:
-        {{ steps.check_research_quality.outputs.feedback }}
+        ${{ steps.check_research_quality.outputs.feedback }}
         
         Original findings:
-        {{ steps.research_topic.outputs.findings }}
+        ${{ steps.research_topic.outputs.findings }}
     
     # Human approval
     - id: approve_research
-      condition: "{{ env.REQUIRE_APPROVAL == 'true' }}"
-      action: human_input
+      condition: ${{ env.REQUIRE_APPROVAL == 'true' }}
+      agent: reviewer
       prompt: |
         Please review and approve this research:
-        {{ steps.enhance_research.output || steps.research_topic.outputs.summary }}
-      timeout: 1h
-      outputs:
-        approved: boolean
-        comments: string
+        ${{ steps.enhance_research.output }}
+        Provide approval status and comments.
     
     # Write article using block
     - id: write_article
-      uses: lacquer/article-writer@v1
-      with:
-        research: "{{ steps.enhance_research.output || steps.research_topic.outputs }}"
-        style: "{{ inputs.writing_style }}"
-        word_count: "{{ inputs.word_count }}"
+      agent: writer
+      prompt: |
+        Write an article based on this research:
+        Research: ${{ steps.enhance_research.output }}
+        Style: ${{ inputs.writing_style }}
+        Target words: ${{ inputs.word_count }}
     
     # Update workflow state
     - id: track_progress
-      action: update_state
-      updates:
-        articles_written: "{{ state.articles_written + 1 }}"
-        last_topic: "{{ inputs.topic }}"
-        last_score: "{{ steps.check_research_quality.outputs.score }}"
+      run: "echo 'Article completed'"
+      with:
+        topic: ${{ inputs.topic }}
+        score: ${{ steps.check_research_quality.outputs.score }}
 ```
 
 ## Step Best Practices
