@@ -48,7 +48,7 @@ func NewSchema() ([]byte, error) {
 	}
 
 	fullSchema := reflector.Reflect(&Workflow{})
-	return json.MarshalIndent(fullSchema, "", "  ")
+	return json.Marshal(fullSchema)
 }
 
 func (r *CustomReflector) extractGoComments(pkg string) error {

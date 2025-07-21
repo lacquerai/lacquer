@@ -5,12 +5,20 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 
 	"github.com/lacquerai/lacquer/internal/engine"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/pkg/events"
+
+	"github.com/rs/zerolog/log"
 )
+
+func init() {
+	log.Logger.Output(io.Discard)
+}
 
 // Option represents a functional option for configuring workflow execution.
 // Options allow customization of the workflow runner behavior, such as
@@ -72,15 +80,14 @@ func WithProgressListener(listener events.Listener) Option {
 //   - Output collection and transformation
 //
 // Parameters:
+//   - ctx: Context for the workflow execution
 //   - workflowFile: Path to the Lacquer workflow YAML file (.laq.yml or .laq.yaml)
 //   - inputs: Map of input values that will be available to the workflow steps.
 //     Keys should match the input names defined in the workflow's inputs section.
+//   - outputs: Pointer to a struct that will be populated with the workflow outputs.
 //   - options: Variadic functional options for configuring execution behavior
 //
 // Returns:
-//   - map[string]interface{}: The workflow outputs as defined in the workflow's
-//     outputs section. Keys correspond to output names, values contain the
-//     computed results from workflow execution.
 //   - error: Any error that occurred during workflow loading, validation, or execution
 //
 // Errors can occur due to:
@@ -98,23 +105,31 @@ func WithProgressListener(listener events.Listener) Option {
 //		"text": "Process this content",
 //		"threshold": 0.8,
 //	}
+
+//	outputs := &struct {
+//		ProcessedData string `json:"processed_data"`
+//	}{}
 //
-//	outputs, err := RunWorkflow(context.Background(), "data-processing.laq.yml", inputs)
+// err := RunWorkflow(context.Background(), "data-processing.laq.yml", inputs, outputs)
+//
 //	if err != nil {
 //		return fmt.Errorf("workflow failed: %w", err)
 //	}
 //
-//	result := outputs["processed_data"]
+// result := outputs["processed_data"]
 //
-//	// With progress monitoring
-//	listener := &MyProgressListener{}
-//	outputs, err = RunWorkflow(
-//		context.Background(),
-//		"complex-workflow.laq.yml",
-//		inputs,
-//		WithProgressListener(listener),
-//	)
-func RunWorkflow(ctx context.Context, workflowFile string, inputs map[string]interface{}, options ...Option) (map[string]interface{}, error) {
+// // With progress monitoring
+// listener := &MyProgressListener{}
+// err = RunWorkflow(
+//
+//	context.Background(),
+//	"complex-workflow.laq.yml",
+//	inputs,
+//	outputs,
+//	WithProgressListener(listener)
+//
+// )
+func RunWorkflow(ctx context.Context, workflowFile string, inputs map[string]interface{}, outputs any, options ...Option) error {
 	runner := engine.NewRunner(nil)
 
 	for _, option := range options {
@@ -127,8 +142,17 @@ func RunWorkflow(ctx context.Context, workflowFile string, inputs map[string]int
 		StdErr:  io.Discard,
 	}, workflowFile, inputs)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return result.Outputs, nil
+	jsonOutput, err := json.Marshal(result.Outputs)
+	if err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal(jsonOutput, outputs); err != nil {
+		return fmt.Errorf("failed to unmarshal outputs %s: %w", string(jsonOutput), err)
+	}
+
+	return nil
 }

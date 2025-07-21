@@ -155,8 +155,7 @@ func initialModel() model {
 	languageItems := []list.Item{
 		languageItem{name: "node", description: "Node.js/JavaScript"},
 		languageItem{name: "python", description: "Python"},
-		languageItem{name: "golang", description: "Go"},
-		languageItem{name: "bash", description: "Bash scripts"},
+		languageItem{name: "go", description: "Go"},
 	}
 
 	languageList := list.New(languageItems, list.NewDefaultDelegate(), 50, 10)
@@ -408,7 +407,7 @@ func (m model) callInitAPI() tea.Cmd {
 		}
 
 		resp, err := http.Post(
-			lacquerAPIBaseURL+"/v1/init",
+			lacquerAPIBaseURL+"/v1/workflows/init",
 			"application/json",
 			bytes.NewBuffer(jsonData),
 		)
@@ -440,7 +439,7 @@ func (m model) pollWorkflow() tea.Cmd {
 			return nil
 		}
 
-		resp, err := http.Get(lacquerAPIBaseURL + "/v1/workflow/" + m.workflowID + "/results")
+		resp, err := http.Get(lacquerAPIBaseURL + "/v1/workflows/workflow/" + m.workflowID + "/results")
 		if err != nil {
 			return errorMsg{err: fmt.Errorf("failed to poll workflow: %w", err)}
 		}

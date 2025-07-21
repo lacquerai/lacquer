@@ -8,8 +8,15 @@
 package events
 
 import (
+	"io"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
+
+func init() {
+	log.Logger.Output(io.Discard)
+}
 
 // ExecutionEventType represents the type of execution event that occurred during
 // workflow processing. These events provide granular visibility into the workflow
