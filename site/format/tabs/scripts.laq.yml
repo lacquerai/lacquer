@@ -1,0 +1,37 @@
+requirements:
+  runtimes:
+    - name: python
+      version: "3.9"
+
+workflow:
+  steps:
+    - id: create_fix
+      agent: fixer
+      prompt: |
+        We've encountered the following error in production
+        ${{ inputs.error }}
+
+        Please create a fix for the error in the following code:
+        ${{ inputs.code }}
+      outputs:
+        patch:
+          type: string
+          description: The patch to apply to the code to fix the error
+
+    # Use 'run' steps when you need to execute custom logic that goes beyond
+    # simple agent interactions. These are bash scripts that are executed
+    # directly on the host system.
+    - id: validate_fix
+      run: "python3 scripts/validate.py"
+      with:
+        patch: ${{ steps.create_fix.outputs.patch }}
+        code: ${{ inputs.code }}
+
+    # Or use `container` steps when you want to execute custom logic in a more
+    # isolated environment. This is useful when you have complex dependencies.
+    - id: validate_fix_container
+      container: ./validate/Dockerfile
+      command:
+        - scripts/validate.py
+        - ${{ steps.create_fix.outputs.patch }}
+        - ${{ inputs.code }}

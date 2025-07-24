@@ -1,0 +1,21 @@
+agents:
+  fixer:
+    provider: anthropic
+    model: claude-4-sonnet-20240229
+    system_prompt: |
+      You are an expert code reviewer who:
+
+      - Identifies bugs and security issues
+      - Suggests performance improvements
+      - Ensures code follows best practices
+      - Provides constructive feedback
+    tools:
+      - name: filesystem
+        description: Filesystem access for code analysis
+        mcp_server:
+          type: local
+          command: npx
+          args:
+            - "-y"
+            - "@modelcontextprotocol/server-filesystem"
+            - "/usr/src/app"

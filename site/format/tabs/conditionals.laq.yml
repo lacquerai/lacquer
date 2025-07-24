@@ -1,0 +1,44 @@
+steps:
+  - id: check_length
+    agent: analyzer
+    prompt: "Count words in: ${{ inputs.text }}"
+    outputs:
+      word_count: 
+        type: integer
+
+  # Conditionally execute steps
+  - id: expand_text
+    condition: ${{ steps.check_length.outputs.word_count < 100 }}
+    agent: writer
+    prompt: "Expand this text to at least 100 words: ${{ inputs.text }}"
+    outputs:
+      expanded_text: 
+        type: string
+
+  # Break out logic into sub steps
+  - id: refine_text
+    while: ${{ steps.refine_text.iteration < 3 && steps.refine_text.outputs.quality_score < 8 }}
+    steps:
+      - id: analyze_quality
+        agent: analyzer
+        prompt: |
+          Analyze the quality of this text on a scale of 1-10:
+          ${{ steps.expand_text.outputs.expanded_text || inputs.text }}
+          
+          Consider: clarity, engagement, structure, and flow.
+        outputs:
+          quality_score: 
+            type: integer
+          improvement_suggestions: 
+            type: string
+
+      - id: apply_improvements
+        condition: ${{ steps.refine_text.steps.analyze_quality.outputs.quality_score < 8 }}
+        agent: editor
+        prompt: |
+          Improve this text based on these suggestions:
+          Text: ${{ steps.expand_text.outputs.expanded_text || inputs.text }}
+          Suggestions: ${{ steps.refine_text.steps.analyze_quality.outputs.improvement_suggestions }}
+        outputs:
+          improved_text: 
+            type: string

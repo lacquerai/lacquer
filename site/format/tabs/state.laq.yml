@@ -1,0 +1,12 @@
+state:
+  counter: 0
+  status: "pending"
+
+workflow:
+  steps:
+    - id: process_item
+      agent: processor
+      prompt: "Process: ${{ inputs.item }}"
+      updates:
+        counter: "${{ state.counter + 1 }}"
+        status: "${{ steps.process_item.outputs.success ? 'processing' : 'error' }}"

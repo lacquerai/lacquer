@@ -2,15 +2,6 @@
 
 Agents are the core execution units in Lacquer workflows. They represent AI models configured with specific parameters, prompts, and tools to perform tasks.
 
-## Table of Contents
-
-- [Basic Agent Definition](#basic-agent-definition)
-- [Agent Properties](#agent-properties)
-- [Provider-Specific Configuration](#provider-specific-configuration)
-- [Agent Output Parsing](#agent-output-parsing)
-- [Best Practices](#best-practices)
-- [Examples](#examples)
-
 ## Basic Agent Definition
 
 ```yaml
@@ -156,21 +147,6 @@ agents:
         script: "go run scripts/web_search.go"
 ```
 
-## Provider-Specific Configuration
-
-Different providers may support different models and features. Here's what you need to know:
-
-```yaml
-agents:
-  environmental_researcher:
-    provider: anthropic
-    model: claude-3-5-sonnet-20241022
-    temperature: 0.5
-    system_prompt: |
-      You are a researcher focused on environmental topics.
-      Provide evidence-based analysis with credible sources.
-```
-
 ## Examples
 
 ### Research Agent
@@ -189,11 +165,13 @@ agents:
     tools:
       - name: search
         script: "go run scripts/web_search.go"
+        description: Search the web for the given query
         parameters:
           type: object
           properties:
             query:
               type: string
+              description: The query to search for
 ```
 
 ### Creative Writer Agent
@@ -201,7 +179,7 @@ agents:
 agents:
   creative_writer:
     provider: anthropic
-    model: claude-3-opus-20240229
+    model: claude-sonnet-4-20250514
     temperature: 0.9
     max_tokens: 2000
     system_prompt: |
@@ -226,45 +204,15 @@ agents:
       - Ensures code follows best practices
       - Provides constructive feedback
     tools:
-      - name: analyze_code
-        script: "go run ./tools/code-analyzer.go"
-        parameters:
-          type: object
-          properties:
-            code:
-              type: string
-            language:
-              type: string
-```
-
-### Data Analysis Agent
-```yaml
-agents:
-  data_analyst:
-    provider: openai
-    model: gpt-4
-    temperature: 0.1
-    system_prompt: |
-      You are a data analyst who:
-      - Performs statistical analysis
-      - Creates clear visualizations
-      - Identifies trends and patterns
-      - Provides actionable insights
-    tools:
-      - name: query_db
-        script: "python3 ./tools/db_query.py"
-        parameters:
-          type: object
-          properties:
-            query:
-              type: string
-      - name: analyze_csv
-        script: "python3 ./tools/csv_analyzer.py"
-        parameters:
-          type: object
-          properties:
-            file_path:
-              type: string
+      - name: filesystem
+        description: Filesystem access for code analysis
+        mcp_server:
+          type: local
+          command: npx
+          args:
+            - "-y"
+            - "@modelcontextprotocol/server-filesystem"
+            - "/usr/src/app"
 ```
 
 
@@ -289,23 +237,7 @@ Lacquer automatically parses agent responses to extract structured data based on
 
 ### How Output Parsing Works
 
-When an agent step defines outputs, Lacquer attempts to:
-1. Parse JSON responses automatically
-2. Extract structured data from natural language
-3. Convert values to the specified types
-4. Fall back to raw response if parsing fails
-
-### Output Type Support
-
-Supported output types:
-- `string` - Text values
-- `integer` - Whole numbers
-- `float` / `number` - Decimal numbers
-- `boolean` - True/false values
-- `array` - Lists of items
-- `object` - Complex data structures
-
-### Example: Parsing JSON Responses
+When an agent step defines outputs lacquer will generate a JSON schema which it will automatically pass to the agent in the prompt. Then it will attempt to parse the response into the specified output types. Here's an example:
 
 ```yaml
 steps:
@@ -323,60 +255,43 @@ steps:
           type: string
 ```
 
-If the agent responds with:
+Lacquer will automatically append the following JSON schema to the agent's prompt:
 ```json
-{"score": 85, "status": "success", "items": ["A", "B", "C"]}
+{
+  "score": {
+    "type": "integer"
+  },
+  "status": {
+    "type": "string"
+  },
+  "items": {
+    "type": "array",
+    "items": {
+      "type": "string"
+    }
+  }
+}
 ```
 
-You can access:
+The agent responds with the following
+```json
+I've analyzed the data and here are the results:
+\`\`\`json
+{"score": 85, "status": "success", "items": ["A", "B", "C"]}
+\`\`\`
+```
+
+Lacquer will then parse the response into the specified output types.
+
+You can can then access the outputs in the workflow:
 - `${{ steps.analyze.outputs.score }}` → 85
 - `${{ steps.analyze.outputs.status }}` → "success"
 - `${{ steps.analyze.outputs.items }}` → ["A", "B", "C"]
-
-## Best Practices
-
-### 1. Use Descriptive Names
-
-Choose agent names that clearly indicate their purpose:
-- ✅ `legal_advisor`, `content_writer`, `data_analyzer`
-- ❌ `agent1`, `helper`, `ai`
-
-### 2. Set Appropriate Temperature
-
-Match temperature to the task:
-- **Factual tasks** (0.0-0.3): Research, analysis, fact-checking
-- **Balanced tasks** (0.4-0.7): General assistance, summaries
-- **Creative tasks** (0.8-2.0): Creative writing, brainstorming
-
-### 3. Write Clear System Prompts
-
-Be specific about:
-- The agent's role and expertise
-- Expected behavior and constraints
-- Output format preferences
-- Tone and style guidelines
-
-### 4. Optimize Tool Usage
-
-- Only provide tools the agent actually needs
-- Document tool purposes clearly
-- Test tool integration thoroughly
-
-### 5. Manage Token Usage
-
-- Set `max_tokens` to control costs
-- Consider response length requirements
-- Monitor usage for optimization
-
-### 6. Test Different Models
-
-- Different models excel at different tasks
-- Benchmark performance for your use case
-- Consider cost vs. capability trade-offs
+- `${{ steps.analyze.output }}` → "full response"
 
 ## Related Documentation
 
-- [Workflow Steps](./workflow-steps.md) - Use agents in your workflow
-- [Tool Integration](./tools.md) - Extend agent capabilities
-- [Variable Interpolation](./variables.md) - Dynamic agent configuration
-- [Examples](./examples/) - See agents in action
+- [Workflow Steps](workflow-steps.md) - Use agents in your workflow
+- [Tool Integration](tools.md) - Extend agent capabilities
+- [Variable Interpolation](variables.md) - Dynamic agent configuration
+- [Examples](examples/) - See agents in action

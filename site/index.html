@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lacquer - AI Workflow Orchestration</title>
+    <link rel="stylesheet" href="styles.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="min-h-screen bg-midnight">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="container">
+                <div class="nav-content">
+                    <div class="nav-brand">
+                        <img src="icon.png" alt="Lacquer" class="nav-logo">
+                        <span class="nav-title">Lacquer</span>
+                    </div>
+                    <div class="nav-links">
+                        <a href="#features" class="nav-link">Features</a>
+                        <a href="#examples" class="nav-link">Examples</a>
+                        <a href="/docs" class="nav-link">Docs</a>
+                        <a href="https://github.com/lacquerai/lacquer" class="btn btn-outline btn-sm">
+                            <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path
+                                    d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                            </svg>
+                            GitHub
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-background">
+                <div class="starry-container"></div>
+            </div>
+
+            <div class="container hero-content">
+                <div class="hero-main">
+                    <div class="hero-mascot">
+                        <img src="icon.png" alt="Lacquer Mascot" class="mascot-image">
+                    </div>
+                    <h1 class="hero-title">
+                        Orchestrate AI Agents with <span class="text-lantern">Code</span>, Not Clicks
+                    </h1>
+                    <p class="hero-subtitle">
+                        Lacquer brings GitHub Actions-style workflows to AI. Define complex multi-agent systems in
+                        simple YAML.
+                    </p>
+                </div>
+
+
+                <!-- Hero Code Example -->
+                <div class="hero-code">
+                    <pre data-lang="yaml">
+                        <code class="lang-yaml">
+<span class="token key">version:</span> <span class="token string">1.0</span>
+
+<span class="token key">agents:</span>
+  <span class="token key">greeter:</span>
+    <span class="token key">provider:</span> <span class="token string">openai</span>
+    <span class="token key">model:</span> <span class="token string">gpt-4</span>
+    <span class="token key">temperature:</span> <span class="token string">0.7</span>
+    <span class="token key">system_prompt:</span> <span class="token string">You are a friendly assistant who gives interesting greetings.</span>
+
+<span class="token key">inputs:</span>
+  <span class="token key">- name:</span> <span class="token string">name</span>
+    <span class="token key">type:</span> <span class="token string">string</span>
+
+<span class="token key">workflow:</span>
+  <span class="token key">steps:</span>
+    - <span class="token key">id:</span> <span class="token string">say_hello</span>
+      <span class="token key">agent:</span> <span class="token string">greeter</span>
+      <span class="token key">prompt:</span> <span class="token-multiline">|
+        Say hello to ${{ inputs.name }} in a creative and friendly way.
+        Make it warm and welcoming!</span>
+    
+  <span class="token key">outputs:</span>
+    <span class="token key">greeting:</span> <span class="token string">${{ steps.say_hello.output }}</span>
+</code>
+                    </pre>
+                </div>
+
+                <!-- CTA Buttons -->
+                <div class="cta-buttons">
+                    <a href="/docs" class="btn btn-primary btn-lg">
+                        Get Started
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m9 18 6-6-6-6" />
+                        </svg>
+                    </a>
+                    <a href="https://github.com/lacquerai/lacquer" class="btn btn-outline btn-lg">
+                        <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                        </svg>
+                        View on GitHub
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Key Features -->
+        <section id="features" class="section-alt">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">The perfect <span class="text-lantern">finish</span> for your <span
+                            class="text-lantern">AI workflow</span></h2>
+                    <p class="section-subtitle">Built for artisans who prefer <span class="underline">terminals</span>
+                        over drag-and-drop</p>
+                </div>
+
+                <div class="grid grid-3">
+                    <div class="card feature-card">
+                        <div class="card-header">
+                            <h3 class="card-title underline">Stop dragging boxes</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>Write AI workflows in YAML, not drag-and-drop. Version control, code review and debug
+                                like real code.</p>
+                        </div>
+                    </div>
+
+                    <div class="card feature-card">
+                        <div class="card-header">
+                            <h3 class="card-title underline">Zero Dependencies</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>No Python environments, no package conflicts, just a lightweight Go binary.</p>
+                        </div>
+                    </div>
+
+                    <div class="card feature-card">
+                        <div class="card-header">
+                            <h3 class="card-title underline">Develop local, deploy global</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>Prototype quickly on your laptop then ship to any cloud. No surprises between dev and
+                                production environments.</p>
+                        </div>
+                    </div>
+
+                    <div class="card feature-card">
+                        <div class="card-header">
+                            <h3 class="card-title underline">Compose once, reuse everywhere</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>Build modular workflows that snap together like LEGO blocks. Share common patterns across
+                                projects and teams without copy-paste hell.</p>
+                        </div>
+                    </div>
+
+                    <div class="card feature-card">
+                        <div class="card-header">
+                            <h3 class="card-title underline">Declarative > Imperative</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>Describe what you want, not how to get it. Let Lacquer handle the orchestration
+                                complexity while you focus on business logic.</p>
+                        </div>
+                    </div>
+
+                    <div class="card feature-card">
+                        <div class="card-header">
+                            <h3 class="card-title underline">Agents, not just prompts</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>Configure specialized AI agents with custom tools and behaviors. Build sophisticated
+                                multi-agent systems without the boilerplate.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Code Examples -->
+        <section id="examples" class="section">
+            <div class="hero-background">
+                <div class="starry-container"></div>
+            </div>
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title"><span class="text-lantern">Buffing out</span> the complexity in AI
+                        orchestration</h2>
+                    <p class="section-subtitle">all the tools you need to build <span class="underline">production-ready</span> AI workflows</p>
+                </div>
+
+<!-- Tab Triggers -->
+<div class="tabs">
+  <div class="tabs-list">
+        <button class="tab-trigger active" data-tab="scripts">Script steps</button>
+        <button class="tab-trigger" data-tab="conditionals">Conditionals</button>
+        <button class="tab-trigger" data-tab="tools">Tool use</button>
+        <button class="tab-trigger" data-tab="mcp">MCP support</button>
+        <button class="tab-trigger" data-tab="state">State management</button>
+  </div>
+
+  <!-- Tab Contents -->
+  
+    <div class="tab-content" id="tab-conditionals">
+      <div class="code-block">
+        <pre><code class="lang-yaml">
+<span class="token key atrule">steps</span><span class="token punctuation">:</span>
+  <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> check_length
+    <span class="token key atrule">agent</span><span class="token punctuation">:</span> analyzer
+    <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token string">"Count words in: ${{ inputs.text }}"</span>
+    <span class="token key atrule">outputs</span><span class="token punctuation">:</span>
+      <span class="token key atrule">word_count</span><span class="token punctuation">:</span> 
+        <span class="token key atrule">type</span><span class="token punctuation">:</span> integer
+
+  <span class="token comment"># Conditionally execute steps</span>
+  <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> expand_text
+    <span class="token key atrule">condition</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> steps.check_length.outputs.word_count &lt; 100 <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token key atrule">agent</span><span class="token punctuation">:</span> writer
+    <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token string">"Expand this text to at least 100 words: ${{ inputs.text }}"</span>
+    <span class="token key atrule">outputs</span><span class="token punctuation">:</span>
+      <span class="token key atrule">expanded_text</span><span class="token punctuation">:</span> 
+        <span class="token key atrule">type</span><span class="token punctuation">:</span> string
+
+  <span class="token comment"># Break out logic into sub steps</span>
+  <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> refine_text
+    <span class="token key atrule">while</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> steps.refine_text.iteration &lt; 3 <span class="token important">&amp;&amp;</span> steps.refine_text.outputs.quality_score &lt; 8 <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token key atrule">steps</span><span class="token punctuation">:</span>
+      <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> analyze_quality
+        <span class="token key atrule">agent</span><span class="token punctuation">:</span> analyzer
+        <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
+          Analyze the quality of this text on a scale of 1-10:
+          ${{ steps.expand_text.outputs.expanded_text || inputs.text }}</span>
+          
+          <span class="token key atrule">Consider</span><span class="token punctuation">:</span> clarity<span class="token punctuation">,</span> engagement<span class="token punctuation">,</span> structure<span class="token punctuation">,</span> and flow.</span>
+        <span class="token key atrule">outputs</span><span class="token punctuation">:</span>
+          <span class="token key atrule">quality_score</span><span class="token punctuation">:</span> 
+            <span class="token key atrule">type</span><span class="token punctuation">:</span> integer
+          <span class="token key atrule">improvement_suggestions</span><span class="token punctuation">:</span> 
+            <span class="token key atrule">type</span><span class="token punctuation">:</span> string
+
+      <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> apply_improvements
+        <span class="token key atrule">condition</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> steps.refine_text.steps.analyze_quality.outputs.quality_score &lt; 8 <span class="token punctuation">}</span><span class="token punctuation">}</span>
+        <span class="token key atrule">agent</span><span class="token punctuation">:</span> editor
+        <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
+          Improve this text based on these suggestions:
+          Text: ${{ steps.expand_text.outputs.expanded_text || inputs.text }}
+          Suggestions: ${{ steps.refine_text.steps.analyze_quality.outputs.improvement_suggestions }}</span></span>
+        <span class="token key atrule">outputs</span><span class="token punctuation">:</span>
+          <span class="token key atrule">improved_text</span><span class="token punctuation">:</span> 
+            <span class="token key atrule">type</span><span class="token punctuation">:</span> string
+
+</code></pre>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-mcp">
+      <div class="code-block">
+        <pre><code class="lang-yaml">
+<span class="token key atrule">agents</span><span class="token punctuation">:</span>
+  <span class="token key atrule">fixer</span><span class="token punctuation">:</span>
+    <span class="token key atrule">provider</span><span class="token punctuation">:</span> anthropic
+    <span class="token key atrule">model</span><span class="token punctuation">:</span> claude<span class="token punctuation">-</span>4<span class="token punctuation">-</span>sonnet<span class="token punctuation">-</span><span class="token number">20240229</span>
+    <span class="token key atrule">system_prompt</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
+      You are an expert code reviewer who:</span>
+
+      <span class="token punctuation">-</span> Identifies bugs and security issues
+      <span class="token punctuation">-</span> Suggests performance improvements
+      <span class="token punctuation">-</span> Ensures code follows best practices
+      <span class="token punctuation">-</span> Provides constructive feedback</span>
+    <span class="token key atrule">tools</span><span class="token punctuation">:</span>
+      <span class="token punctuation">-</span> <span class="token key atrule">name</span><span class="token punctuation">:</span> filesystem
+        <span class="token key atrule">description</span><span class="token punctuation">:</span> Filesystem access for code analysis
+        <span class="token key atrule">mcp_server</span><span class="token punctuation">:</span>
+          <span class="token key atrule">type</span><span class="token punctuation">:</span> local
+          <span class="token key atrule">command</span><span class="token punctuation">:</span> npx
+          <span class="token key atrule">args</span><span class="token punctuation">:</span>
+            <span class="token punctuation">-</span> <span class="token string">"-y"</span>
+            <span class="token punctuation">-</span> <span class="token string">"@modelcontextprotocol/server-filesystem"</span>
+            <span class="token punctuation">-</span> <span class="token string">"/usr/src/app"</span>
+</code></pre>
+      </div>
+    </div>
+
+    <div class="tab-content active" id="tab-scripts">
+      <div class="code-block">
+        <pre><code class="lang-yaml">
+<span class="token key atrule">requirements</span><span class="token punctuation">:</span>
+  <span class="token key atrule">runtimes</span><span class="token punctuation">:</span>
+    <span class="token punctuation">-</span> <span class="token key atrule">name</span><span class="token punctuation">:</span> python
+      <span class="token key atrule">version</span><span class="token punctuation">:</span> <span class="token string">"3.9"</span>
+
+<span class="token key atrule">workflow</span><span class="token punctuation">:</span>
+  <span class="token key atrule">steps</span><span class="token punctuation">:</span>
+    <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> create_fix
+      <span class="token key atrule">agent</span><span class="token punctuation">:</span> fixer
+      <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
+        We've encountered the following error in production
+        ${{ inputs.error }}</span>
+
+        <span class="token key atrule">Please create a fix for the error in the following code</span><span class="token punctuation">:</span>
+        $<span class="token punctuation">{</span><span class="token punctuation">{</span> inputs.code <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+      <span class="token key atrule">outputs</span><span class="token punctuation">:</span>
+        <span class="token key atrule">patch</span><span class="token punctuation">:</span>
+          <span class="token key atrule">type</span><span class="token punctuation">:</span> string
+          <span class="token key atrule">description</span><span class="token punctuation">:</span> The patch to apply to the code to fix the error
+
+    <span class="token comment"># Use 'run' steps when you need to execute custom logic that goes beyond</span>
+    <span class="token comment"># simple agent interactions. These are bash scripts that are executed</span>
+    <span class="token comment"># directly on the host system.</span>
+    <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> validate_fix
+      <span class="token key atrule">run</span><span class="token punctuation">:</span> <span class="token string">"python3 scripts/validate.py"</span>
+      <span class="token key atrule">with</span><span class="token punctuation">:</span>
+        <span class="token key atrule">patch</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> steps.create_fix.outputs.patch <span class="token punctuation">}</span><span class="token punctuation">}</span>
+        <span class="token key atrule">code</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> inputs.code <span class="token punctuation">}</span><span class="token punctuation">}</span>
+
+    <span class="token comment"># Or use `container` steps when you want to execute custom logic in a more</span>
+    <span class="token comment"># isolated environment. This is useful when you have complex dependencies.</span>
+    <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> validate_fix_container
+      <span class="token key atrule">container</span><span class="token punctuation">:</span> ./validate/Dockerfile
+      <span class="token key atrule">command</span><span class="token punctuation">:</span>
+        <span class="token punctuation">-</span> scripts/validate.py
+        <span class="token punctuation">-</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> steps.create_fix.outputs.patch <span class="token punctuation">}</span><span class="token punctuation">}</span>
+        <span class="token punctuation">-</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> inputs.code <span class="token punctuation">}</span><span class="token punctuation">}</span>
+</code></pre>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-state">
+      <div class="code-block">
+        <pre><code class="lang-yaml">
+<span class="token key atrule">state</span><span class="token punctuation">:</span>
+  <span class="token key atrule">counter</span><span class="token punctuation">:</span> <span class="token number">0</span>
+  <span class="token key atrule">status</span><span class="token punctuation">:</span> <span class="token string">"pending"</span>
+
+<span class="token key atrule">workflow</span><span class="token punctuation">:</span>
+  <span class="token key atrule">steps</span><span class="token punctuation">:</span>
+    <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> process_item
+      <span class="token key atrule">agent</span><span class="token punctuation">:</span> processor
+      <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token string">"Process: ${{ inputs.item }}"</span>
+      <span class="token key atrule">updates</span><span class="token punctuation">:</span>
+        <span class="token key atrule">counter</span><span class="token punctuation">:</span> <span class="token string">"${{ state.counter + 1 }}"</span>
+        <span class="token key atrule">status</span><span class="token punctuation">:</span> <span class="token string">"${{ steps.process_item.outputs.success ? 'processing' : 'error' }}"</span>
+</code></pre>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-tools">
+      <div class="code-block">
+        <pre><code class="lang-yaml">
+<span class="token key atrule">agents</span><span class="token punctuation">:</span>
+  <span class="token key atrule">researcher</span><span class="token punctuation">:</span>
+    <span class="token key atrule">provider</span><span class="token punctuation">:</span> openai
+    <span class="token key atrule">model</span><span class="token punctuation">:</span> gpt<span class="token punctuation">-</span><span class="token number">4</span>
+    <span class="token key atrule">temperature</span><span class="token punctuation">:</span> <span class="token number">0.2</span>
+    <span class="token key atrule">system_prompt</span><span class="token punctuation">:</span> You are a helpful researcher that answers questions about a given topic.
+    <span class="token key atrule">tools</span><span class="token punctuation">:</span>
+      <span class="token punctuation">-</span> <span class="token key atrule">name</span><span class="token punctuation">:</span> search_web
+        <span class="token key atrule">script</span><span class="token punctuation">:</span> <span class="token string">"node ./scripts/web_search.js"</span>
+        <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
+          the search_web tool provides a easy way to search the web for information.
+          Use this tool to get the latest information on a given topic, it will provide
+          a short summary of the latest information on the given topic.</span></span>
+        <span class="token key atrule">parameters</span><span class="token punctuation">:</span>
+          <span class="token key atrule">type</span><span class="token punctuation">:</span> object
+          <span class="token key atrule">properties</span><span class="token punctuation">:</span>
+            <span class="token key atrule">query</span><span class="token punctuation">:</span>
+              <span class="token key atrule">type</span><span class="token punctuation">:</span> string
+              <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
+                The given topic that you want to search for.</span></span>
+</code></pre>
+      </div>
+    </div>
+</div>
+
+
+
+                <div class="cta-buttons">
+                    <a href="/docs" class="btn btn-primary btn-lg">
+                        Discover more
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m9 18 6-6-6-6" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Getting Started -->
+        <section class="section-alt">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">Craft Your First Workflow in <span class="text-lantern">30 Seconds</span>
+                    </h2>
+                    <p class="section-subtitle"><span class="underline">No sanding required</span></p>
+                </div>
+
+                <div class="grid grid-3">
+                    <div class="getting-started-step">
+                        <div class="step-number">1</div>
+                        <h3 class="step-title">Install</h3>
+                        <div class="step-command">
+                            <code>curl -sSL <span class="text-lantern">https://get.lacquer.ai</span> | sh</code>
+                        </div>
+                        <p class="step-description">Single binary, zero dependencies</p>
+                    </div>
+
+                    <div class="getting-started-step">
+                        <div class="step-number">2</div>
+                        <h3 class="step-title">Create</h3>
+                        <div class="step-command">
+                            <code>laq init</code>
+                        </div>
+                        <p class="step-description">Get AI to scaffold your first workflow</p>
+                    </div>
+
+                    <div class="getting-started-step">
+                        <div class="step-number">3</div>
+                        <h3 class="step-title">Run</h3>
+                        <div class="step-command">
+                            <code>laq run <span class="text-lantern">workflow.laq.yaml</span></code>
+                        </div>
+                        <p class="step-description">Execute and see the magic</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="container">
+                <div class="footer-brand">
+                    <div class="footer-logo">
+                        <img src="icon.png" alt="Lacquer" class="nav-logo">
+                        <span class="nav-title">Lacquer</span>
+                    </div>
+                </div>
+                <p>Where AI workflows get their <span class="text-lantern">shine</span></p>
+                <p>© Lacquer 2025</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

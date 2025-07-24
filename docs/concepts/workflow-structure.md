@@ -2,18 +2,6 @@
 
 This document describes the fundamental structure of a Lacquer workflow file and all its components. Understanding the workflow structure is essential for creating effective AI-powered automation.
 
-## Table of Contents
-
-- [Basic Structure](#basic-structure)
-- [Version](#version)
-- [Metadata](#metadata)
-- [Agents](#agents)
-- [Inputs](#inputs)
-- [Requirements](#requirements)
-- [Workflow](#workflow)
-- [Complete Examples](#complete-examples)
-- [Best Practices](#best-practices)
-
 ## Basic Structure
 
 Every Lacquer workflow follows this basic structure:
@@ -59,11 +47,6 @@ The `metadata` section contains information about the workflow.
 metadata:
   name: my-workflow
   description: A workflow that does something useful
-  author: user@example.com
-  tags:
-    - automation
-    - ai
-  version: 1.2.3
 ```
 
 ### Metadata Fields
@@ -93,42 +76,6 @@ metadata:
 ```yaml
 metadata:
   description: Generates blog posts from research topics
-```
-
-### author
-
-**Required**: No  
-**Type**: String  
-**Description**: Email or identifier of the workflow creator.
-
-```yaml
-metadata:
-  author: user@example.com
-```
-
-### tags
-
-**Required**: No  
-**Type**: Array of strings  
-**Description**: Categories or keywords for organizing workflows.
-
-```yaml
-metadata:
-  tags:
-    - automation
-    - ai
-    - content-generation
-```
-
-### version (metadata)
-
-**Required**: No  
-**Type**: String  
-**Description**: Semantic version of the workflow.
-
-```yaml
-metadata:
-  version: 1.2.3
 ```
 
 ## Agents
@@ -442,87 +389,10 @@ workflow:
 - **Naming**: Use kebab-case (e.g., `data-processor.laq.yaml`)
 - **Organization**: Group related workflows in directories
 
-### Directory Structure
-
-```
-workflows/
-├── data-processing/
-│   ├── csv-analyzer.laq.yaml
-│   ├── json-transformer.laq.yaml
-│   └── data-validator.laq.yaml
-├── content-generation/
-│   ├── blog-writer.laq.yaml
-│   └── social-media-post.laq.yaml
-└── shared/
-    ├── error-handler.laq.yaml
-    └── notification-sender.laq.yaml
-```
-
-## Best Practices
-
-### 1. Structure and Organization
-
-- **Start with version and metadata**: Always include these at the top
-- **Order sections logically**: version → metadata → inputs → agents → workflow
-- **Keep related elements together**: Group similar agents or inputs
-
-### 2. Metadata Best Practices
-
-```yaml
-metadata:
-  name: customer-feedback-analyzer  # Descriptive name
-  description: |
-    Analyzes customer feedback to extract sentiment,
-    key themes, and actionable insights.
-  author: team@company.com
-  tags:
-    - analytics
-    - customer-service
-    - nlp
-  version: 2.1.0  # Semantic versioning
-```
-
-### 3. Input Design
-
-- **Provide clear descriptions**: Help users understand each input
-- **Use sensible defaults**: Make workflows easy to run
-- **Validate input types**: Use the correct type for each parameter
-- **Group related inputs**: Use object types for configuration
-
-### 4. Workflow Clarity
-
-- **Keep workflows focused**: One clear purpose per workflow
-- **Use child workflows**: Break complex processes into smaller pieces
-- **Document complex logic**: Add comments for non-obvious sections
-- **Test with different inputs**: Ensure workflows handle edge cases
-
-### 5. Maintainability
-
-```yaml
-# Good: Self-documenting structure
-workflow:
-  # Initialize processing state
-  state:
-    processed_items: 0
-    errors: []
-  
-  steps:
-    # Validate input data before processing
-    - id: validate_input
-      agent: validator
-      prompt: "Validate the input data structure"
-    
-    # Process only if validation passes
-    - id: process_data
-      condition: ${{ steps.validate_input.outputs.is_valid }}
-      agent: processor
-      prompt: "Process the validated data"
-```
-
 ## Related Documentation
 
-- [Agents](./agents.md) - Configure AI models and tools
-- [Workflow Steps](./workflow-steps.md) - Define execution logic
-- [Variable Interpolation](./variables.md) - Create dynamic workflows
-- [State Management](./state-management.md) - Maintain workflow state
-- [Examples](./examples/) - See complete workflow examples
+- [Agents](agents.md) - Configure AI models and tools
+- [Workflow Steps](workflow-steps.md) - Define execution logic
+- [Variable Interpolation](variables.md) - Create dynamic workflows
+- [State Management](state-management.md) - Maintain workflow state
+- [Examples](examples/) - See complete workflow examples

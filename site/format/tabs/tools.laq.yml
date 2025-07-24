@@ -1,0 +1,20 @@
+agents:
+  researcher:
+    provider: openai
+    model: gpt-4
+    temperature: 0.2
+    system_prompt: You are a helpful researcher that answers questions about a given topic.
+    tools:
+      - name: search_web
+        script: "node ./scripts/web_search.js"
+        description: |
+          the search_web tool provides a easy way to search the web for information.
+          Use this tool to get the latest information on a given topic, it will provide
+          a short summary of the latest information on the given topic.
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
+              description: |
+                The given topic that you want to search for.

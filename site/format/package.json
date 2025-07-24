@@ -1,0 +1,17 @@
+{
+  "name": "lacquer-site-formatter",
+  "version": "1.0.0",
+  "description": "Formats YAML files in the tabs folder using Prism.js",
+  "main": "format.js",
+  "scripts": {
+    "format": "node format.js",
+    "install-deps": "npm install"
+  },
+  "dependencies": {
+    "prismjs": "^1.29.0"
+  },
+  "devDependencies": {},
+  "keywords": ["yaml", "prism", "syntax-highlighting", "formatting"],
+  "author": "Lacquer AI",
+  "license": "MIT"
+} 

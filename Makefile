@@ -113,25 +113,94 @@ docker-run: docker-build
 	@echo "Running Docker container..."
 	docker run --rm -it ghcr.io/lacquerai/lacquer:local
 
-## docs-serve: Serve documentation locally (requires Hugo)
-docs-serve:
-	@echo "Serving documentation..."
-	@if command -v hugo >/dev/null 2>&1; then \
-		hugo server -D; \
-	else \
-		echo "Hugo not installed. Install it from https://gohugo.io/installation/"; \
+## docs-install: Install docs dependencies
+docs-install:
+	@echo "Installing dependencies..."
+	@command -v python3 >/dev/null 2>&1 || { echo "Python 3 is required but not installed."; exit 1; }
+	@echo "Dependencies checked ✓"
+
+## docs-serve: Run local development server with hot reload
+docs-serve: docs-clean
+	@echo "Starting local development server with hot reload..."
+	@echo "Checking if port 8000 is available..."
+	@if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then \
+		echo "Port 8000 is already in use. Attempting to stop existing server..."; \
+		pkill -f "python.*http.server.*8000" 2>/dev/null || true; \
+		sleep 2; \
+		if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then \
+			echo "Failed to free port 8000. Please manually stop the process using port 8000 and try again."; \
+			echo "You can find the process with: lsof -Pi :8000"; \
+			exit 1; \
+		fi; \
+	fi
+	@echo "Setting up build directory structure..."
+	@mkdir -p build
+	@cp -r site/* build/
+	@mkdir -p build/docs
+	@cp -r docs/* build/docs/
+	@echo "Starting server..."
+	@(cd build && python3 -m http.server 8000 2>/dev/null) & \
+	SERVER_PID=$$!; \
+	sleep 1; \
+	if ! kill -0 $$SERVER_PID 2>/dev/null; then \
+		echo "Failed to start server. Port may still be in use."; \
 		exit 1; \
+	fi; \
+	echo "Server running at http://localhost:8000"; \
+	echo "Landing page: http://localhost:8000"; \
+	echo "Documentation: http://localhost:8000/docs"; \
+	echo "Watching for changes in site/ and docs/ directories..."; \
+	echo "Press Ctrl+C to stop"; \
+	trap 'echo "Stopping server..."; kill $$SERVER_PID 2>/dev/null; exit' INT TERM; \
+	if command -v fswatch >/dev/null 2>&1; then \
+		fswatch -o site docs | while read f; do \
+			echo "Files changed, rebuilding..."; \
+			cp -r site/* build/ 2>/dev/null || true; \
+			cp -r docs/* build/docs/ 2>/dev/null || true; \
+			echo "Rebuild complete"; \
+		done; \
+	elif command -v inotifywait >/dev/null 2>&1; then \
+		while inotifywait -r -e modify,create,delete site docs >/dev/null 2>&1; do \
+			echo "Files changed, rebuilding..."; \
+			cp -r site/* build/ 2>/dev/null || true; \
+			cp -r docs/* build/docs/ 2>/dev/null || true; \
+			echo "Rebuild complete"; \
+		done; \
+	else \
+		echo "No file watcher found. Install fswatch (brew install fswatch) or inotify-tools for hot reload."; \
+		echo "Running without hot reload - server will continue until Ctrl+C"; \
+		wait $$SERVER_PID; \
 	fi
 
-## docs-build: Build documentation (requires Hugo)
-docs-build:
-	@echo "Building documentation..."
-	@if command -v hugo >/dev/null 2>&1; then \
-		hugo --minify; \
-	else \
-		echo "Hugo not installed. Install it from https://gohugo.io/installation/"; \
-		exit 1; \
-	fi
+## docs-build: Build docs for production
+docs-build: docs-clean
+	@echo "Building site for production..."
+	@mkdir -p build
+	@echo "Copying landing page files..."
+	@cp -r site/* build/
+	@echo "Copying documentation files..."
+	@mkdir -p build/docs
+	@cp -r docs/* build/docs/
+	@echo "Creating .nojekyll file..."
+	@touch build/.nojekyll
+	@if [ -f "CNAME" ]; then cp CNAME build/; fi
+	@echo "Build complete! Output in build/"
+
+## docs-clean: Clean docs build directory
+docs-clean:
+	@echo "Cleaning build directory..."
+	@rm -rf build
+	@echo "Clean complete!"
+
+## docs-stop: Stop any running docs servers
+docs-stop:
+	@echo "Stopping docs servers..."
+	@pkill -f "python.*http.server.*8000" 2>/dev/null || echo "No docs servers found running on port 8000"
+
+# Test the production build locally
+deploy-test: build
+	@echo "Testing production build..."
+	@cd build && python3 -m http.server 8001
 
 ## deps: Install dependencies
 deps:

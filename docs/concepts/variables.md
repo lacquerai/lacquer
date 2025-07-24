@@ -2,14 +2,6 @@
 
 Lacquer uses GitHub Actions-style template syntax with `${{ }}` for variable interpolation, allowing dynamic values throughout your workflows. This powerful feature enables you to create flexible, reusable workflows that adapt to different inputs and conditions.
 
-## Table of Contents
-
-- [Variable Syntax](#variable-syntax)
-- [Variable Contexts](#variable-contexts)
-- [Expression Types](#expression-types)
-- [Built-in Functions](#built-in-functions)
-- [Best Practices](#best-practices)
-
 ## Variable Syntax
 
 ### Basic Template Syntax
@@ -304,129 +296,9 @@ Checks if all previous steps succeeded.
 - **Returns**: boolean
 - **Example**: `${{ success() }}` → `true`
 
-## Common Patterns
-
-### Default Values
-
-Use conditional expressions to provide defaults:
-
-```yaml
-steps:
-  - id: process
-    agent: processor
-    prompt: "Process with timeout: ${{ inputs.timeout || 300 }} seconds"
-```
-
-### Safe Property Access
-
-Check for existence before accessing:
-
-```yaml
-condition: ${{ inputs.config && inputs.config.enabled }}
-```
-
-### String Building
-
-Combine multiple values:
-
-```yaml
-prompt: |
-  User: ${{ inputs.user_name }}
-  Role: ${{ inputs.role || 'guest' }}
-  Permissions: ${{ join(inputs.permissions, ', ') }}
-```
-
-### Dynamic Keys
-
-Access properties dynamically:
-
-```yaml
-value: ${{ state.data[inputs.key_name] }}
-```
-
-## Best Practices
-
-### 1. Use Clear Variable Names
-
-Choose descriptive names that indicate purpose:
-
-```yaml
-# Good
-${{ steps.validate_email.outputs.is_valid }}
-${{ state.processing_queue_length }}
-
-# Avoid
-${{ steps.s1.outputs.v }}
-${{ state.pql }}
-```
-
-### 2. Provide Sensible Defaults
-
-Use conditional expressions for optional values:
-
-```yaml
-# Good
-timeout: ${{ inputs.timeout || 300 }}
-environment: ${{ inputs.env || 'development' }}
-
-# Avoid
-timeout: ${{ inputs.timeout }}  # May be undefined
-```
-
-### 3. Handle Null/Undefined Gracefully
-
-Check for existence before use:
-
-```yaml
-# Good
-condition: ${{ inputs.user && inputs.user.id }}
-name: ${{ inputs.user ? inputs.user.name : 'Anonymous' }}
-
-# Avoid
-condition: ${{ inputs.user.id }}  # May error if user is null
-```
-
-### 4. Use Functions Appropriately
-
-Choose the right function for the task:
-
-```yaml
-# Checking if array has items
-condition: ${{ length(inputs.items) > 0 }}
-
-# Formatting output
-message: ${{ format("Processing {0} of {1}", state.current, state.total) }}
-
-# Building lists
-summary: "Items: ${{ join(steps.collect.outputs.items, ', ') }}"
-```
-
-### 5. Keep Expressions Simple
-
-Break complex logic into steps:
-
-```yaml
-# Instead of complex inline expressions
-condition: ${{ (inputs.mode == 'auto' && state.confidence > 0.8) || (inputs.mode == 'manual' && inputs.approved) }}
-
-# Use intermediate steps
-steps:
-  - id: check_auto
-    agent: validator
-    prompt: "Check if auto mode conditions met"
-    outputs:
-      can_proceed:
-        type: boolean
-  
-  - id: proceed
-    condition: ${{ steps.check_auto.outputs.can_proceed }}
-    agent: processor
-    prompt: "Process request"
-```
-
 ## Related Documentation
 
-- [Workflow Steps](./workflow-steps.md) - Using variables in steps
-- [State Management](./state-management.md) - Working with state variables
-- [Control Flow](./control-flow.md) - Variables in conditions
-- [Examples](./examples/) - See variables in action
+- [Workflow Steps](workflow-steps.md) - Using variables in steps
+- [State Management](state-management.md) - Working with state variables
+- [Control Flow](control-flow.md) - Variables in conditions
+- [Examples](examples/) - See variables in action

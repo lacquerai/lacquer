@@ -1,114 +1,98 @@
-# Lacquer Workflow Syntax Documentation
+# Lacquer
 
-Welcome to the comprehensive documentation for Lacquer's workflow DSL (Domain Specific Language). Lacquer provides a declarative, YAML-based syntax for orchestrating AI agent workflows, similar to how GitHub Actions works for CI/CD workflows.
+Welcome to the documentation for Lacquer's workflow DSL (Domain Specific Language). Lacquer provides a declarative, YAML-based syntax for orchestrating AI agent workflows, similar to how GitHub Actions works for CI/CD workflows.
 
-## Overview
+Lacquer was built out of a desire to have a workflow language that provides:
 
-Lacquer enables you to:
-- **Orchestrate AI agents** with different models and configurations
-- **Build complex workflows** with conditional logic and state management
-- **Integrate external tools** through scripts and MCP servers
-- **Create reusable components** for common tasks
+* <span class="font-highlight">Code not Clicks</span> - Write AI workflows in YAML, not drag-and-drop. Version control, code review and debug like real code.
+* <span class="font-highlight">Zero Dependencies</span> - No Python environments, no package conflicts, just a lightweight Go binary.
+* <span class="font-highlight">Develop local, deploy global</span> - Prototype quickly on your laptop then ship to any cloud. No surprises between dev and production environments.
+* <span class="font-highlight">Compose once, reuse everywhere</span> - Build modular workflows that snap together like LEGO blocks. Share common patterns across projects and teams without copy-paste hell.  
+* <span class="font-highlight">Declarative > Imperative</span> - Describe what you want, not how to get it. Let Lacquer handle the orchestration complexity while you focus on business logic.
+* <span class="font-highlight">Agents, not just prompts</span> - Configure specialized AI agents with custom tools and behaviors. Build sophisticated multi-agent systems without the boilerplate.
 
-## Table of Contents
+## Quick Start {docsify-ignore}
 
-1. [Workflow Structure](./workflow-structure.md) - Basic workflow anatomy and metadata
-2. [Agents](./agents.md) - Defining and configuring AI agents
-3. [Workflow Steps](./workflow-steps.md) - Step definitions and execution
-4. [Control Flow](./control-flow.md) - Parallel execution, conditions, and loops
-5. [Tool Integration](./tools.md) - Integrating tools with agents
-6. [State Management](./state-management.md) - Managing workflow state and variables
-7. [Variable Interpolation](./variables.md) - Using variables and outputs
-8. [Examples](./examples/) - Comprehensive examples for all features
+**Install `laq`**
 
-## Quick Start
+```bash
+curl -LsSf https://get.lacquer.ai | sh
+```
 
-Here's a minimal Lacquer workflow to get you started:
+**Initialize a Lacquer Workflow**
+
+Run `laq init` to run through the interactive setup process for your first workflow.
+
+```bash
+laq init
+```
+
+...
+
+<pre v-pre="" data-lang="bash"><code class="lang-bash"><span class="token highlight">Project Summary</span>
+
+Please review your selections:
+
+<span class="token string">Project Name:</span> greeter
+<span class="token string">Description:</span> A simple hello world workflow that should greet a given person
+<span class="token string">Model Providers:</span> anthropic
+<span class="token string">Script Language:</span> go</code></pre>
+
+Press `Enter` to generate your project, lacquer will create a new directory with a `workflow.laq.yaml` file, here's an exammple of what it might look like:
 
 ```yaml
 version: "1.0"
 metadata:
   name: hello-world
+  description: A simple greeting workflow demonstrating basic Lacquer syntax
 
+# Define a single agent using GPT-4
 agents:
-  assistant:
+  greeter:
     provider: openai
     model: gpt-4
     temperature: 0.7
+    system_prompt: You are a friendly assistant who gives warm greetings.
 
+# Define input parameters for the workflow
 inputs:
   name:
     type: string
-    description: The name of the person to greet
-    default: "world"
+    description: Name of the person to greet
+    default: "World"
 
+# Define a simple single step workflow
 workflow:
   steps:
-    - id: greet
-      agent: assistant
-      prompt: "Say hello to ${{ inputs.name }} in a creative way!"
-
+    - id: say_hello
+      agent: greeter
+      prompt: |
+        Say hello to ${{ inputs.name }} in a creative and friendly way.
+        Make it warm and welcoming!
+  
+  # Return the greeting as output
   outputs:
-    farewell: ${{ steps.greet.output }}
+    greeting: ${{ steps.say_hello.output }}
 ```
 
-To run this workflow:
+**Run the Workflow**
 
-```bash
-laq run hello.laq.yaml
-```
+Now run your workflow passing a name to greet `laq run --input name=lackey`
 
-## Key Concepts
+<pre v-pre="" data-lang="bash"><code class="lang-bash">Running <span class="token string">hello-world</span> workflow <span class="token punctuation">(</span><span class="token number">1</span> steps<span class="token punctuation">)</span>
 
-### Declarative Syntax
+<span class="token string">✓</span>  Running step say_hello <span class="token punctuation">(</span><span class="token number">1/1</span><span class="token punctuation">)</span>
+   <span class="token string">✓</span> Say hello to lackey <span class="token keyword">in</span> a creative and friendly way.
 
-Lacquer uses YAML to define workflows declaratively. You describe *what* you want to happen, not *how* to do it.
+<span class="token string">✓</span> Workflow completed successfully <span class="token punctuation">(</span><span class="token number">3.56s</span><span class="token punctuation">)</span>
 
-### Agent-Based Architecture
 
-Workflows are executed by AI agents that you configure with:
-- **Models**: Choose from OpenAI, Anthropic, or local models
-- **Prompts**: Define agent behavior and expertise
-- **Tools**: Extend capabilities with external integrations
+<span class="token highlight small">Outputs</span>
 
-### Composable Workflows
+<span class="token string">greeting:</span> Hey there, lackey<span class="token operator">!</span> *waves enthusiastically* 🌟 What an absolute joy to see your wonderful self here<span class="token operator">!</span></code></pre>
 
-Workflows can reference other workflows as steps, enabling:
-- **Reusability**: Share common patterns across projects
-- **Modularity**: Break complex workflows into manageable pieces
-- **Maintainability**: Update shared components in one place
+## Learn More {docsify-ignore}
 
-### Portable Execution
-
-Workflows run anywhere:
-- **Local machines**: Development and testing
-- **Cloud platforms**: Production deployments
-- **Edge devices**: Distributed processing
-
-## File Extension Convention
-
-Lacquer workflow files use the `.laq.yaml` extension to distinguish them from regular YAML files.
-
-## Getting Started Guide
-
-1. **Learn the Basics**
-   - [Workflow Structure](./workflow-structure.md) - Understand workflow anatomy
-   - [Agents](./agents.md) - Configure AI models and behavior
-   - [Workflow Steps](./workflow-steps.md) - Define execution logic
-
-2. **Add Advanced Features**
-   - [Control Flow](./control-flow.md) - Conditional execution
-   - [Tool Integration](./tools.md) - Extend agent capabilities
-   - [State Management](./state-management.md) - Maintain workflow state
-
-3. **Master Variable Usage**
-   - [Variable Interpolation](./variables.md) - Dynamic values and expressions
-
-4. **Explore Examples**
-   - [Examples Directory](./examples/) - Real-world workflow patterns
-
-## Support and Resources
-
-- **Documentation**: You're here!
-- **GitHub**: Report issues and contribute
-- **Community**: Join discussions and share workflows
+* Dive into [writing your first workflow](guides/writing-your-first-workflow.md) which explores the core concepts of Lacquer.
+* Review the main features of Lacquer in the [features](start/features.md) guide.
+* Understand the DSL [concepts](concepts) that underpin Lacquer.
