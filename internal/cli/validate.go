@@ -31,8 +31,8 @@ This command checks:
 - Agent reference validation
 - Step dependency analysis
 - Variable interpolation syntax
-
-Examples:
+`,
+	Example: `
   laq validate workflow.laq.yaml           # Validate single file
   laq validate *.laq.yaml                  # Validate multiple files
   laq validate --recursive ./workflows    # Validate directory recursively

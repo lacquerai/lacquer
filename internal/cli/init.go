@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/bubbles/v2/list"
+	"github.com/charmbracelet/bubbles/v2/spinner"
+	"github.com/charmbracelet/bubbles/v2/textinput"
+	tea "github.com/charmbracelet/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/style"
 	"github.com/spf13/cobra"
@@ -40,8 +40,8 @@ The wizard will guide you through:
 - Describing what you want to build
 - Selecting model providers (Anthropic, OpenAI, Claude Code)
 - Choosing your preferred scripting language
-
-Examples:
+`,
+	Example: `
   laq init    # Start interactive setup wizard`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -126,13 +126,13 @@ func initialModel() model {
 	pni.SetValue("lacquer")
 	pni.Focus()
 	pni.CharLimit = 50
-	pni.Width = 50
+	pni.SetWidth(50)
 
 	// Description input
 	ti := textinput.New()
 	ti.Placeholder = "Describe what you want to build..."
 	ti.CharLimit = 200
-	ti.Width = 50
+	ti.SetWidth(50)
 
 	providerItems := []list.Item{
 		providerItem{name: "anthropic", selected: false},
@@ -150,7 +150,7 @@ func initialModel() model {
 	mcpInput := textinput.New()
 	mcpInput.Placeholder = "Enter MCP providers (comma-separated, or leave empty)"
 	mcpInput.CharLimit = 200
-	mcpInput.Width = 50
+	mcpInput.SetWidth(50)
 
 	languageItems := []list.Item{
 		languageItem{name: "node", description: "Node.js/JavaScript"},
@@ -167,7 +167,7 @@ func initialModel() model {
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	s.Style = style.AccentStyle
 
 	return model{
 		step:             StepProjectName,
@@ -188,28 +188,20 @@ func (m model) Init() tea.Cmd {
 	)
 }
 
-// Styles
+// Styles - using the standardized color themes from internal/style/output.go
 var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FAFAFA")).
-			Background(lipgloss.Color("#7D56F4")).
-			Padding(0, 1)
+	titleStyle = style.TitleStyle.
+			Background(style.SuccessColor).
+			Foreground(style.PrimaryBgColor).
+			Padding(1, 1)
 
-	subtitleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#626262"))
+	subtitleStyle = style.MutedStyle
 
-	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7D56F4")).
-			Bold(true)
+	selectedStyle = style.SuccessStyle.Bold(true)
 
-	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF5555")).
-			Bold(true)
+	errorStyle = style.ErrorStyle
 
-	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#50FA7B")).
-			Bold(true)
+	successStyle = style.SuccessStyle
 )
 
 // Update handles messages
@@ -542,24 +534,28 @@ func (m model) View() string {
 		return errorStyle.Render("Error: "+m.err.Error()) + "\n\nPress 'q' to quit."
 	}
 
+	box := lipgloss.NewStyle().
+		Padding(1, 2)
+
+	var out string
 	switch m.step {
 	case StepProjectName:
-		return m.renderProjectNameStep()
+		out = m.renderProjectNameStep()
 	case StepDescription:
-		return m.renderDescriptionStep()
+		out = m.renderDescriptionStep()
 	case StepModelProviders:
-		return m.renderModelProvidersStep()
+		out = m.renderModelProvidersStep()
 	case StepScriptLanguage:
-		return m.renderScriptLanguageStep()
+		out = m.renderScriptLanguageStep()
 	case StepSummary:
-		return m.renderSummaryStep()
+		out = m.renderSummaryStep()
 	case StepProcessing:
-		return m.renderProcessingStep()
+		out = m.renderProcessingStep()
 	case StepComplete:
-		return m.renderCompleteStep()
+		out = m.renderCompleteStep()
 	}
 
-	return ""
+	return box.Render(out)
 }
 
 func (m model) renderProjectNameStep() string {

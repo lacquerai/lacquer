@@ -7,20 +7,98 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/charmbracelet/lipgloss/v2/compat"
 	"gopkg.in/yaml.v3"
 )
 
+// Color palette - standardized across the application
 var (
-	// Color palette
-	ErrorColor   = lipgloss.Color("#FF6B6B")
-	WarningColor = lipgloss.Color("#FFA726")
-	SuccessColor = lipgloss.Color("#66BB6A")
-	InfoColor    = lipgloss.Color("#42A5F5")
-	MutedColor   = lipgloss.Color("#6C757D")
-	AccentColor  = lipgloss.Color("#7C3AED")
-	CodeColor    = lipgloss.Color("#D4D4D4")
+	// Base colors (dark terminal themes)
+	MidnightColor  = "#0D1B2A" // midnight
+	NavyColor      = "#1B263B" // navy
+	LanternColor   = "#F4D58D" // lantern
+	ChameleonColor = "#3A7D44" // chameleon
+	ForestColor    = "#1E5128" // forest
+	SunsetColor    = "#D88A60" // sunset
+	OffWhiteColor  = "#F8F9FA" // offwhite
+	WarmGrayColor  = "#CED4DA" // warmgray
+	ErrorBaseColor = "#2D1B1B" // error
 
-	// Base styles
+	// Base colors (light terminal themes)
+	LightLanternColor   = "#E6A645" // dark lantern
+	LightWarmGrayColor  = "#8B949E" // dark warmgray
+	LightOffWhiteColor  = "#F1F3F4" // dark offwhite
+	LightErrorBaseColor = "#FDEAEA" // dark errorbg
+
+	// Adaptive color definitions for light/dark themes
+	// Error colors - using sunset for better contrast
+	ErrorColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(SunsetColor),
+		Dark:  lipgloss.Color(SunsetColor),
+	}
+
+	// Warning colors - using lantern for visibility
+	WarningColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(LightLanternColor),
+		Dark:  lipgloss.Color(LanternColor),
+	}
+
+	// Success colors - using chameleon/forest
+	SuccessColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(ForestColor),
+		Dark:  lipgloss.Color(ChameleonColor),
+	}
+
+	// Info colors - using navy for light, lantern for dark
+	InfoColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(NavyColor),
+		Dark:  lipgloss.Color(LanternColor),
+	}
+
+	// Muted/secondary text
+	MutedColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(LightWarmGrayColor), // Darker gray for light mode
+		Dark:  lipgloss.Color(WarmGrayColor),
+	}
+
+	// Accent/primary colors
+	AccentColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(ChameleonColor),
+		Dark:  lipgloss.Color(LanternColor),
+	}
+
+	// Code/monospace text
+	CodeColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(MidnightColor),
+		Dark:  lipgloss.Color(MidnightColor),
+	}
+
+	// Primary text color
+	PrimaryTextColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(MidnightColor),
+		Dark:  lipgloss.Color(OffWhiteColor),
+	}
+
+	// Background colors
+	PrimaryBgColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(OffWhiteColor),
+		Dark:  lipgloss.Color(MidnightColor),
+	}
+
+	SecondaryBgColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(LightOffWhiteColor), // Slightly darker than off-white
+		Dark:  lipgloss.Color(NavyColor),
+	}
+
+	// Error background for highlighting
+	ErrorBgColor = compat.AdaptiveColor{
+		Light: lipgloss.Color(LightErrorBaseColor), // Light red background
+		Dark:  lipgloss.Color(ErrorBaseColor),      // Dark red background
+	}
+)
+
+var (
+	// Base styles using adaptive colors
 	ErrorStyle   = lipgloss.NewStyle().Foreground(ErrorColor).Bold(true)
 	WarningStyle = lipgloss.NewStyle().Foreground(WarningColor).Bold(true)
 	SuccessStyle = lipgloss.NewStyle().Foreground(SuccessColor).Bold(true)
@@ -39,14 +117,15 @@ var (
 			Italic(true)
 
 	TitleStyle = lipgloss.NewStyle().
-			Bold(true)
+			Bold(true).
+			Foreground(PrimaryTextColor)
 
 	MessageStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#E4E4E7"))
+			Foreground(PrimaryTextColor)
 
 	CodeStyle = lipgloss.NewStyle().
 			Foreground(CodeColor).
-			Background(lipgloss.Color("#1A1B26")).
+			Background(SecondaryBgColor).
 			Padding(0, 1)
 
 	LineNumberStyle = lipgloss.NewStyle().
@@ -55,7 +134,7 @@ var (
 			Align(lipgloss.Right)
 
 	ErrorLineStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#3D2020"))
+			Background(ErrorBgColor)
 
 	HighlightStyle = lipgloss.NewStyle().
 			Foreground(ErrorColor).
@@ -66,13 +145,13 @@ var (
 				Bold(true)
 
 	SuggestionStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#B8BCC2"))
+			Foreground(MutedColor)
 
 	DocsLinkStyle = lipgloss.NewStyle().
 			Foreground(InfoColor).
 			Underline(true)
 
-	// Box styles
+	// Box styles with adaptive borders
 	ErrorBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(ErrorColor).
@@ -213,7 +292,7 @@ var (
 			Bold(true)
 
 	StepNameStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#E4E4E7"))
+			Foreground(PrimaryTextColor)
 
 	DurationStyle = lipgloss.NewStyle().
 			Foreground(MutedColor).

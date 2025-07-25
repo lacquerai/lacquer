@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"os"
 
 	"github.com/charmbracelet/fang"
@@ -11,6 +12,9 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/lacquerai/lacquer/internal/style"
 )
 
 var (
@@ -40,7 +44,26 @@ Visit https://lacquer.ai/docs for documentation and examples.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
-	return fang.Execute(context.Background(), rootCmd)
+	return fang.Execute(context.Background(), rootCmd, fang.WithColorSchemeFunc(func(lightDark lipgloss.LightDarkFunc) fang.ColorScheme {
+		return fang.ColorScheme{
+			Base:           style.PrimaryTextColor,
+			Title:          style.AccentColor,
+			Description:    style.PrimaryTextColor,
+			Codeblock:      style.CodeColor,
+			Program:        style.AccentColor,
+			DimmedArgument: style.MutedColor,
+			Comment:        style.MutedColor,
+			Flag:           style.InfoColor,
+			FlagDefault:    style.MutedColor,
+			Command:        style.SuccessColor,
+			QuotedString:   style.WarningColor,
+			Argument:       style.PrimaryTextColor,
+			Help:           style.InfoColor,
+			Dash:           style.MutedColor,
+			ErrorHeader:    [2]color.Color{style.ErrorColor, style.ErrorBgColor},
+			ErrorDetails:   style.ErrorColor,
+		}
+	}))
 }
 
 func init() {

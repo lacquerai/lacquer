@@ -34,14 +34,15 @@ This command:
 - Executes workflow steps sequentially with proper error handling
 - Provides real-time progress updates and logging
 - Supports graceful shutdown on interruption signals
+`,
 
-Examples:
+	Args: cobra.ExactArgs(1),
+	Example: `
   laq run workflow.laq.yaml                    # Run workflow with default settings
   laq run workflow.laq.yaml --input key=value # Provide input parameters
   laq run workflow.laq.yaml --input-json '{"key": "value"}' # Provide input parameters as JSON
   laq run workflow.laq.yaml --output json     # JSON output for automation
   laq run workflow.laq.yaml --save-state      # Persist state for debugging`,
-	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Setup signal handling for graceful shutdown
 		ctx, cancel := context.WithCancel(context.Background())

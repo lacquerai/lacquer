@@ -37,8 +37,8 @@ The server provides:
 - WebSocket streaming for real-time progress updates
 - Prometheus metrics endpoint
 - Concurrent execution of multiple workflows
-
-Examples:
+`,
+	Example: `
   laq serve workflow.laq.yaml                    # Serve single workflow
   laq serve workflow1.laq.yaml workflow2.laq.yaml # Serve multiple workflows  
   laq serve --workflow-dir ./workflows          # Serve all workflows in directory

@@ -21,9 +21,8 @@ var (
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version information",
-	Long: `Display version information for laq, including build details and component versions.
-
-Examples:
+	Long:  `Display version information for laq, including build details and component versions.`,
+	Example: `
   laq version              # Show basic version info
   laq version --output json # Show version info as JSON`,
 	Run: func(cmd *cobra.Command, args []string) {
