@@ -43,7 +43,6 @@ import (
 	"github.com/lacquerai/lacquer/internal/expression"
 	"github.com/lacquerai/lacquer/internal/provider"
 	"github.com/lacquerai/lacquer/internal/provider/anthropic"
-	"github.com/lacquerai/lacquer/internal/provider/claudecode"
 	"github.com/lacquerai/lacquer/internal/provider/openai"
 )
 
@@ -157,15 +156,10 @@ func GetSchema() (*SchemaOutput, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating Anthropic provider: %w", err)
 	}
-	claudecodeProvider, err := claudecode.NewProvider(nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating Claude Code provider: %w", err)
-	}
 
 	modelProviders := []provider.Provider{
 		openaiProvider,
 		anthropicProvider,
-		claudecodeProvider,
 	}
 
 	availableModels := []Model{}
