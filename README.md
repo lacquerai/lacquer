@@ -1,5 +1,6 @@
 <div align="center">
-<img src="https://github.com/user-attachments/assets/3f60a020-402e-460e-a547-68f2521b2a5f">
+<img width="1240" height="480" alt="lacquer-banner-stars" src="https://github.com/user-attachments/assets/42844a33-c8cb-404b-ba56-54b803615e03" />
+
 
 [Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](https://lacquer.ai/docs) • [Examples](examples/) • [Community](https://discord.gg/lacquer)
 </div>
