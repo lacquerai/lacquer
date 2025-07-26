@@ -98,10 +98,84 @@ func (as *ActionStates) Add(action ActionState) {
 	*as = newActions
 }
 
+// wrapLine wraps a line to the specified width, preserving word boundaries when possible
+func wrapLine(line string, maxWidth int) []string {
+	if len(line) <= maxWidth {
+		return []string{line}
+	}
+
+	var wrapped []string
+	for len(line) > maxWidth {
+		// Try to find a space to break at
+		breakPoint := maxWidth
+		for breakPoint > 0 && line[breakPoint] != ' ' {
+			breakPoint--
+		}
+
+		// If no space found within reasonable distance, just cut at maxWidth
+		if breakPoint <= maxWidth/2 {
+			breakPoint = maxWidth
+		}
+
+		wrapped = append(wrapped, strings.TrimSpace(line[:breakPoint]))
+		line = strings.TrimSpace(line[breakPoint:])
+	}
+
+	if len(line) > 0 {
+		wrapped = append(wrapped, line)
+	}
+
+	return wrapped
+}
+
 func (as ActionStates) String() string {
 	var text strings.Builder
 	for _, action := range as {
-		text.WriteString(fmt.Sprintf("   %s", action.text))
+		lines := strings.Split(action.text, "\n")
+		indentation := "   "
+		successIndentation := ""
+
+		for i, line := range lines {
+			// Check for success icon to determine additional indentation
+			if i == 0 && strings.HasPrefix(line, style.SuccessIcon()) {
+				successIndentation = "  "
+			}
+
+			// Calculate the maximum width for this line considering indentation
+			totalIndent := indentation
+			if i > 0 {
+				totalIndent += successIndentation
+			}
+			maxWidth := 100 - len(totalIndent)
+			if maxWidth < 20 {
+				maxWidth = 20 // Minimum reasonable width
+			}
+
+			// For the first line, handle icon prefixes
+			lineContent := line
+			iconPrefix := ""
+			if strings.HasPrefix(line, style.SuccessIcon()) {
+				iconPrefix = style.SuccessIcon() + " "
+				lineContent = strings.TrimPrefix(line, iconPrefix)
+			} else if strings.HasPrefix(line, style.ErrorIcon()) {
+				iconPrefix = style.ErrorIcon() + " "
+				lineContent = strings.TrimPrefix(line, iconPrefix)
+			}
+
+			// Wrap the line content if needed
+			wrappedLines := wrapLine(lineContent, maxWidth)
+
+			// Write the lines with proper indentation
+			for j, wrappedLine := range wrappedLines {
+				if i == 0 && j == 0 {
+					// First line of first text line
+					text.WriteString(fmt.Sprintf("%s%s%s", indentation, iconPrefix, wrappedLine))
+				} else {
+					// Continuation lines or subsequent original lines
+					text.WriteString(fmt.Sprintf("\n%s%s%s", indentation, successIndentation, wrappedLine))
+				}
+			}
+		}
 		text.WriteString("\n")
 	}
 	return text.String()

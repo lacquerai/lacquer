@@ -53,9 +53,6 @@ func NewPromptAgentEvent(stepID, actionID string, runID string, prompt ...string
 	text := generateRandomPromptingText()
 	if len(prompt) > 0 {
 		text = strings.Join(prompt, "\n")
-		if len(text) > 200 {
-			text = text[:200] + "..."
-		}
 	}
 	return pkgEvents.ExecutionEvent{
 		Type:      pkgEvents.EventStepActionStarted,
