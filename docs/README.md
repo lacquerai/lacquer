@@ -93,6 +93,6 @@ Now run your workflow passing a name to greet `laq run --input name=lackey`
 
 ## Learn More {docsify-ignore}
 
-* Dive into [writing your first workflow](guides/writing-your-first-workflow.md) which explores the core concepts of Lacquer.
+* Dive into [writing your first workflow](start/writing-your-first-workflow.md) which explores the core concepts of Lacquer.
 * Review the main features of Lacquer in the [features](start/features.md) guide.
 * Understand the DSL [concepts](concepts) that underpin Lacquer.
