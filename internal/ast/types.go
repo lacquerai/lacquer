@@ -187,6 +187,8 @@ type Agent struct {
 	Uses string `yaml:"uses,omitempty" json:"uses,omitempty"`
 	// With provides additional configuration parameters for the referenced agent
 	With map[string]interface{} `yaml:"with,omitempty" json:"with,omitempty"`
+	// Config provides additional agent-specific configuration options
+	Config map[string]interface{} `yaml:"config,omitempty" json:"config,omitempty"`
 
 	Position Position `yaml:"-" json:"-"`
 }

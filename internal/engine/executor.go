@@ -976,13 +976,13 @@ func getKeys(m map[string]interface{}) []string {
 }
 
 // getRequiredProviders extracts the unique set of providers used in a workflow
-func getRequiredProviders(workflow *ast.Workflow) map[string]bool {
-	providers := make(map[string]bool)
+func getRequiredProviders(workflow *ast.Workflow) map[string]map[string]interface{} {
+	providers := make(map[string]map[string]interface{})
 
 	// Check agents for provider usage
 	for _, agent := range workflow.Agents {
 		if agent.Provider != "" {
-			providers[agent.Provider] = true
+			providers[agent.Provider] = agent.Config
 		}
 	}
 
@@ -990,8 +990,8 @@ func getRequiredProviders(workflow *ast.Workflow) map[string]bool {
 }
 
 // initializeRequiredProviders initializes only the specified providers
-func initializeRequiredProviders(registry *provider.Registry, requiredProviders map[string]bool) error {
-	for providerName := range requiredProviders {
+func initializeRequiredProviders(registry *provider.Registry, requiredProviders map[string]map[string]interface{}) error {
+	for providerName, config := range requiredProviders {
 		// Check if provider is already registered (e.g., mock providers in tests)
 		if _, err := registry.GetProviderByName(providerName); err == nil {
 			log.Debug().Str("provider", providerName).Msg("Provider already registered, skipping initialization")
@@ -1003,11 +1003,11 @@ func initializeRequiredProviders(registry *provider.Registry, requiredProviders 
 
 		switch providerName {
 		case "anthropic":
-			pr, err = anthropic.NewProvider(nil)
+			pr, err = anthropic.NewProvider(config)
 		case "openai":
-			pr, err = openai.NewProvider(nil)
+			pr, err = openai.NewProvider(config)
 		case "local":
-			pr, err = claudecode.NewProvider(nil)
+			pr, err = claudecode.NewProvider(config)
 		default:
 			return fmt.Errorf("unknown provider: %s", providerName)
 		}

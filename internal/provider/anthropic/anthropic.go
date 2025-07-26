@@ -9,7 +9,10 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/bedrock"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/vertex"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/provider"
 	"github.com/lacquerai/lacquer/internal/utils"
@@ -45,6 +48,9 @@ type Config struct {
 	RetryDelay       time.Duration `yaml:"retry_delay"`
 	UserAgent        string        `yaml:"user_agent"`
 	AnthropicVersion string        `yaml:"anthropic_version"`
+	Platform         string        `yaml:"platform"`
+	Region           string        `yaml:"region"`
+	ProjectID        string        `yaml:"project_id"`
 }
 
 // Request represents a request to the Anthropic API
@@ -162,43 +168,38 @@ func DefaultConfig() *Config {
 }
 
 // NewAnthropicProvider creates a new Anthropic model provider
-func NewProvider(config *Config) (*Provider, error) {
-	if config == nil {
-		config = DefaultConfig()
-	} else {
-		// Merge with defaults for missing fields
-		defaults := DefaultConfig()
-		if config.Timeout == 0 {
-			config.Timeout = defaults.Timeout
-		}
-		if config.MaxRetries == 0 {
-			config.MaxRetries = defaults.MaxRetries
-		}
-		if config.RetryDelay == 0 {
-			config.RetryDelay = defaults.RetryDelay
-		}
-		if config.UserAgent == "" {
-			config.UserAgent = defaults.UserAgent
-		}
-		if config.AnthropicVersion == "" {
-			config.AnthropicVersion = defaults.AnthropicVersion
-		}
-	}
+func NewProvider(yamlConfig map[string]interface{}) (*Provider, error) {
+	config := DefaultConfig()
+	provider.MergeConfig(config, yamlConfig)
 
-	// Validate API key
-	if config.APIKey == "" {
-		config.APIKey = GetAnthropicAPIKeyFromEnv()
-		if config.APIKey == "" {
-			return nil, fmt.Errorf("anthropic API key is required")
-		}
-	}
-
-	client := anthropic.NewClient(
-		option.WithAPIKey(config.APIKey),
+	options := []option.RequestOption{
 		option.WithBaseURL(config.BaseURL),
 		option.WithHTTPClient(&http.Client{
 			Timeout: config.Timeout,
 		}),
+	}
+
+	if config.Platform == "aws" {
+		options = append(options, bedrock.WithConfig(aws.Config{
+			Region: config.Region,
+		}))
+	}
+
+	if config.Platform == "google" {
+		options = append(options, vertex.WithGoogleAuth(context.Background(), config.Region, config.ProjectID))
+	}
+
+	// Validate API key
+	if config.APIKey == "" && config.Platform == "" {
+		config.APIKey = GetAnthropicAPIKeyFromEnv()
+		if config.APIKey == "" {
+			return nil, fmt.Errorf("anthropic API key is required")
+		}
+		options = append(options, option.WithAPIKey(config.APIKey))
+	}
+
+	client := anthropic.NewClient(
+		options...,
 	)
 
 	provider := &Provider{
@@ -275,6 +276,10 @@ func (p *Provider) anthropicContentToModelMessage(contentBlock anthropic.Content
 
 // GetName returns the provider name
 func (p *Provider) GetName() string {
+	if p.config.Platform != "" {
+		return p.name + "-" + p.config.Platform
+	}
+
 	return p.name
 }
 

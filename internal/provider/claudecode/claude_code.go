@@ -143,10 +143,9 @@ func DefaultClaudeCodeConfig() *ClaudeCodeConfig {
 }
 
 // NewProvider creates a new Claude Code model provider
-func NewProvider(config *ClaudeCodeConfig) (*ClaudeCodeProvider, error) {
-	if config == nil {
-		config = DefaultClaudeCodeConfig()
-	}
+func NewProvider(yamlConfig map[string]interface{}) (*ClaudeCodeProvider, error) {
+	config := DefaultClaudeCodeConfig()
+	provider.MergeConfig(config, yamlConfig)
 
 	// Detect Claude Code executable
 	execPath, err := detectClaudeCodeExecutable(config.ExecutablePath)

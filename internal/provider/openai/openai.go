@@ -26,6 +26,7 @@ type OpenAIProvider struct {
 // OpenAIConfig contains configuration for the OpenAI provider
 type OpenAIConfig struct {
 	APIKey     string        `yaml:"api_key"`
+	Platform   string        `yaml:"platform"`
 	BaseURL    string        `yaml:"base_url"`
 	Timeout    time.Duration `yaml:"timeout"`
 	MaxRetries int           `yaml:"max_retries"`
@@ -35,45 +36,34 @@ type OpenAIConfig struct {
 }
 
 // NewProvider creates a new OpenAI provider
-func NewProvider(config *OpenAIConfig) (*OpenAIProvider, error) {
-	if config == nil {
-		config = &OpenAIConfig{}
+func NewProvider(yamlConfig map[string]interface{}) (*OpenAIProvider, error) {
+	config := getDefaultOpenAIConfig()
+	provider.MergeConfig(config, yamlConfig)
+
+	var options []option.RequestOption
+
+	options = append(options, option.WithBaseURL(config.BaseURL))
+	options = append(options, option.WithMaxRetries(config.MaxRetries))
+
+	if config.Platform == "aws" {
+		// TODO: Add AWS support
 	}
 
-	// Set defaults
-	defaults := getDefaultOpenAIConfig()
-	if config.Timeout == 0 {
-		config.Timeout = defaults.Timeout
-	}
-	if config.MaxRetries == 0 {
-		config.MaxRetries = defaults.MaxRetries
-	}
-	if config.RetryDelay == 0 {
-		config.RetryDelay = defaults.RetryDelay
-	}
-	if config.UserAgent == "" {
-		config.UserAgent = defaults.UserAgent
-	}
-	if config.BaseURL == "" {
-		config.BaseURL = defaults.BaseURL
+	if config.Platform == "google" {
+		// TODO: Add Google support
 	}
 
-	// Get API key from config or environment
 	if config.APIKey == "" {
 		config.APIKey = GetOpenAIAPIKeyFromEnv()
-	}
-
-	// Validate API key
-	if config.APIKey == "" {
-		return nil, fmt.Errorf("OpenAI API key is required")
+		if config.APIKey == "" {
+			return nil, fmt.Errorf("OpenAI API key is required")
+		}
+		options = append(options, option.WithAPIKey(config.APIKey))
 	}
 
 	client := openai.NewClient(
-		option.WithAPIKey(config.APIKey),
-		option.WithBaseURL(config.BaseURL),
-		option.WithMaxRetries(config.MaxRetries),
+		options...,
 	)
-	// Create HTTP client with timeout
 
 	provider := &OpenAIProvider{
 		name:   "openai",
@@ -155,6 +145,10 @@ func (p *OpenAIProvider) Generate(ctx provider.GenerateContext, request *provide
 
 // GetName returns the provider name
 func (p *OpenAIProvider) GetName() string {
+	if p.config.Platform != "" {
+		return p.name + "-" + p.config.Platform
+	}
+
 	return p.name
 }
 

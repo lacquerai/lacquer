@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -483,4 +484,29 @@ func formatInputs(inputs map[string]interface{}) string {
 	}
 
 	return sb.String()
+}
+
+// MergeConfig merges a yaml config into a struct
+func MergeConfig(config interface{}, yamlConfig map[string]interface{}) {
+	configValue := reflect.ValueOf(config).Elem()
+	configType := configValue.Type()
+
+	for i := 0; i < configType.NumField(); i++ {
+		field := configType.Field(i)
+		yamlTag := field.Tag.Get("yaml")
+
+		if yamlTag != "" {
+			// Split on comma to handle options like "api_key,omitempty"
+			tagParts := strings.Split(yamlTag, ",")
+			yamlKey := tagParts[0]
+
+			// Check if this yaml key exists in the yamlConfig
+			if value, exists := yamlConfig[yamlKey]; exists {
+				fieldValue := configValue.Field(i)
+				if fieldValue.CanSet() {
+					fieldValue.Set(reflect.ValueOf(value))
+				}
+			}
+		}
+	}
 }
