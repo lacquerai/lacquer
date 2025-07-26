@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/v2/key"
 	"github.com/charmbracelet/bubbles/v2/list"
 	"github.com/charmbracelet/bubbles/v2/spinner"
 	"github.com/charmbracelet/bubbles/v2/textinput"
@@ -68,6 +69,25 @@ const (
 	StepSummary
 	StepProcessing
 	StepComplete
+)
+
+var (
+	quitKey = key.NewBinding(
+		key.WithKeys("ctrl+c", "q"),
+		key.WithHelp("Ctrl+C", "Quit"),
+	)
+	enterKey = key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("Enter", "Continue"),
+	)
+	tabKey = key.NewBinding(
+		key.WithKeys("tab", "shift+tab"),
+		key.WithHelp("Tab", "Next"),
+	)
+	spaceKey = key.NewBinding(
+		key.WithKeys("space"),
+		key.WithHelp("Space", "Select"),
+	)
 )
 
 // Model represents the wizard state
@@ -215,14 +235,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+		switch {
+		case key.Matches(msg, quitKey):
 			return m, tea.Quit
-		case "enter":
+		case key.Matches(msg, enterKey):
 			return m.handleEnter()
-		case "tab", "shift+tab":
+		case key.Matches(msg, tabKey):
 			return m.handleTab()
-		case " ":
+		case key.Matches(msg, spaceKey):
 			if m.step == StepModelProviders {
 				return m.toggleProvider()
 			}

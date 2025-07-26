@@ -26,27 +26,7 @@ jobs:
         uses: actions/configure-pages@v4
         
       - name: Build site
-        run: |
-          echo "Creating build directory..."
-          mkdir -p build
-          
-          echo "Copying landing page files..."
-          cp -r site/* build/
-          
-          echo "Copying documentation files..."
-          mkdir -p build/docs
-          cp -r docs/* build/docs/
-          
-          echo "Creating .nojekyll file..."
-          touch build/.nojekyll
-          
-          # Copy CNAME if it exists
-          if [ -f "CNAME" ]; then
-            cp CNAME build/
-          fi
-          
-          echo "Build complete!"
-          
+        run: make docs-build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
