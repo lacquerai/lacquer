@@ -2,35 +2,37 @@
 <img width="1240" height="480" alt="lacquer-banner-stars" src="https://github.com/user-attachments/assets/42844a33-c8cb-404b-ba56-54b803615e03" />
 
 
-[Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](https://lacquer.ai/docs) • [Examples](examples/) • [Community](https://discord.gg/lacquer)
+[Quick Start](#-quick-start) • [Examples](#-examples) • [Documentation](https://lacquer.ai/docs)
 </div>
 
 ---
 
-## 🚀 What is Lacquer?
+## Orchestrate AI Agents with Code, Not Clicks
 
-Lacquer (`laq`) is a blazing-fast, code-first orchestration engine for AI agent workflows. Write declarative YAML workflows that seamlessly coordinate multiple AI models and tools - all from a single binary.
+Lacquer is a blazing-fast, code-first orchestration engine for AI agent workflows. Bring **GitHub Actions-style workflows** to AI and define complex multi-agent systems in simple YAML.
+
+Built for artisans who prefer **terminals** over drag-and-drop.
 
 ```yaml
-# hello-world.laq.yml
 version: "1.0"
+
 agents:
   assistant:
     provider: openai
     model: gpt-4
     temperature: 0.7
 
-workflow:
-  inputs:
-    topic:
-      type: string
-      description: Topic to explore
+inputs:
+  topic:
+    type: string
+    description: Topic to explore
   
+workflow:
   steps:
     - id: research
       agent: assistant
       prompt: "Tell me about ${{ inputs.topic }}"
-    
+
     - id: summarize
       agent: assistant
       prompt: "Summarize this in 3 bullet points: ${{ steps.research.output }}"
@@ -40,9 +42,9 @@ workflow:
 ```
 
 ```bash
-$ laq run hello-world.laq.yml --input topic="quantum computing"
+$ laq run workflow.laq.yml --input topic="quantum computing"
 
-Running hello-world (2 steps)
+Running research_workflow (2 steps)
 
 ✓ Step research completed (2.1s)
 ✓ Step summarize completed (1.3s)
@@ -51,223 +53,198 @@ Running hello-world (2 steps)
 
 Outputs:
 
-summary: "Quantum computing is a field of computing that uses quantum-mechanical phenomena, such as superposition and entanglement, to perform calculations."
+summary: 
+  • Quantum computing uses quantum-mechanical phenomena like superposition and entanglement for calculations
+  • It represents a revolutionary approach to processing information beyond classical computing limitations
+  • Current applications include cryptography, optimization, and simulation of quantum systems
 ```
 
-## 🎯 Why Lacquer?
+## Quick Start
 
-### For Engineers Who Want to Ship, Not Configure
+Install `laq` with a single command:
 
-- **Code-First**: Version control your workflows, ensure governance, bulletproof your AI features.
-- **Single Binary**: Download and run. No Python environments, no dependency hell.
-- **Extensible**: Build workflows with custom scripts, containers, and more
-- **Lightning Fast**: <100ms validation, sub-second startup, efficient Go runtime
-- **Provider Agnostic**: Works with OpenAI, Anthropic, Claude Code, and more coming soon
-
-## 📦 Installation
-
-### macOS/Linux (Coming Soon)
 ```bash
-# Installation scripts are being prepared
-# For now, build from source
+curl -sSL https://get.lacquer.ai | sh
 ```
 
-### From Source
+Use the `laq init` wizard to create a new workflow using AI.
+
 ```bash
-git clone https://github.com/lacquer/lacquer
-cd lacquer
-go build -o laq ./cmd/laq
+laq init
 ```
 
-### Docker (Coming Soon)
+Execute it and see the magic.
+
 ```bash
-docker run -v ~/.laq:/root/.laq lacquer/laq:latest
+laq run workflow.laq.yml
 ```
 
-## 🏃 Quick Start
+Now explore the [documentation](https://lacquer.ai/docs) to find out how to improve your workflow.
 
-### 1. Initialize a New Project
-```bash
-laq init my-agent
-cd my-agent
-```
 
-### 2. Create Your First Workflow
-```yaml
-# analyze.laq.yml
-version: "1.0"
-metadata:
-  name: data-analyzer
-  description: Analyze data and provide insights
+## Examples
 
-agents:
-  analyst:
-    provider: anthropic
-    model: claude-3-5-sonnet-20241022
-    temperature: 0.3
-    system_prompt: You are a data analyst expert.
+### 🔧 Agent Tools
 
-workflow:
-  inputs:
-    data:
-      type: string
-      description: Data to analyze
-    
-  steps:
-    - id: analyze
-      agent: analyst
-      prompt: |
-        Analyze this data and provide key insights:
-        ${{ inputs.data }}
-        
-    - id: format
-      agent: analyst
-      prompt: |
-        Format these insights as a markdown report:
-        ${{ steps.analyze.output }}
-        
-  outputs:
-    report: "${{ steps.format.output }}"
-```
+Extend your agents with custom tools for web search, file operations, and more:
 
-### 3. Run It
-```bash
-laq run analyze.laq.yml --input data="Q4 sales increased 25% YoY..."
-```
-
-## 🌟 Current Features
-
-### ✅ Core Functionality
-- **YAML-based DSL** with complex logic and templating
-- **Multi-provider support**: OpenAI, Anthropic, Claude Code
-- **Complex workflow execution**: Sequential, parallel, conditional, and more
-- **Serve your workflows as an HTTP API**
-
-### ✅ CLI Commands
-```bash
-laq init       # Initialize new project with example workflow
-laq validate   # Validate workflow syntax and semantics
-laq run        # Execute workflow locally
-laq serve      # Run as HTTP API server (with WebSocket support)
-laq version    # Display version information
-```
-
-### ✅ Agent Configuration
 ```yaml
 agents:
   researcher:
-    provider: openai        # or anthropic, claude-code
-    model: gpt-4           # or claude-3-5-sonnet-20241022
-    temperature: 0.7
-    max_tokens: 2000
-    system_prompt: "You are a helpful research assistant"
+    provider: openai
+    model: gpt-4
+    temperature: 0.2
+    system_prompt: You are a helpful researcher that answers questions about a given topic.
+    tools:
+      - name: search_web
+        script: "node ./scripts/web_search.js"
+        description: |
+          the search_web tool provides a easy way to search the web for information.
+          Use this tool to get the latest information on a given topic, it will provide
+          a short summary of the latest information on the given topic.
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
+              description: |
+                The given topic that you want to search for.
 ```
 
-### ✅ Script & Docker Steps
-Execute custom code in any language using inline scripts or Docker containers:
+### 📊 State Management
 
-**Go Script Steps:**
+Maintain workflow state across steps with automatic updates:
+
+```yaml
+state:
+  counter: 0
+  status: "pending"
+
+workflow:
+  steps:
+    - id: process_item
+      agent: processor
+      prompt: "Process: ${{ inputs.item }}"
+      updates:
+        counter: "${{ state.counter + 1 }}"
+        status: "${{ steps.process_item.outputs.success ? 'processing' : 'error' }}"
+```
+
+### 🔀 Conditional Logic
+
+Build complex workflows with conditionals and loops:
+
 ```yaml
 steps:
-  - id: process_data
-    script: |
-      package main
-      import (
-        "encoding/json"
-        "os"
-      )
-      
-      type Context struct {
-        Inputs Inputs `json:"inputs"`
-      }
+  - id: check_length
+    agent: analyzer
+    prompt: "Count words in: ${{ inputs.text }}"
+    outputs:
+      word_count: 
+        type: integer
 
-      type Inputs struct {
-        Text string `json:"text"`
-      }
-      
-      func main() {
-        var ctx Context
-        json.NewDecoder(os.Stdin).Decode(&ctx)
-        
-        // Process inputs...
-        result := ctx.Inputs.Text + " processed!"
-        
-        json.NewEncoder(os.Stdout).Encode(map[string]interface{}{
-          "outputs": map[string]interface{}{
-            "result": result,
-          },
-        })
-      }
-    with:
-      text: "${{ inputs.text }}"
+  # Conditionally execute steps
+  - id: expand_text
+    condition: ${{ steps.check_length.outputs.word_count < 100 }}
+    agent: writer
+    prompt: "Expand this text to at least 100 words: ${{ inputs.text }}"
+
+  # Iterative refinement with while loops
+  - id: refine_text
+    while: ${{ steps.refine_text.iteration < 3 && steps.refine_text.outputs.quality_score < 8 }}
+    steps:
+      - id: analyze_quality
+        agent: analyzer
+        prompt: |
+          Analyze the quality of this text on a scale of 1-10:
+          ${{ steps.expand_text.outputs.expanded_text || inputs.text }}
+        outputs:
+          quality_score: integer
+          improvement_suggestions: string
+
+      - id: apply_improvements
+        condition: ${{ steps.refine_text.steps.analyze_quality.outputs.quality_score < 8 }}
+        agent: editor
+        prompt: |
+          Improve this text based on these suggestions:
+          Text: ${{ steps.expand_text.outputs.expanded_text || inputs.text }}
+          Suggestions: ${{ steps.refine_text.steps.analyze_quality.outputs.improvement_suggestions }}
 ```
 
-**Docker Container Steps:**
+### 🛠️ Custom Scripts & Containers
+
+Execute custom code alongside AI agents:
+
 ```yaml
-steps:
-  - id: analyze_with_python
-    container: ./.docker/python-analysis.dockerfile
-    with:
-      text: "${{ inputs.text }}"
+requirements:
+  runtimes:
+    - name: python
+      version: "3.9"
+
+workflow:
+  steps:
+    - id: create_fix
+      agent: fixer
+      prompt: |
+        We've encountered the following error in production
+        ${{ inputs.error }}
+
+        Please create a fix for the error in the following code:
+        ${{ inputs.code }}
+
+    # Execute custom Python scripts
+    - id: validate_fix
+      run: "python3 scripts/validate.py"
+      with:
+        patch: ${{ steps.create_fix.outputs.patch }}
+        code: ${{ inputs.code }}
+
+    # Or run in isolated containers
+    - id: validate_fix_container
+      container: ./validate/Dockerfile
+      command:
+        - scripts/validate.py
+        - ${{ steps.create_fix.outputs.patch }}
+        - ${{ inputs.code }}
 ```
 
-Both approaches support full I/O via JSON, making it easy to integrate any tool or language.
+### 🔌 MCP Integration
 
-### ✅ Server Mode
-Run Lacquer as an HTTP API server:
+Connect to Model Context Protocol servers for enhanced capabilities:
 
-```bash
-laq serve --port 8080
+```yaml
+agents:
+  fixer:
+    provider: anthropic
+    model: claude-4-sonnet-20240229
+    system_prompt: |
+      You are an expert code reviewer who:
 
-# Execute workflows via REST API
-curl -X POST http://localhost:8080/workflows/{workflow_id}/execute \
-  -H "Content-Type: application/json" \
-  -d '{"inputs": {"data": "..."}}'
-```
-
-Features:
-- REST API for workflow execution
-- WebSocket support for streaming responses
-- Prometheus metrics at `/metrics`
-- Concurrent execution management
-- CORS support for web integrations
-
-### ✅ Tool Integration (Experimental)
-- **MCP (Model Context Protocol)** client support
-- **Script tools** for custom integrations
-- Tool registry and execution framework
-
-## 🛠️ Development
-
-```bash
-# Clone the repo
-git clone https://github.com/lacquer/lacquer
-cd lacquer
-
-# Install dependencies
-go mod download
-
-# Build
-go build -o laq ./cmd/laq
-
-# Run tests
-go test ./...
-
-# Run with debug logging
-./laq run workflow.laq.yml --log-level debug
+      - Identifies bugs and security issues
+      - Suggests performance improvements
+      - Ensures code follows best practices
+      - Provides constructive feedback
+    tools:
+      - name: filesystem
+        description: Filesystem access for code analysis
+        mcp_server:
+          type: local
+          command: npx
+          args:
+            - "-y"
+            - "@modelcontextprotocol/server-filesystem"
+            - "/usr/src/app"
 ```
 
 ## 🤝 Contributing
 
 We welcome contributions! Lacquer is in early alpha, and we're actively seeking feedback and help with:
 
-- Additional provider integrations
-- More official blocks
-- Documentation improvements
 - Bug fixes and performance optimizations
+- Additional provider integrations
+- DSL improvements
+- Documentation improvements  
 - Example workflows
-
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📄 License
 
@@ -281,8 +258,7 @@ Lacquer is in **early alpha** (v0.1.0). The core engine is functional and being 
 
 <div align="center">
 
-**Ready to try Lacquer?**
+**Where AI workflows get their shine** ✨
 
-[Get Started](#-quick-start) • [Report Issues](https://github.com/lacquer/lacquer/issues) • [Star on GitHub](https://github.com/lacquer/lacquer)
-
+[Site](https://lacquer.ai) • [Documentation](https://lacquer.ai/docs)
 </div>
