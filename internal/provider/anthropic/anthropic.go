@@ -276,15 +276,61 @@ func (p *Provider) anthropicContentToModelMessage(contentBlock anthropic.Content
 
 // GetName returns the provider name
 func (p *Provider) GetName() string {
-	if p.config.Platform != "" {
-		return p.name + "-" + p.config.Platform
-	}
+	// if p.config.Platform != "" {
+	// 	return p.name + "-" + p.config.Platform
+	// }
 
 	return p.name
 }
 
 // ListModels dynamically fetches available models from the Anthropic API
 func (p *Provider) ListModels(ctx context.Context) ([]provider.Info, error) {
+	// hard coded for now as the vertex api doesn't have a nice way to get this
+	if p.config.Platform == "google" {
+		return []provider.Info{
+			{
+				ID:       "claude-opus-4@20250514",
+				Name:     "Claude Opus 4",
+				Provider: p.GetName(),
+			},
+			{
+				ID:       "claude-sonnet-4@20250514",
+				Name:     "Claude Sonnet 4",
+				Provider: p.GetName(),
+			},
+			{
+				ID:       "claude-3-7-sonnet@20250219",
+				Name:     "Claude Sonnet 3.7",
+				Provider: p.GetName(),
+			},
+			{
+				ID:       "claude-3-5-haiku@20241022",
+				Name:     "Claude Haiku 3.5",
+				Provider: p.GetName(),
+			},
+			{
+				ID:       "claude-3-5-sonnet-v2@20241022",
+				Name:     "Claude Sonnet 3.5",
+				Provider: p.GetName(),
+			},
+			{
+				ID:       "claude-3-opus@20240229",
+				Name:     "Claude Opus 3 (Public Preview)",
+				Provider: p.GetName(),
+			},
+			{
+				ID:       "claude-3-sonnet@20240229",
+				Name:     "Claude Sonnet 3",
+				Provider: p.GetName(),
+			},
+			{
+				ID:       "claude-3-haiku@20240307",
+				Name:     "Claude Haiku 3",
+				Provider: p.GetName(),
+			},
+		}, nil
+	}
+
 	models, err := p.client.Models.List(ctx, anthropic.ModelListParams{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list models: %w", err)
@@ -295,7 +341,7 @@ func (p *Provider) ListModels(ctx context.Context) ([]provider.Info, error) {
 		modelInfos[i] = provider.Info{
 			ID:        model.ID,
 			Name:      model.DisplayName,
-			Provider:  p.name,
+			Provider:  p.GetName(),
 			CreatedAt: model.CreatedAt.Format(time.RFC3339),
 			Features:  []string{"text-generation", "chat"},
 		}
