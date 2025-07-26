@@ -124,9 +124,9 @@ var (
 			Foreground(PrimaryTextColor)
 
 	CodeStyle = lipgloss.NewStyle().
-			Foreground(CodeColor).
-			Background(SecondaryBgColor).
-			Padding(0, 1)
+			Foreground(lipgloss.Color(OffWhiteColor)).
+			Background(CodeColor).
+			Padding(1, 1)
 
 	LineNumberStyle = lipgloss.NewStyle().
 			Foreground(MutedColor).
