@@ -178,6 +178,7 @@ docs-build: docs-clean
 	@mkdir -p build
 	@echo "Copying landing page files..."
 	@cp -r site/* build/
+	@cp scripts/install.sh build/
 	@echo "Copying documentation files..."
 	@mkdir -p build/docs
 	@cp -r docs/* build/docs/

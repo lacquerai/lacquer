@@ -64,7 +64,7 @@ summary:
 Install `laq` with a single command:
 
 ```bash
-curl -sSL https://get.lacquer.ai | sh
+curl -sSL https://lacquer.ai/install.sh | sh
 ```
 
 Use the `laq init` wizard to create a new workflow using AI.

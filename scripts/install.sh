@@ -2,7 +2,7 @@
 set -e
 
 # Lacquer installer script
-# Usage: curl -sSL https://get.lacquer.ai | sh
+# Usage: curl -sSL https://lacquer.ai/install.sh | sh
 
 BINARY_NAME="laq"
 REPO_OWNER="lacquerai"

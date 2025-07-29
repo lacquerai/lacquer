@@ -7,7 +7,7 @@ This directory contains utility scripts for the Lacquer project.
 The installation script for Lacquer that can be used via curl:
 
 ```bash
-curl -sSL https://get.lacquer.ai | sh
+curl -sSL https://lacquer.ai/install.sh | sh
 ```
 
 ### Features
@@ -27,10 +27,10 @@ curl -sSL https://get.lacquer.ai | sh
 
 Install to custom directory:
 ```bash
-INSTALL_DIR=$HOME/.local/bin curl -sSL https://get.lacquer.ai | sh
+INSTALL_DIR=$HOME/.local/bin curl -sSL https://lacquer.ai/install.sh | sh
 ```
 
 Install specific version:
 ```bash
-VERSION=v0.1.0 curl -sSL https://get.lacquer.ai | sh
+VERSION=v0.1.0 curl -sSL https://lacquer.ai/install.sh | sh
 ```
