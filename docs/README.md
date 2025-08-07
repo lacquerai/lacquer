@@ -16,7 +16,7 @@ Lacquer was built out of a desire to have a workflow language that provides:
 **Install `laq`**
 
 ```bash
-curl -LsSf https://get.lacquer.ai | sh
+curl -LsSf https://lacquer.ai/install.sh | sh
 ```
 
 **Initialize a Lacquer Workflow**

@@ -32,16 +32,37 @@ body {
     padding: 0 1rem;
 }
 
-.text-lantern { color: var(--lantern); }
-.text-chameleon { color: var(--chameleon); }
-.text-sunset { color: var(--sunset); }
-.text-offwhite { color: var(--offwhite); }
-.text-warmgray { color: var(--warmgray); }
+.text-lantern {
+    color: var(--lantern);
+}
 
-.bg-midnight { background-color: var(--midnight); }
-.bg-navy { background-color: var(--navy); }
+.text-chameleon {
+    color: var(--chameleon);
+}
 
-.min-h-screen { min-height: 100vh; }
+.text-sunset {
+    color: var(--sunset);
+}
+
+.text-offwhite {
+    color: var(--offwhite);
+}
+
+.text-warmgray {
+    color: var(--warmgray);
+}
+
+.bg-midnight {
+    background-color: var(--midnight);
+}
+
+.bg-navy {
+    background-color: var(--navy);
+}
+
+.min-h-screen {
+    min-height: 100vh;
+}
 
 /* Grid System */
 .grid {
@@ -49,12 +70,23 @@ body {
     gap: 2rem;
 }
 
-.grid-2 { grid-template-columns: repeat(2, 1fr); }
-.grid-3 { grid-template-columns: repeat(3, 1fr); }
-.grid-4 { grid-template-columns: repeat(4, 1fr); }
+.grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
 
 @media (max-width: 768px) {
-    .grid-2, .grid-3, .grid-4 {
+
+    .grid-2,
+    .grid-3,
+    .grid-4 {
         grid-template-columns: 1fr;
     }
 }
@@ -124,8 +156,15 @@ body {
     font-size: 0.875rem;
 }
 
-.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.75rem; }
-.btn-lg { padding: 0.75rem 1.5rem; font-size: 1rem; }
+.btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+}
+
+.btn-lg {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+}
 
 .btn-primary {
     background-color: var(--lantern);
@@ -233,6 +272,7 @@ body {
     .hero-title {
         font-size: 2rem;
     }
+
     .mascot-image {
         width: 12rem;
         height: 12rem;
@@ -302,7 +342,7 @@ pre {
     padding: 1rem 2rem;
     overflow-x: auto;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.875rem; 
+    font-size: 0.875rem;
     max-width: 48rem;
     text-align: left;
 }
@@ -315,7 +355,7 @@ pre code.lang-yaml .token-multiline {
     color: var(--sunset) !important;
 }
 
-pre code.lang-yaml .token-multiline .token{
+pre code.lang-yaml .token-multiline .token {
     color: var(--sunset) !important;
 }
 
@@ -369,13 +409,29 @@ code .token-multiline {
     margin-top: 0.5rem;
 }
 
-.ml-2 { margin-left: 0.5rem; }
-.ml-4 { margin-left: 1rem; }
-.ml-6 { margin-left: 1.5rem; }
+.ml-2 {
+    margin-left: 0.5rem;
+}
 
-.yaml-key { color: var(--lantern); }
-.yaml-value { color: var(--warmgray); }
-.yaml-string { color: var(--sunset); }
+.ml-4 {
+    margin-left: 1rem;
+}
+
+.ml-6 {
+    margin-left: 1.5rem;
+}
+
+.yaml-key {
+    color: var(--lantern);
+}
+
+.yaml-value {
+    color: var(--warmgray);
+}
+
+.yaml-string {
+    color: var(--sunset);
+}
 
 /* CTA Buttons */
 .cta-buttons {
@@ -658,6 +714,7 @@ code .token-multiline {
     from {
         transform: scale(1);
     }
+
     to {
         transform: scale(1.5);
         box-shadow: 0 0 5px 0.5px rgba(150, 150, 150, 0.6);
@@ -669,19 +726,20 @@ code .token-multiline {
     .nav-links {
         display: none;
     }
-    
+
     .hero {
         padding: 3rem 1rem;
     }
-    
-    .section, .section-alt {
+
+    .section,
+    .section-alt {
         padding: 3rem 1rem;
     }
-    
+
     .section-title {
         font-size: 2rem;
     }
-    
+
     .tabs-list {
         grid-template-columns: 1fr;
         gap: 0.25rem;

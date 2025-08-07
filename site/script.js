@@ -7,56 +7,56 @@ function initStarryBackground() {
 
     for (const container of containers) {
 
-    // Generate a random number between min and max values
-    const genRandomNumber = (min, max) => {
-        return Math.random() * (max - min) + min;
-    };
+        // Generate a random number between min and max values
+        const genRandomNumber = (min, max) => {
+            return Math.random() * (max - min) + min;
+        };
 
-    // Generate a star <div>
-    const genStar = () => {
-        const star = document.createElement("div");
-        star.classList.add("dynamic-star");
+        // Generate a star <div>
+        const genStar = () => {
+            const star = document.createElement("div");
+            star.classList.add("dynamic-star");
 
-        // Randomly add lantern class to about 50% of stars
-        if (Math.random() < 0.50) {
-            star.classList.add("lantern");
+            // Randomly add lantern class to about 50% of stars
+            if (Math.random() < 0.50) {
+                star.classList.add("lantern");
+            }
+
+            // Gen star coordinates relative to container size
+            let x = genRandomNumber(1, container.offsetWidth);
+            let y = genRandomNumber(1, container.offsetHeight);
+
+            const { style } = star;
+
+            style.left = Math.floor(x) + "px";
+            style.top = Math.floor(y) + "px";
+
+            style.setProperty(
+                "--star-size",
+                genRandomNumber(1, 3) + "px"
+            );
+
+            style.setProperty(
+                "--twinkle-duration",
+                Math.ceil(genRandomNumber(1, 5)) + "s"
+            );
+
+            style.setProperty(
+                "--twinkle-delay",
+                Math.ceil(genRandomNumber(1, 5)) + "s"
+            );
+
+            return star;
+        };
+
+        // Clear any existing stars
+        container.innerHTML = '';
+
+        // Generate 200 stars
+        for (let index = 0; index < 200; index++) {
+            container.append(genStar());
         }
 
-        // Gen star coordinates relative to container size
-        let x = genRandomNumber(1, container.offsetWidth);
-        let y = genRandomNumber(1, container.offsetHeight);
-
-        const { style } = star;
-
-        style.left = Math.floor(x) + "px";
-        style.top = Math.floor(y) + "px";
-
-        style.setProperty(
-            "--star-size",
-            genRandomNumber(1, 3) + "px"
-        );
-
-        style.setProperty(
-            "--twinkle-duration",
-            Math.ceil(genRandomNumber(1, 5)) + "s"
-        );
-
-        style.setProperty(
-            "--twinkle-delay",
-            Math.ceil(genRandomNumber(1, 5)) + "s"
-        );
-
-        return star;
-    };
-
-    // Clear any existing stars
-    container.innerHTML = '';
-
-    // Generate 200 stars
-    for (let index = 0; index < 200; index++) {
-        container.append(genStar());
-    }
-    
     }
 }
 
@@ -66,7 +66,7 @@ function copyToClipboard(text, button) {
         const originalText = button.textContent;
         button.textContent = '✓';
         button.style.color = '#3A7D44';
-        
+
         setTimeout(() => {
             button.textContent = originalText;
             button.style.color = '';
@@ -84,11 +84,11 @@ function initTabs() {
     tabTriggers.forEach(trigger => {
         trigger.addEventListener('click', () => {
             const tabId = trigger.getAttribute('data-tab');
-            
+
             // Remove active class from all triggers and contents
             tabTriggers.forEach(t => t.classList.remove('active'));
             tabContents.forEach(c => c.classList.remove('active'));
-            
+
             // Add active class to clicked trigger and corresponding content
             trigger.classList.add('active');
             document.getElementById(`tab-${tabId}`).classList.add('active');
@@ -99,13 +99,13 @@ function initTabs() {
 // Smooth scrolling for navigation links
 function initSmoothScrolling() {
     const navLinks = document.querySelectorAll('a[href^="#"]');
-    
+
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const targetId = link.getAttribute('href').substring(1);
             const targetElement = document.getElementById(targetId);
-            
+
             if (targetElement) {
                 targetElement.scrollIntoView({
                     behavior: 'smooth',
