@@ -11,7 +11,6 @@ import (
 
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
-	"github.com/google/uuid"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
@@ -42,12 +41,20 @@ type TestSpinner struct {
 	PostUpdate func(s *TestSpinner)
 }
 
+var (
+	testIDCounter = 0
+	counterMutex  = &sync.Mutex{}
+)
+
 type TestOption func(*TestSpinner)
 
 // New provides a pointer to an instance of TestSpinner with the supplied options.
 func NewTestSpinner(cs []string, d time.Duration, options ...TestOption) *TestSpinner {
-	// Generate a random 7-character ID
-	id := uuid.New().String()[:7]
+	counterMutex.Lock()
+	id := fmt.Sprintf("spinner-%d", testIDCounter)
+	testIDCounter++
+	counterMutex.Unlock()
+
 	s := &TestSpinner{
 		ID:         id,
 		Delay:      d,

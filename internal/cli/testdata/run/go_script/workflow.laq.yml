@@ -19,10 +19,10 @@ workflow:
     - id: say_hello
       run: "go run scripts/main.go"
       with:
-        name: "{{ inputs.name }}"
+        name: "${{ inputs.name }}"
       outputs:
         greeting:
           type: string
           description: The greeting to the person
   outputs:
-    greeting: "{{ steps.say_hello.outputs.greeting }}"
+    greeting: "${{ steps.say_hello.outputs.greeting }}"

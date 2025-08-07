@@ -22,7 +22,7 @@ def main():
         'message': f'Received input: {test_param}',
     }
     
-    print(json.dumps({'outputs': result}))
+    print(json.dumps(result))
 
 if __name__ == '__main__':
     main()

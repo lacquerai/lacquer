@@ -36,7 +36,7 @@ func (e *NativeExecutor) Validate(block *Block) error {
 }
 
 // Execute runs a native block
-func (e *NativeExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
+func (e *NativeExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (interface{}, error) {
 	// 1. Validate and map inputs according to block schema
 	mappedInputs, err := e.validateAndMapInputs(block, inputs)
 	if err != nil {

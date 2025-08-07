@@ -30,7 +30,7 @@ function main() {
             message: `Received input: ${testParam}`,
         };
         
-        console.log(JSON.stringify({ outputs: result }));
+        console.log(JSON.stringify(result));
     });
 }
 

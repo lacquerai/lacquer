@@ -86,7 +86,7 @@ type Loader interface {
 // Executor executes blocks
 type Executor interface {
 	// Execute runs a block with the given inputs
-	Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error)
+	Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (interface{}, error)
 
 	// Validate checks if the executor can handle the given block
 	Validate(block *Block) error

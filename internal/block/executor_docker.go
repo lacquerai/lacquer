@@ -53,7 +53,7 @@ func (e *DockerExecutor) Validate(block *Block) error {
 }
 
 // Execute runs a Docker block
-func (e *DockerExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
+func (e *DockerExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (interface{}, error) {
 	var imageName string
 	var err error
 
@@ -117,9 +117,7 @@ func (e *DockerExecutor) Execute(execCtx *execcontext.ExecutionContext, block *B
 	// Parse output
 	var output map[string]interface{}
 	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		return map[string]interface{}{
-			"output": stdout.String(),
-		}, nil
+		return stdout.String(), nil
 	}
 
 	return output, nil

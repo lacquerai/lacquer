@@ -50,7 +50,7 @@ func (m *Manager) LoadBlock(ctx context.Context, path string) (*Block, error) {
 }
 
 // ExecuteBlock executes a block at the given path with the given inputs
-func (m *Manager) ExecuteBlock(execCtx *execcontext.ExecutionContext, blockPath string, inputs map[string]interface{}) (map[string]interface{}, error) {
+func (m *Manager) ExecuteBlock(execCtx *execcontext.ExecutionContext, blockPath string, inputs map[string]interface{}) (interface{}, error) {
 	block, err := m.LoadBlock(execCtx.Context.Context, blockPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load block: %w", err)
@@ -64,7 +64,7 @@ func (m *Manager) ExecuteBlock(execCtx *execcontext.ExecutionContext, blockPath 
 }
 
 // ExecuteRawBlock executes a block with the given inputs, it does not validate inputs
-func (m *Manager) ExecuteRawBlock(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
+func (m *Manager) ExecuteRawBlock(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (interface{}, error) {
 	executor, ok := m.registry.Get(block.Runtime)
 	if !ok {
 		return nil, fmt.Errorf("no executor registered for runtime: %s", block.Runtime)

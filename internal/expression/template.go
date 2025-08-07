@@ -3,6 +3,7 @@ package expression
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -61,15 +62,15 @@ func (te *TemplateEngine) Render(template string, execCtx *execcontext.Execution
 			return value, nil
 		}
 
-		strValue := valueToString(value)
+		strValue := ValueToString(value)
 		result = strings.ReplaceAll(result, fullMatch, strValue)
 	}
 
 	return result, nil
 }
 
-// valueToString converts a value to its string representation
-func valueToString(value interface{}) string {
+// ValueToString converts a value to its string representation
+func ValueToString(value interface{}) string {
 	if value == nil {
 		return ""
 	}
@@ -92,14 +93,20 @@ func valueToString(value interface{}) string {
 		// Convert arrays to comma-separated strings
 		strs := make([]string, len(v))
 		for i, item := range v {
-			strs[i] = valueToString(item)
+			strs[i] = ValueToString(item)
 		}
 		return strings.Join(strs, ", ")
 	case map[string]interface{}:
 		// For maps, return a JSON-like representation
+		keys := make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
 		parts := make([]string, 0, len(v))
-		for k, val := range v {
-			parts = append(parts, fmt.Sprintf("%s: %v", k, valueToString(val)))
+		for _, k := range keys {
+			parts = append(parts, fmt.Sprintf("%s: %v", k, ValueToString(v[k])))
 		}
 		return "{" + strings.Join(parts, ", ") + "}"
 	default:
@@ -185,47 +192,6 @@ func (vr *VariableResolver) ResolveVariable(varPath string, execCtx *execcontext
 	default:
 		return nil, fmt.Errorf("unknown variable scope: %s", parts[0])
 	}
-}
-
-// resolveStepField resolves a field from a step result
-func (vr *VariableResolver) resolveStepField(result *execcontext.StepResult, field string, remaining []string) (interface{}, error) {
-	var value interface{}
-
-	switch field {
-	case "status":
-		value = string(result.Status)
-	case "duration":
-		value = result.Duration.String()
-	case "output":
-		value = result.Response
-	case "error":
-		if result.Error != nil {
-			value = result.Error.Error()
-		} else {
-			value = ""
-		}
-	case "success":
-		value = result.Status == execcontext.StepStatusCompleted
-	case "failed":
-		value = result.Status == execcontext.StepStatusFailed
-	case "outputs":
-		// `outputs` is a special case which is used to access the outputs of the step
-		// so if this key is not found, we return the entire output map
-		value = result.Output
-	default:
-		// Try to find field in output
-		if result.Output != nil {
-			if outputValue, exists := result.Output[field]; exists {
-				value = outputValue
-			} else {
-				return nil, fmt.Errorf("step field %s not found", field)
-			}
-		} else {
-			return nil, fmt.Errorf("step field %s not found", field)
-		}
-	}
-
-	return vr.resolveNestedPath(value, remaining)
 }
 
 // resolveWorkflowVariable resolves workflow-level variables

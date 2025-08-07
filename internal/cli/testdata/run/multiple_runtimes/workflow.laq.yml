@@ -60,6 +60,7 @@ workflow:
           description: Test message
 
   outputs:
-    python_result: ${{ steps.test_python.outputs }}
+    python_runtime_result: ${{ steps.test_python.outputs.runtime }}
     node_result: ${{ steps.test_node.outputs }}
     go_result: ${{ steps.test_go.outputs }}
+    python_full: ${{ steps.test_python.output }}

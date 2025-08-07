@@ -36,7 +36,7 @@ func (r *ExecutorRegistry) Get(runtime RuntimeType) (Executor, bool) {
 }
 
 // Execute runs a block using the appropriate executor
-func (r *ExecutorRegistry) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
+func (r *ExecutorRegistry) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (interface{}, error) {
 	executor, ok := r.Get(block.Runtime)
 	if !ok {
 		return nil, fmt.Errorf("no executor registered for runtime: %s", block.Runtime)
@@ -53,7 +53,5 @@ func (r *ExecutorRegistry) Execute(execCtx *execcontext.ExecutionContext, block 
 		return nil, fmt.Errorf("block execution failed: %w", err)
 	}
 
-	return map[string]interface{}{
-		"outputs": outputs,
-	}, nil
+	return outputs, nil
 }

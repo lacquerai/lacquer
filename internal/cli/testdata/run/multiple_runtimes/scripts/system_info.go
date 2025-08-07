@@ -43,10 +43,6 @@ func main() {
 		Message: fmt.Sprintf("Received input: %s", testParam),
 	}
 
-	output := map[string]interface{}{
-		"outputs": result,
-	}
-
-	outputJson, _ := json.Marshal(output)
+	outputJson, _ := json.Marshal(result)
 	fmt.Println(string(outputJson))
 }

@@ -12,17 +12,12 @@ workflow:
     - id: while_loop
       while: ${{ state.iterations < 3 }}
       steps:
-        - id: update_state_string
-          action: update_state
-          updates:
-            text: "${{ state.text }}, ${{ state.iterations }}"
-        - id: update_state
-          action: update_state
-          updates:
-            iterations: ${{ state.iterations + 1 }}
         - id: print_text
           run: |
             echo "${{ state.text }}" inner
+          updates:
+            text: "${{ state.text }}, ${{ state.iterations }}"
+            iterations: ${{ state.iterations + 1 }}
 
     - id: print_text
       run: |
@@ -31,4 +26,4 @@ workflow:
   outputs:
     iterations: ${{ state.iterations }}
     text: ${{ state.text }}
-    second_iterations: ${{ steps.while_loop.steps.print_text.outputs.output }}
+    second_iterations: ${{ steps.while_loop.steps.print_text.output }}

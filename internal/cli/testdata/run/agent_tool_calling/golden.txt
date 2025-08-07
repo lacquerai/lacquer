@@ -1,21 +1,29 @@
 
 Running agent-tool-calling workflow (1 steps)
 
-[Spinner ca973b5]: Running step solve_math (1/1)
-[ca973b5] + +
+[Spinner spinner-0]: Running step solve_math (1/1)
+[spinner-0] + +
    Please solve this math problem: What is 42 divided by 6?
-
-Use the calculator tool to compute the answer. Make sure to call the tool with the correct parameters.
-[ca973b5] +✓ 
-[ca973b5] +   Using tool calculator (num1: 42; num2: 6; operation: divide)
-[ca973b5] +✓ 
-[ca973b5] +   Tool result: {"result":7}
-[ca973b5] +✓ 
-[Finish ca973b5]✓  Running step solve_math (1/1)
+   
+   Use the calculator tool to compute the answer. Make sure to call the tool with the correct
+   parameters.
+[spinner-0] +✓ -
++  
+  +  
+[spinner-0] +   Using tool calculator (num1:
+   42; num2: 6;
+   operation: divide)
+[spinner-0] +✓ +  +  
+[spinner-0] +   Tool result: {"result":7}
+[spinner-0] +✓ 
+[Finish spinner-0]✓  Running step solve_math (1/1)
    ✓ Please solve this math problem: What is 42 divided by 6?
-
-Use the calculator tool to compute the answer. Make sure to call the tool with the correct parameters.
-   ✓ Using tool calculator (num1: 42; num2: 6; operation: divide)
+     
+     Use the calculator tool to compute the answer. Make sure to call the tool with the correct
+     parameters.
+   ✓ Using tool calculator (num1:
+     42; num2: 6;
+     operation: divide)
    ✓ Tool result: {"result":7}
 
 

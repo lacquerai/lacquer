@@ -112,7 +112,7 @@ func (stp *ScriptToolProvider) ExecuteTool(execCtx *execcontext.ExecutionContext
 	startTime := time.Now()
 
 	// Execute based on script type
-	var output map[string]interface{}
+	var output interface{}
 	var err error
 
 	output, err = stp.executeBashScript(execCtx, scriptTool, parameters)
@@ -136,7 +136,7 @@ func (stp *ScriptToolProvider) ExecuteTool(execCtx *execcontext.ExecutionContext
 	}, nil
 }
 
-func (stp *ScriptToolProvider) executeBashScript(execCtx *execcontext.ExecutionContext, scriptTool *ScriptTool, parameters json.RawMessage) (map[string]interface{}, error) {
+func (stp *ScriptToolProvider) executeBashScript(execCtx *execcontext.ExecutionContext, scriptTool *ScriptTool, parameters json.RawMessage) (interface{}, error) {
 	// Get script content
 	scriptContent := scriptTool.Content
 	if scriptContent == "" && scriptTool.ScriptPath != "" {

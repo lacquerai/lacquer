@@ -32,7 +32,9 @@ const (
 	JSON_OUTPUT_SCHEMA_PREFIX = "IMPORTANT: Respond in JSON using the following schema:"
 )
 
-// Executor is the main workflow execution engine
+// Executor orchestrates the execution of workflow steps, managing AI providers,
+// tools, templating, and progress reporting. It handles concurrent step execution,
+// retry logic, and maintains execution context throughout the workflow lifecycle.
 type Executor struct {
 	templateEngine *expression.TemplateEngine
 	modelRegistry  *provider.Registry
@@ -46,7 +48,8 @@ type Executor struct {
 	execCtx *execcontext.ExecutionContext
 }
 
-// ExecutorConfig contains configuration for the executor
+// ExecutorConfig defines the runtime behavior and limits for workflow execution.
+// It controls concurrency, timeouts, retry policies, and observability features.
 type ExecutorConfig struct {
 	MaxConcurrentSteps int           `yaml:"max_concurrent_steps"`
 	DefaultTimeout     time.Duration `yaml:"default_timeout"`
@@ -56,7 +59,8 @@ type ExecutorConfig struct {
 	EnableMetrics      bool          `yaml:"enable_metrics"`
 }
 
-// DefaultExecutorConfig returns a sensible default configuration
+// DefaultExecutorConfig returns production-ready configuration values with
+// moderate concurrency limits and retry policies enabled.
 func DefaultExecutorConfig() *ExecutorConfig {
 	return &ExecutorConfig{
 		MaxConcurrentSteps: 3, // Enable concurrent execution with reasonable limit
@@ -68,7 +72,10 @@ func DefaultExecutorConfig() *ExecutorConfig {
 	}
 }
 
-// NewExecutor creates a new workflow executor with only required providers
+// NewExecutor creates a workflow executor instance with lazy initialization of
+// AI providers, tool registries, and runtime dependencies. Only providers and
+// tools referenced in the workflow are initialized to minimize resource usage.
+// Returns an error if provider initialization or dependency resolution fails.
 func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry, runner *Runner) (*Executor, error) {
 	if config == nil {
 		config = DefaultExecutorConfig()
@@ -134,7 +141,10 @@ func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *a
 	}, nil
 }
 
-// ExecuteWorkflow runs a workflow with progress events sent to the given channel
+// ExecuteWorkflow runs the complete workflow, executing steps sequentially while
+// respecting dependencies and conditional logic. Progress events are sent to the
+// provided channel for real-time monitoring. Returns an error if any step fails
+// or if workflow output collection encounters issues.
 func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progressChan chan<- pkgEvents.ExecutionEvent) error {
 	e.execCtx = execCtx
 	e.progressChan = progressChan
@@ -335,7 +345,6 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 	// Update step result
 	result.EndTime = time.Now()
 	result.Duration = result.EndTime.Sub(start)
-	result.TokenUsage = stepResult.TokenUsage
 	result.Response = stepResult.Response
 	execCtx.IncrementCurrentStep()
 
@@ -370,58 +379,82 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 	return nil
 }
 
+// StepResult contains the execution result of a workflow step, including
+// structured output data and the raw response from the execution.
 type StepResult struct {
-	Output     map[string]interface{}
-	TokenUsage *execcontext.TokenUsage
-	Response   string
+	Output   map[string]interface{}
+	Response string
+}
+
+// NewStepResult creates a StepResult from execution output, automatically
+// formatting structured data and optionally accepting a raw response string.
+// The output is normalized to include both "output" and "outputs" fields.
+func NewStepResult(output interface{}, raw ...string) *StepResult {
+	var response string
+	if len(raw) > 0 {
+		response = raw[0]
+	} else {
+		response = expression.ValueToString(output)
+	}
+
+	stepResultOut := map[string]interface{}{
+		"output": response,
+	}
+
+	switch output.(type) {
+	case map[string]interface{}:
+		stepResultOut["outputs"] = output
+	default:
+		stepResultOut["output"] = output
+	}
+
+	return &StepResult{
+		Output:   stepResultOut,
+		Response: response,
+	}
+}
+
+// NewChildStepResult creates a StepResult for composite steps (like while loops)
+// that contain nested steps. It aggregates all sub-step outputs and includes
+// metadata about the number of iterations executed.
+func NewChildStepResult(subExecCtx *execcontext.ExecutionContext, step *ast.Step) *StepResult {
+	stepOutputs := make(map[string]interface{}, len(subExecCtx.StepResults))
+	for _, subStep := range subExecCtx.StepResults {
+		stepOutputs[subStep.StepID] = subStep.Output
+	}
+
+	return &StepResult{
+		Output: map[string]interface{}{
+			"steps":      stepOutputs,
+			"iterations": subExecCtx.CurrentStepIndex,
+		},
+		Response: expression.ValueToString(stepOutputs),
+	}
 }
 
 func (e *Executor) collectStepResults(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
-	var result *StepResult
-	var err error
-
 	switch {
 	case step.IsAgentStep():
-		result, err = e.executeAgentStep(execCtx, step)
-
+		return e.executeAgentStep(execCtx, step)
 	case step.IsBlockStep():
-		result, err = e.executeBlockStep(execCtx, step)
-
+		return e.executeBlockStep(execCtx, step)
 	case step.IsScriptStep():
-		result, err = e.executeScriptStep(execCtx, step)
-
+		return e.executeScriptStep(execCtx, step)
 	case step.IsContainerStep():
-		result, err = e.executeContainerStep(execCtx, step)
-
+		return e.executeContainerStep(execCtx, step)
 	default:
-		err = fmt.Errorf("unknown step type for step %s", step.ID)
+		return nil, fmt.Errorf("unknown step type for step %s", step.ID)
 	}
-
-	return result, err
 }
 
-func (e *Executor) parseAgentOutput(step *ast.Step, response string) (map[string]interface{}, error) {
+func (e *Executor) parseAgentOutput(step *ast.Step, response string) (*StepResult, error) {
 	// if there is no output schema, return the raw response as there is nothing to parse
 	if len(step.Outputs) == 0 {
-		return map[string]interface{}{
-			"response": response,
-		}, nil
+		return NewStepResult(response), nil
 	}
 
-	stepOutput, parseErr := e.outputParser.ParseStepOutput(step, response)
-	if parseErr != nil {
-		log.Warn().
-			Err(parseErr).
-			Str("step_id", step.ID).
-			Msg("Failed to parse agent output, using raw response")
-
-		// Fallback to raw response
-		return map[string]interface{}{
-			"response": response,
-		}, nil
-	}
-
-	return stepOutput, nil
+	stepOutput := e.outputParser.ParseStepOutput(step, response)
+	return NewStepResult(stepOutput), nil
 }
 
 func (e *Executor) executeWhileStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
@@ -449,20 +482,7 @@ func (e *Executor) executeWhileStep(execCtx *execcontext.ExecutionContext, step 
 		}
 	}
 
-	result := &StepResult{
-		Output: map[string]interface{}{
-			"iterations": iterationCount,
-		},
-		Response: fmt.Sprintf("While loop completed after %d iterations", iterationCount),
-	}
-
-	stepOutputs := make(map[string]interface{}, len(subExecCtx.StepResults))
-	for _, subStep := range subExecCtx.StepResults {
-		stepOutputs[subStep.StepID] = subStep.Output
-	}
-
-	result.Output["steps"] = stepOutputs
-	return result, nil
+	return NewChildStepResult(subExecCtx, step), nil
 }
 
 // executeAgentStep executes a step that uses an AI agent
@@ -473,33 +493,24 @@ func (e *Executor) executeAgentStep(execCtx *execcontext.ExecutionContext, step 
 		return nil, fmt.Errorf("agent %s not found", step.Agent)
 	}
 
-	response, tokenUsage, err := e.executeAgentStepWithTools(execCtx, step, agent)
+	response, err := e.executeAgentStepWithTools(execCtx, step, agent)
 	if err != nil {
 		return nil, err
 	}
 
-	output, err := e.parseAgentOutput(step, response)
-	if err != nil {
-		return nil, err
-	}
-
-	return &StepResult{
-		Output:     output,
-		Response:   response,
-		TokenUsage: tokenUsage,
-	}, nil
+	return e.parseAgentOutput(step, response)
 }
 
 // executeAgentStepWithTools executes an agent step with tool support
-func (e *Executor) executeAgentStepWithTools(execCtx *execcontext.ExecutionContext, step *ast.Step, agent *ast.Agent) (string, *execcontext.TokenUsage, error) {
+func (e *Executor) executeAgentStepWithTools(execCtx *execcontext.ExecutionContext, step *ast.Step, agent *ast.Agent) (string, error) {
 	initialPrompt, err := e.buildInitialPrompt(execCtx, step)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to build initial prompt: %w", err)
+		return "", fmt.Errorf("failed to build initial prompt: %w", err)
 	}
 
 	provider, err := e.modelRegistry.GetProviderForModel(agent.Provider, agent.Model)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to get provider %s for model %s: %w", agent.Provider, agent.Model, err)
+		return "", fmt.Errorf("failed to get provider %s for model %s: %w", agent.Provider, agent.Model, err)
 	}
 
 	return e.executeConversationWithTools(execCtx, provider, agent, initialPrompt, step)
@@ -535,9 +546,7 @@ func (e *Executor) buildInitialPrompt(execCtx *execcontext.ExecutionContext, ste
 }
 
 // executeConversationWithTools handles multi-turn conversation with tool calling
-func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionContext, pr provider.Provider, agent *ast.Agent, initialPrompt string, step *ast.Step) (string, *execcontext.TokenUsage, error) {
-	totalTokenUsage := &execcontext.TokenUsage{}
-
+func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionContext, pr provider.Provider, agent *ast.Agent, initialPrompt string, step *ast.Step) (string, error) {
 	// @TODO: make this configurable in the step & or agent definition
 	maxTurns := 10
 
@@ -555,26 +564,26 @@ func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionCo
 	if _, ok := pr.(provider.LocalModelProvider); ok {
 		request, err := e.createModelRequestWithTools(agent, messages, pr.GetName())
 		if err != nil {
-			return "", totalTokenUsage, fmt.Errorf("failed to create model request: %w", err)
+			return "", fmt.Errorf("failed to create model request: %w", err)
 		}
 
-		responseMessages, tokenUsage, err := pr.Generate(provider.GenerateContext{
+		responseMessages, _, err := pr.Generate(provider.GenerateContext{
 			StepID:  step.ID,
 			RunID:   execCtx.RunID,
 			Context: execCtx.Context.Context,
 		}, request, e.progressChan)
 		if err != nil {
-			return "", tokenUsage, fmt.Errorf("model generation failed: %w", err)
+			return "", fmt.Errorf("model generation failed: %w", err)
 		}
 
-		return getLastContentBlock(responseMessages), tokenUsage, nil
+		return getLastContentBlock(responseMessages), nil
 	}
 
 	for turn := 0; turn < maxTurns; turn++ {
 		// Create request with tools
 		request, err := e.createModelRequestWithTools(agent, messages, pr.GetName())
 		if err != nil {
-			return "", totalTokenUsage, fmt.Errorf("failed to create model request: %w", err)
+			return "", fmt.Errorf("failed to create model request: %w", err)
 		}
 
 		actionID := fmt.Sprintf("turn-%d", turn)
@@ -582,7 +591,7 @@ func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionCo
 		prompt = RemoveJSONSchema(prompt)
 		e.progressChan <- events.NewPromptAgentEvent(step.ID, actionID, execCtx.RunID, prompt)
 
-		responseMessages, tokenUsage, err := pr.Generate(provider.GenerateContext{
+		responseMessages, _, err := pr.Generate(provider.GenerateContext{
 			StepID:  step.ID,
 			RunID:   execCtx.RunID,
 			Context: execCtx.Context.Context,
@@ -590,28 +599,21 @@ func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionCo
 		if err != nil {
 			e.progressChan <- events.NewAgentFailedEvent(step, actionID, execCtx.RunID)
 
-			return "", totalTokenUsage, fmt.Errorf("model generation failed: %w", err)
+			return "", fmt.Errorf("model generation failed: %w", err)
 		}
 
 		e.progressChan <- events.NewAgentCompletedEvent(step, actionID, execCtx.RunID)
 
-		// Accumulate token usage
-		if tokenUsage != nil {
-			totalTokenUsage.PromptTokens += tokenUsage.PromptTokens
-			totalTokenUsage.CompletionTokens += tokenUsage.CompletionTokens
-			totalTokenUsage.TotalTokens += tokenUsage.TotalTokens
-		}
-
 		// Check if the response contains tool calls
 		toolCalls := e.getToolCallsFromResponseMessages(responseMessages)
 		if len(toolCalls) == 0 {
-			return getLastContentBlock(responseMessages), totalTokenUsage, nil
+			return getLastContentBlock(responseMessages), nil
 		}
 
 		// Execute tool calls
 		toolResults, err := e.executeToolCalls(execCtx, toolCalls, step)
 		if err != nil {
-			return "", totalTokenUsage, fmt.Errorf("tool execution failed: %w", err)
+			return "", fmt.Errorf("tool execution failed: %w", err)
 		}
 
 		// add the response messages and the tool results to the messages
@@ -621,7 +623,7 @@ func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionCo
 		messages = append(messages, toolResults...)
 	}
 
-	return "Max conversation turns reached without completion", totalTokenUsage, nil
+	return "Max conversation turns reached without completion", nil
 }
 
 func (e *Executor) getToolCallsFromResponseMessages(responseMessages []provider.Message) []*provider.ToolUseBlockParam {
@@ -809,12 +811,7 @@ func (e *Executor) executeBlockStep(execCtx *execcontext.ExecutionContext, step 
 		return nil, fmt.Errorf("block execution failed: %w", err)
 	}
 
-	return &StepResult{
-		Output: map[string]interface{}{
-			"outputs": result.Outputs,
-		},
-		Response: fmt.Sprintf("%v", result.Outputs),
-	}, nil
+	return NewStepResult(result.Outputs), nil
 }
 
 // executeScriptStep executes a step that runs a Go script
@@ -850,12 +847,7 @@ func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step
 		return nil, fmt.Errorf("script execution failed: %w", err)
 	}
 
-	return &StepResult{
-		Output: map[string]interface{}{
-			"outputs": outputs,
-		},
-		Response: fmt.Sprintf("%v", outputs),
-	}, nil
+	return NewStepResult(outputs), nil
 }
 
 // executeContainerStep executes a step that runs a Docker container
@@ -899,12 +891,7 @@ func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, s
 		return nil, fmt.Errorf("container execution failed: %w", err)
 	}
 
-	return &StepResult{
-		Output: map[string]interface{}{
-			"outputs": outputs,
-		},
-		Response: fmt.Sprintf("%v", outputs),
-	}, nil
+	return NewStepResult(outputs), nil
 }
 
 // evaluateSkipCondition evaluates whether a step should be skipped
@@ -1083,7 +1070,7 @@ func (e *Executor) collectWorkflowOutputs(execCtx *execcontext.ExecutionContext)
 			return fmt.Errorf("failed to render output '%s': %w", key, err)
 		}
 
-		outputs[key] = renderedValue
+		outputs[key] = expression.ValueToString(renderedValue)
 	}
 
 	// Set the rendered outputs in the execution context
@@ -1118,6 +1105,10 @@ func getLastContentBlock(responseMessages []provider.Message) string {
 	return ""
 }
 
+// RemoveJSONSchema strips JSON schema instructions from AI model prompts
+// by removing the "IMPORTANT:" directive and associated JSON schema blocks.
+// This is used to clean prompts for display purposes while preserving the
+// original prompt content.
 func RemoveJSONSchema(input string) string {
 	lines := strings.Split(input, "\n")
 

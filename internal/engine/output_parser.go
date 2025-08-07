@@ -23,18 +23,8 @@ func NewOutputParser() *OutputParser {
 }
 
 // ParseStepOutput parses the agent response according to the step's output definitions
-func (p *OutputParser) ParseStepOutput(step *ast.Step, response string) (map[string]interface{}, error) {
-	// If no outputs are defined, return the raw response as default output
-	if len(step.Outputs) == 0 {
-		return map[string]interface{}{
-			"output": response,
-		}, nil
-	}
-
-	return map[string]interface{}{
-		"output":  response,
-		"outputs": p.extractJSON(response),
-	}, nil
+func (p *OutputParser) ParseStepOutput(step *ast.Step, response string) interface{} {
+	return p.extractJSON(response)
 }
 
 // extractJSON attempts to extract JSON data from the response

@@ -41,7 +41,7 @@ func (e *BashExecutor) Validate(block *Block) error {
 	return nil
 }
 
-func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *Block, inputJSON json.RawMessage) (map[string]interface{}, error) {
+func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *Block, inputJSON json.RawMessage) (interface{}, error) {
 	// Get or prepare the script
 	scriptPath, err := e.getOrPrepare(block)
 	if err != nil {
@@ -116,16 +116,14 @@ func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *
 	var output map[string]interface{}
 	out := stdout.Bytes()
 	if err := json.Unmarshal(out, &output); err != nil {
-		return map[string]interface{}{
-			"output": stdout.String(),
-		}, nil
+		return stdout.String(), nil
 	}
 
 	return output, nil
 }
 
 // Execute runs a Bash script block
-func (e *BashExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (map[string]interface{}, error) {
+func (e *BashExecutor) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (interface{}, error) {
 	jsonInput, err := json.Marshal(inputs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal input: %w", err)

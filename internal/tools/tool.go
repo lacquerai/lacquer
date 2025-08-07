@@ -27,7 +27,7 @@ type ExecutionContext struct {
 type Result struct {
 	ToolName string                 `json:"tool_name"`
 	Success  bool                   `json:"success"`
-	Output   map[string]interface{} `json:"output,omitempty"`
+	Output   interface{}            `json:"output,omitempty"`
 	Error    string                 `json:"error,omitempty"`
 	Duration time.Duration          `json:"duration"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
