@@ -36,19 +36,11 @@ func init() {
 
 // VersionInfo represents version information
 type VersionInfo struct {
-	Version    string            `json:"version" yaml:"version"`
-	Commit     string            `json:"commit" yaml:"commit"`
-	Date       string            `json:"date" yaml:"date"`
-	GoVersion  string            `json:"go_version" yaml:"go_version"`
-	Platform   string            `json:"platform" yaml:"platform"`
-	Components ComponentVersions `json:"components" yaml:"components"`
-}
-
-// ComponentVersions represents versions of different components
-type ComponentVersions struct {
-	Parser  string `json:"parser" yaml:"parser"`
-	Runtime string `json:"runtime" yaml:"runtime"`
-	CLI     string `json:"cli" yaml:"cli"`
+	Version   string `json:"version" yaml:"version"`
+	Commit    string `json:"commit" yaml:"commit"`
+	Date      string `json:"date" yaml:"date"`
+	GoVersion string `json:"go_version" yaml:"go_version"`
+	Platform  string `json:"platform" yaml:"platform"`
 }
 
 func showVersion(cmd *cobra.Command) {
@@ -58,11 +50,6 @@ func showVersion(cmd *cobra.Command) {
 		Date:      Date,
 		GoVersion: GoVersion,
 		Platform:  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
-		Components: ComponentVersions{
-			Parser:  "1.0.0", // Will be from parser package
-			Runtime: "1.0.0", // Will be from runtime package
-			CLI:     Version,
-		},
 	}
 
 	outputFormat := viper.GetString("output")
@@ -83,11 +70,4 @@ func printText(info VersionInfo) {
 	fmt.Printf("Built: %s\n", info.Date)
 	fmt.Printf("Go version: %s\n", info.GoVersion)
 	fmt.Printf("Platform: %s\n", info.Platform)
-
-	if viper.GetBool("verbose") {
-		fmt.Printf("\nComponent versions:\n")
-		fmt.Printf("  Parser: %s\n", info.Components.Parser)
-		fmt.Printf("  Runtime: %s\n", info.Components.Runtime)
-		fmt.Printf("  CLI: %s\n", info.Components.CLI)
-	}
 }
