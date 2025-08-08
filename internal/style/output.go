@@ -367,6 +367,10 @@ func Warning(w io.Writer, message string) {
 	fmt.Fprintf(w, "%s %s\n", icon, msg)
 }
 
+func InfoIcon() string {
+	return lipgloss.NewStyle().Foreground(InfoColor).Bold(true).Render("ℹ")
+}
+
 // Info prints an info message with styling
 func Info(w io.Writer, message string) {
 	icon := lipgloss.NewStyle().Foreground(InfoColor).Bold(true).Render("ℹ")

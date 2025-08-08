@@ -38,6 +38,10 @@ Visit https://lacquer.ai/docs for documentation and examples.`,
 	Version: getVersion(),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		initLogging()
+		go triggerBackgroundUpdateCheck()
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		showUpdateNotificationIfAvailable()
 	},
 }
 
@@ -152,4 +156,30 @@ func getVersion() string {
 	)
 
 	return fmt.Sprintf("%s (commit: %s, built: %s, go: %s)", version, commit, date, goVersion)
+}
+
+// triggerBackgroundUpdateCheck performs a background check for updates if the cache is expired
+func triggerBackgroundUpdateCheck() {
+	// Create a dummy command for the update check (won't be used for output)
+	dummyCmd := &cobra.Command{}
+
+	// This will check for updates and cache the result for future use
+	// It runs silently in the background and doesn't print anything
+	checkForUpdate(dummyCmd, false)
+}
+
+// showUpdateNotificationIfAvailable checks for available updates and shows a notification
+func showUpdateNotificationIfAvailable() {
+	// Skip notification if quiet mode is enabled
+	if viper.GetBool("quiet") {
+		return
+	}
+
+	// Check if an update is available (from cache only, no network calls)
+	updateInfo := ShouldShowUpdateNotification()
+	if updateInfo != nil {
+		// Print the update notification on the last line
+		fmt.Fprintf(os.Stderr, "\n%s A newer version (%s) is available! Run 'laq update' to upgrade.\n",
+			style.InfoIcon(), updateInfo.LatestVersion)
+	}
 }
