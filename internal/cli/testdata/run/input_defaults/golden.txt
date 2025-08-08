@@ -1,0 +1,14 @@
+
+Running input-defaults workflow (1 steps)
+
+[Spinner spinner-21]: Running step validate_inputs (1/1)
+[Finish spinner-21]✓  Running step validate_inputs (1/1)
+
+
+✓ Workflow completed successfully (TIME)
+
+Outputs
+
+all_inputs: {additional_messages: ["Have a great day!", "Thank you for using Lacquer!"], formatting_options: {add_borders: true, indent_level: 2, uppercase: false}, greeting_style: "formal", include_timestamp: true, optional_note: null, repetitions: 2, required_name: "Alice", user_code: "LAQ-001"}
+
+STDERR:

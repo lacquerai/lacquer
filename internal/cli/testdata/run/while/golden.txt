@@ -1,20 +1,20 @@
 
 Running while workflow (2 steps)
 
-[Spinner spinner-0]: Running step while_loop (1/2)
-[Spinner spinner-1]: Running step print_text (1/2)
-[Finish spinner-1]✓  Running step print_text (1/2)
+[Spinner spinner-29]: Running step while_loop (1/2)
+[Spinner spinner-30]: Running step print_text (1/2)
+[Finish spinner-30]✓  Running step print_text (1/2)
 
-[Spinner spinner-2]: Running step print_text (1/2)
-[Finish spinner-2]✓  Running step print_text (1/2)
+[Spinner spinner-31]: Running step print_text (1/2)
+[Finish spinner-31]✓  Running step print_text (1/2)
 
-[Spinner spinner-3]: Running step print_text (1/2)
-[Finish spinner-3]✓  Running step print_text (1/2)
+[Spinner spinner-32]: Running step print_text (1/2)
+[Finish spinner-32]✓  Running step print_text (1/2)
 
-[Finish spinner-0]✓  Running step while_loop (1/2)
+[Finish spinner-29]✓  Running step while_loop (1/2)
 
-[Spinner spinner-4]: Running step print_text (2/2)
-[Finish spinner-4]✓  Running step print_text (2/2)
+[Spinner spinner-33]: Running step print_text (2/2)
+[Finish spinner-33]✓  Running step print_text (2/2)
 
 
 ✓ Workflow completed successfully (TIME)

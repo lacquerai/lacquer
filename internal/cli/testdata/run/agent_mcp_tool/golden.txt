@@ -1,26 +1,48 @@
 
 Running agent-mcp-tool workflow (1 steps)
 
-[Spinner bc74306]: Running step convert_time (1/1)
-[bc74306] + +
-   Please help me convert the time "2024-03-15 10:30:00" from UTC to America/Los_Angeles.
-
-Use the available MCP time tools to:
-1. Parse the source time in the source timezone
-2. Convert it to the target...
-[bc74306] +✓ -...
-[bc74306] +   Using tool convert_time (source_timezone: UTC; target_timezone: America/Los_Angeles; time: 10:30)
-[bc74306] +✓ 
-[bc74306] +   Tool result: {"content":[{"text":"{\n  \"source\": {\n    \"timezone\": \"UTC\",\n    \"datetime\": \"2025-07-14T10:30:00+00:00\",\n    \"is_dst\": false\n  },\n  \"target\": {\n    \"timezone\": \"Am...
-[bc74306] +✓ -...
-[Finish bc74306]✓  Running step convert_time (1/1)
-   ✓ Please help me convert the time "2024-03-15 10:30:00" from UTC to America/Los_Angeles.
-
-Use the available MCP time tools to:
-1. Parse the source time in the source timezone
-2. Convert it to the target
-   ✓ Using tool convert_time (source_timezone: UTC; target_timezone: America/Los_Angeles; time: 10:30)
-   ✓ Tool result: {"content":[{"text":"{\n  \"source\": {\n    \"timezone\": \"UTC\",\n    \"datetime\": \"2025-07-14T10:30:00+00:00\",\n    \"is_dst\": false\n  },\n  \"target\": {\n    \"timezone\": \"Am
+[Spinner spinner-4]: Running step convert_time (1/1)
+[spinner-4] + +
+   Please help me convert the time "$inputs.source_time }}" from UTC to America/Los_Angeles.
+   
+   Use the available MCP time tools to:
+   1. Parse the source time in the source timezone
+   2. Convert it to the target timezone
+   3. Provide the converted time and any additional timezone information
+   
+   Please provide a detailed response with the converted time and timezone details.
+[spinner-4] +✓ -
++  
+  + + +  +  -
++  
+  
+[spinner-4] +   Using tool convert_time (source_timezone:
+   UTC; target_timezone:
+   America/Los_Angeles; time:
+   10:30)
+[spinner-4] +✓ +  + + +  
+[spinner-4] +   Tool result: {"content":[{"text":"{\n  \"source\": {\n    \"timezone\": \"UTC\",\n
+   \"datetime\": \"2025-08-08T10:30:00+00:00\",\n    \"is_dst\": false\n  },\n  \"target\": {\n
+   \"timezone\": \"America/Los_Angeles\",\n    \"datetime\": \"2025-08-08T03:30:00-07:00\",\n
+   \"is_dst\": true\n  },\n  \"time_difference\": \"-7.0h\"\n}","type":"text"}],"isError":false}
+[spinner-4] +✓ +  + + +  
+[Finish spinner-4]✓  Running step convert_time (1/1)
+   ✓ Please help me convert the time "$inputs.source_time }}" from UTC to America/Los_Angeles.
+     
+     Use the available MCP time tools to:
+     1. Parse the source time in the source timezone
+     2. Convert it to the target timezone
+     3. Provide the converted time and any additional timezone information
+     
+     Please provide a detailed response with the converted time and timezone details.
+   ✓ Using tool convert_time (source_timezone:
+     UTC; target_timezone:
+     America/Los_Angeles; time:
+     10:30)
+   ✓ Tool result: {"content":[{"text":"{\n  \"source\": {\n    \"timezone\": \"UTC\",\n
+     \"datetime\": \"2025-08-08T10:30:00+00:00\",\n    \"is_dst\": false\n  },\n  \"target\": {\n
+     \"timezone\": \"America/Los_Angeles\",\n    \"datetime\": \"2025-08-08T03:30:00-07:00\",\n
+     \"is_dst\": true\n  },\n  \"time_difference\": \"-7.0h\"\n}","type":"text"}],"isError":false}
 
 
 ✓ Workflow completed successfully (TIME)

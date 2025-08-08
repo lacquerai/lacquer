@@ -38,6 +38,14 @@ func (te *TemplateEngine) Render(template string, execCtx *execcontext.Execution
 	}
 
 	result := template
+	// Strip trailing comments (anything after //)
+	if commentIndex := strings.Index(result, "//"); commentIndex != -1 {
+		result = strings.TrimSpace(result[:commentIndex])
+	}
+
+	if result == "" {
+		return nil, nil
+	}
 
 	// Replace each variable reference
 	for _, match := range matches {
@@ -47,6 +55,7 @@ func (te *TemplateEngine) Render(template string, execCtx *execcontext.Execution
 
 		fullMatch := match[0]                        // Full match including {{ }}
 		rawExpression := strings.TrimSpace(match[2]) // Expression content
+
 		isEscaped := match[1] != ""
 		if isEscaped {
 			result = strings.Replace(result, fullMatch, strings.TrimPrefix(fullMatch, match[1]), 1)
@@ -58,7 +67,7 @@ func (te *TemplateEngine) Render(template string, execCtx *execcontext.Execution
 			return "", fmt.Errorf("failed to evaluate expression %s: %w", fullMatch, err)
 		}
 
-		if len(matches) == 1 && template == fullMatch {
+		if len(matches) == 1 && result == fullMatch {
 			return value, nil
 		}
 
@@ -72,10 +81,12 @@ func (te *TemplateEngine) Render(template string, execCtx *execcontext.Execution
 // ValueToString converts a value to its string representation
 func ValueToString(value interface{}) string {
 	if value == nil {
-		return ""
+		return "null"
 	}
 
 	switch v := value.(type) {
+	case nil:
+		return "null"
 	case string:
 		return v
 	case int:
@@ -90,12 +101,16 @@ func ValueToString(value interface{}) string {
 		}
 		return "false"
 	case []interface{}:
-		// Convert arrays to comma-separated strings
+		// Convert arrays to comma-separated strings wrapped in brackets
 		strs := make([]string, len(v))
 		for i, item := range v {
-			strs[i] = ValueToString(item)
+			if _, ok := item.(string); ok {
+				strs[i] = fmt.Sprintf("%q", item)
+			} else {
+				strs[i] = ValueToString(item)
+			}
 		}
-		return strings.Join(strs, ", ")
+		return "[" + strings.Join(strs, ", ") + "]"
 	case map[string]interface{}:
 		// For maps, return a JSON-like representation
 		keys := make([]string, 0, len(v))
@@ -106,7 +121,12 @@ func ValueToString(value interface{}) string {
 
 		parts := make([]string, 0, len(v))
 		for _, k := range keys {
-			parts = append(parts, fmt.Sprintf("%s: %v", k, ValueToString(v[k])))
+			if _, ok := v[k].(string); ok {
+				parts = append(parts, fmt.Sprintf("%s: %q", k, v[k]))
+			} else {
+				strVal := ValueToString(v[k])
+				parts = append(parts, fmt.Sprintf("%s: %v", k, strVal))
+			}
 		}
 		return "{" + strings.Join(parts, ", ") + "}"
 	default:
@@ -134,9 +154,14 @@ func (vr *VariableResolver) ResolveVariable(varPath string, execCtx *execcontext
 	// Handle different variable scopes
 	switch parts[0] {
 	case "inputs":
+		if len(parts) == 1 {
+			return execCtx.Inputs, nil
+		}
+
 		if len(parts) < 2 {
 			return nil, fmt.Errorf("inputs variable requires a parameter name")
 		}
+
 		value, exists := execCtx.GetInput(parts[1])
 		if !exists {
 			return nil, fmt.Errorf("input parameter %s not found", parts[1])

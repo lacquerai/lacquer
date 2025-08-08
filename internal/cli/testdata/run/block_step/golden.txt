@@ -1,33 +1,32 @@
 
 Running block-step workflow (3 steps)
 
-[Spinner 42313a4]: Running step first_processing (1/3)
+[Spinner spinner-15]: Running step first_processing (1/3)
 
 Running text-processor workflow (1 steps)
 
-[Spinner be26e56]: Running step process_text (1/1)
-[Finish be26e56]✓  Running step process_text (1/1)
+[Spinner spinner-16]: Running step process_text (1/1)
+[Finish spinner-16]✓  Running step process_text (1/1)
 
-[Finish 42313a4]✓  Running step first_processing (1/3)
+[Finish spinner-15]✓  Running step first_processing (1/3)
 
-[Spinner e6f0e5e]: Running step second_processing (2/3)
-
-Running text-processor workflow (1 steps)
-
-[Spinner d75475b]: Running step process_text (1/1)
-[Finish d75475b]✓  Running step process_text (1/1)
-
-[Finish e6f0e5e]✓  Running step second_processing (2/3)
-
-[Spinner 498af0b]: Running step length_check (3/3)
+[Spinner spinner-17]: Running step second_processing (2/1)
 
 Running text-processor workflow (1 steps)
 
-[Spinner ffe9612]: Running step process_text (1/1)
-[Finish ffe9612]✓  Running step process_text (1/1)
+[Spinner spinner-18]: Running step process_text (1/1)
+[Finish spinner-18]✓  Running step process_text (1/1)
 
-[Finish 498af0b]✓  Running step length_check (3/3)
+[Finish spinner-17]✓  Running step second_processing (2/1)
 
+[Spinner spinner-19]: Running step length_check (3/1)
+
+Running text-processor workflow (1 steps)
+
+[Spinner spinner-20]: Running step process_text (1/1)
+[Finish spinner-20]✓  Running step process_text (1/1)
+
+[Finish spinner-19]
 
 ✓ Workflow completed successfully (TIME)
 

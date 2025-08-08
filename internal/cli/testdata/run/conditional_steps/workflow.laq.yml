@@ -44,7 +44,8 @@ workflow:
           description: Whether further analysis is needed
 
     - id: conditional_skip_check
-      action: update_state
+      run: |
+        echo "conditional_skip_check"
       condition: ${{ !steps.check_number.outputs.should_analyze }}
       updates:
         skip_analysis: true
@@ -83,7 +84,8 @@ workflow:
           description: Whether analysis was skipped
 
     - id: finalize_analysis
-      action: update_state
+      run: |
+        echo "finalize_analysis"
       condition: ${{ inputs.mode == 'full' }}
       updates:
         analysis_complete: true

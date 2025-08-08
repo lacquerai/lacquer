@@ -25,7 +25,8 @@ workflow:
 
   steps:
     - id: initialize_state
-      action: update_state
+      run: |
+        echo "Initializing state with value: ${{ inputs.initial_value }}"
       updates:
         counter: ${{ inputs.initial_value }}
         total: ${{ inputs.initial_value }}
@@ -72,7 +73,8 @@ workflow:
           description: The operation performed
 
     - id: finalize_state
-      action: update_state
+      run: |
+        echo "Finalizing state with value: ${{ state.counter }}"
       updates:
         metadata.total_operations: ${{ length(state.operations) }}
         final_result: ${{ state.counter }}

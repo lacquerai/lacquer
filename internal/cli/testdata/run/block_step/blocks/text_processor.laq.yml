@@ -50,8 +50,8 @@ workflow:
             ;;
         esac
       with:
-        text: "{{ inputs.text }}"
-        operation: "{{ inputs.operation }}"
+        text: ${{ inputs.text }}
+        operation: ${{ inputs.operation }}
       outputs:
         processed_text:
           type: string
@@ -67,7 +67,7 @@ workflow:
           description: Length result (only for length operation)
 
   outputs:
-    result: "{{ steps.process_text.outputs.processed_text }}"
-    operation_performed: "{{ steps.process_text.outputs.operation }}"
-    text_length: "{{ steps.process_text.outputs.original_length }}"
-    calculated_length: "{{ steps.process_text.outputs.length }}"
+    result: ${{ steps.process_text.outputs.processed_text }}
+    operation_performed: ${{ steps.process_text.outputs.operation }}
+    text_length: ${{ steps.process_text.outputs.original_length }}
+    calculated_length: ${{ steps.process_text.outputs.length }}

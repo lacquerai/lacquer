@@ -1,23 +1,23 @@
 
 Running hello-world workflow (2 steps)
 
-[Spinner 61bec03]: Running step say_hello_anthropic (1/2)
-[61bec03] + +
+[Spinner spinner-0]: Running step say_hello_anthropic (1/2)
+[spinner-0] + +
    Say hello to John Doe in a creative and friendly way.
-Make it warm and welcoming!
-[61bec03] +✓ 
-[Finish 61bec03]✓  Running step say_hello_anthropic (1/2)
+   Make it warm and welcoming!
+[spinner-0] +✓ +  
+[Finish spinner-0]✓  Running step say_hello_anthropic (1/2)
    ✓ Say hello to John Doe in a creative and friendly way.
-Make it warm and welcoming!
+     Make it warm and welcoming!
 
-[Spinner e798266]: Running step say_hello_openai (2/2)
-[e798266] + +
+[Spinner spinner-1]: Running step say_hello_openai (2/2)
+[spinner-1] + +
    Say hello to John Doe in a creative and friendly way.
-Make it warm and welcoming!
-[e798266] +✓ 
-[Finish e798266]✓  Running step say_hello_openai (2/2)
+   Make it warm and welcoming!
+[spinner-1] +✓ +  
+[Finish spinner-1]✓  Running step say_hello_openai (2/2)
    ✓ Say hello to John Doe in a creative and friendly way.
-Make it warm and welcoming!
+     Make it warm and welcoming!
 
 
 ✓ Workflow completed successfully (TIME)

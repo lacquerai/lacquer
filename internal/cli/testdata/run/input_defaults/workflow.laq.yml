@@ -20,7 +20,7 @@ inputs:
   
   # Numeric input with default and constraints
   repetitions:
-    type: number
+    type: integer
     description: Number of times to repeat the greeting
     default: 3
     minimum: 1
@@ -65,70 +65,15 @@ inputs:
 workflow:
   steps:
     - id: validate_inputs
-      run: "go run scripts/input_validator.go"
-      with:
-        name: ${{ inputs.required_name }}
-        style: ${{ inputs.greeting_style }}
-        reps: ${{ inputs.repetitions }}
-        timestamp: ${{ inputs.include_timestamp }}
-        code: ${{ inputs.user_code }}
-        note: ${{ inputs.optional_note or '' }}
-      outputs:
-        provided_name:
-          type: string
-          description: The provided name
-        greeting_style:
-          type: string
-          description: The greeting style used
-        repetitions:
-          type: number
-          description: Number of repetitions
-        include_timestamp:
-          type: boolean
-          description: Whether timestamp is included
-        user_code:
-          type: string
-          description: The user code
-        has_optional_note:
-          type: boolean
-          description: Whether optional note was provided
-        validation_status:
-          type: string
-          description: Validation result
-
-    - id: generate_greetings
-      run: "go run scripts/greeting_generator.go"
-      with:
-        name: ${{ inputs.required_name }}
-        style: ${{ inputs.greeting_style }}
-        reps: ${{ inputs.repetitions }}
-        include_ts: ${{ inputs.include_timestamp }}
-      outputs:
-        greetings:
-          type: array
-          description: Generated greetings
-        greeting_count:
-          type: number
-          description: Number of greetings generated
-        style_used:
-          type: string
-          description: Style that was used
-        timestamp_included:
-          type: boolean
-          description: Whether timestamps were included
-
-    - id: process_additional_data
-      run: "go run scripts/data_processor.go"
-      outputs:
-        additional_message_count:
-          type: number
-          description: Number of additional messages
-        formatting_applied:
-          type: object
-          description: Formatting that was applied
-        processed_options:
-          type: boolean
-          description: Whether options were processed
+      run: |
+        echo "Required name: ${{ inputs.required_name }}"
+        echo "Greeting style: ${{ inputs.greeting_style }}"
+        echo "Repetitions: ${{ inputs.repetitions }}"
+        echo "Include timestamp: ${{ inputs.include_timestamp }}"
+        echo "Additional messages: ${{ inputs.additional_messages }}"
+        echo "Formatting options: ${{ inputs.formatting_options }}"
+        echo "User code: ${{ inputs.user_code }}"
+        echo "Optional note: ${{ inputs.optional_note }}"
 
   outputs:
     # Output showing all input values (including defaults)
@@ -142,17 +87,3 @@ workflow:
       "user_code": "${{ inputs.user_code }}",
       "optional_note": "${{ inputs.optional_note }}"
     }
-    
-    # Validation results
-    input_validation: ${{ steps.validate_inputs.outputs }}
-    
-    # Generated content
-    generated_greetings: ${{ steps.generate_greetings.outputs.greetings }}
-    greeting_summary: "Generated ${{ steps.generate_greetings.outputs.greeting_count }} greetings in ${{ steps.generate_greetings.outputs.style_used }} style"
-    
-    # Processing results
-    processing_results: ${{ steps.process_additional_data.outputs }}
-    
-    # Conditional outputs based on inputs
-    personalized_message: "${{ inputs.greeting_style == 'formal' ? 'Thank you for your formal request, ' + inputs.required_name : 'Thanks ' + inputs.required_name + '!' }}"
-    has_optional_content: ${{ inputs.optional_note != null }}

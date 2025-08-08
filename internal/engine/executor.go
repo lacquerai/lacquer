@@ -953,15 +953,6 @@ func (e *Executor) renderValueRecursively(value interface{}, execCtx *execcontex
 	}
 }
 
-// getKeys returns the keys of a map as a slice
-func getKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
 // getRequiredProviders extracts the unique set of providers used in a workflow
 func getRequiredProviders(workflow *ast.Workflow) map[string]map[string]interface{} {
 	providers := make(map[string]map[string]interface{})
@@ -1051,21 +1042,13 @@ func (e *Executor) collectWorkflowOutputs(execCtx *execcontext.ExecutionContext)
 	outputs := make(map[string]interface{})
 
 	for key, valueTemplate := range workflowOutputs {
-		// Convert the template value to a string for rendering
-		templateStr, ok := valueTemplate.(string)
-		if !ok {
-			// If it's not a string template, use the value as-is
-			outputs[key] = valueTemplate
-			continue
-		}
-
-		// Render the template using the template engine
-		renderedValue, err := e.templateEngine.Render(templateStr, execCtx)
+		// Render the value recursively to handle nested structures with templates
+		renderedValue, err := e.renderValueRecursively(valueTemplate, execCtx)
 		if err != nil {
 			log.Error().
 				Err(err).
 				Str("key", key).
-				Str("template", templateStr).
+				Interface("template", valueTemplate).
 				Msg("Failed to render workflow output template")
 			return fmt.Errorf("failed to render output '%s': %w", key, err)
 		}

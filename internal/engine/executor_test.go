@@ -411,20 +411,6 @@ func TestExecutor_ExecuteAgentStep_MissingModel(t *testing.T) {
 	assert.Contains(t, err.Error(), "model nonexistent-model not supported by provider mock")
 }
 
-func TestGetKeys(t *testing.T) {
-	m := map[string]interface{}{
-		"a": 1,
-		"b": 2,
-		"c": 3,
-	}
-
-	keys := getKeys(m)
-	assert.Len(t, keys, 3)
-	assert.Contains(t, keys, "a")
-	assert.Contains(t, keys, "b")
-	assert.Contains(t, keys, "c")
-}
-
 func TestExecutor_CollectWorkflowOutputs(t *testing.T) {
 	tests := []struct {
 		name            string

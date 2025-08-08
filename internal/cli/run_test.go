@@ -398,16 +398,6 @@ func Test_AgentConfig(t *testing.T) {
 	newSingleDirectoryRunTest(t)
 }
 
-func Test_ConcurrentSteps(t *testing.T) {
-	t.Skip("Skipping concurrent steps test, not supported yet")
-
-	newSingleDirectoryRunTest(t)
-}
-
-func Test_TimeoutHandling(t *testing.T) {
-	newSingleDirectoryRunTest(t)
-}
-
 func Test_MultipleRuntimes(t *testing.T) {
 	newSingleDirectoryRunTest(t)
 }

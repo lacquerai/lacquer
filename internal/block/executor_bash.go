@@ -104,7 +104,8 @@ func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *
 				}
 				return nil, fmt.Errorf("block execution failed: %s", stderr.String())
 			}
-			return nil, fmt.Errorf("block execution failed: %w", err)
+
+			return nil, fmt.Errorf("block execution failed: %w: %s", err, stdout.String())
 		}
 	case <-execCtx.Context.Context.Done():
 		if cmd.Process != nil {
