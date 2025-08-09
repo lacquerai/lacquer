@@ -10,7 +10,8 @@ import (
 	"github.com/lacquerai/lacquer/internal/execcontext"
 )
 
-var expressionPattern = regexp.MustCompile(`(\$)?\$\{\{\s*(.*?)\s*\}\}`)
+// VariablePattern is a regular expression that matches variable references in a template.
+var VariablePattern = regexp.MustCompile(`(\$)?\$\{\{\s*(.*?)\s*\}\}`)
 
 // TemplateEngine handles variable interpolation and template rendering
 type TemplateEngine struct {
@@ -32,7 +33,7 @@ func (te *TemplateEngine) Render(template string, execCtx *execcontext.Execution
 	}
 
 	// Find all expressions
-	matches := expressionPattern.FindAllStringSubmatch(template, -1)
+	matches := VariablePattern.FindAllStringSubmatch(template, -1)
 	if len(matches) == 0 {
 		return template, nil // No variables to substitute
 	}

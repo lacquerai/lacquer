@@ -63,7 +63,6 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 				Title:       "Use correct file extension",
 				Description: "Lacquer workflow files must have .laq.yaml or .laq.yml extension",
 				Examples:    []string{"my-workflow.laq.yaml", "pipeline.laq.yml"},
-				DocsURL:     DocsURL + "/concepts/files",
 			},
 		})
 		return nil, reporter.ToError()
@@ -98,7 +97,7 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 			Category: "file",
 			Suggestion: &ErrorSuggestion{
 				Title:       "Reduce file size",
-				Description: "Large workflow files can cause performance issues. Consider splitting into smaller workflows.",
+				Description: "Large workflow files can cause io issues. Consider splitting into smaller workflows.",
 			},
 		})
 		return nil, reporter.ToError()
@@ -138,7 +137,6 @@ func (p *YAMLParser) ParseBytes(data []byte, filename string) (*ast.Workflow, er
 					"    - id: hello",
 					"      prompt: \"Hello, world!\"",
 				},
-				DocsURL: DocsURL + "/getting-started",
 			},
 		})
 		return nil, reporter.ToError()
@@ -174,7 +172,6 @@ func (p *YAMLParser) ParseBytes(data []byte, filename string) (*ast.Workflow, er
 		workflow.Agents[name] = agent
 	}
 
-	// Perform semantic validation
 	if p.semanticValidator != nil {
 		if err := p.validateSemanticsEnhanced(&workflow, reporter); err != nil {
 			return nil, err
@@ -250,7 +247,6 @@ func findNodeByPath(node *yaml.Node, path string) ast.Position {
 			}
 
 		case yaml.SequenceNode:
-			// Parse the part as an array index
 			index := 0
 			if _, err := fmt.Sscanf(part, "%d", &index); err != nil {
 				return ast.Position{Line: current.Line, Column: current.Column}
@@ -263,7 +259,6 @@ func findNodeByPath(node *yaml.Node, path string) ast.Position {
 			}
 
 		default:
-			// For scalar nodes or unknown types, return current position
 			return ast.Position{Line: current.Line, Column: current.Column}
 		}
 	}
@@ -277,7 +272,6 @@ func findNodeByPath(node *yaml.Node, path string) ast.Position {
 
 // parsePath converts different path formats to a uniform slice of parts
 func parsePath(path string) []string {
-	// Handle JSON schema style paths like "/workflow/steps/0/agent"
 	if strings.HasPrefix(path, "/") {
 		return strings.Split(strings.TrimPrefix(path, "/"), "/")
 	}
@@ -297,10 +291,8 @@ func extractPositionFromPathSimple(path string, source []byte) ast.Position {
 		return ast.Position{Line: 1, Column: 1}
 	}
 
-	// Remove leading slash and split path
 	pathParts := strings.Split(strings.TrimPrefix(path, "/"), "/")
 
-	// Try to find the field in the YAML
 	lines := strings.Split(string(source), "\n")
 	for lineNum, line := range lines {
 		for _, part := range pathParts {
@@ -321,12 +313,10 @@ func isValidWorkflowFile(filename string) bool {
 	ext := filepath.Ext(filename)
 	base := strings.TrimSuffix(filepath.Base(filename), ext)
 
-	// Check for .laq.yaml extension
 	if ext == ".yaml" && strings.HasSuffix(base, ".laq") {
 		return true
 	}
 
-	// Also accept .yml variant
 	if ext == ".yml" && strings.HasSuffix(base, ".laq") {
 		return true
 	}
@@ -362,26 +352,24 @@ func (p *YAMLParser) enhanceYAMLError(err error, data []byte, reporter *ErrorRep
 			for _, errMsg := range yamlErr.Errors {
 				pos := extractPositionFromMessage(errMsg, data)
 				reporter.AddError(&EnhancedError{
-					ID:         generateErrorID("yaml_type", pos),
-					Severity:   SeverityError,
-					Title:      "YAML type error",
-					Message:    errMsg,
-					Position:   pos,
-					Category:   "yaml",
-					Suggestion: reporter.generateYAMLSuggestion(errMsg),
+					ID:       generateErrorID("yaml_type", pos),
+					Severity: SeverityError,
+					Title:    "YAML type error",
+					Message:  errMsg,
+					Position: pos,
+					Category: "yaml",
 				})
 			}
 		}
 	default:
 		pos := extractPositionFromMessage(err.Error(), data)
 		reporter.AddError(&EnhancedError{
-			ID:         generateErrorID("yaml_parse", pos),
-			Severity:   SeverityError,
-			Title:      "YAML parsing error",
-			Message:    err.Error(),
-			Position:   pos,
-			Category:   "yaml",
-			Suggestion: reporter.generateYAMLSuggestion(err.Error()),
+			ID:       generateErrorID("yaml_parse", pos),
+			Severity: SeverityError,
+			Title:    "YAML parsing error",
+			Message:  err.Error(),
+			Position: pos,
+			Category: "yaml",
 		})
 	}
 
@@ -409,13 +397,12 @@ func (p *YAMLParser) validateSemanticsEnhanced(workflow *ast.Workflow, reporter 
 			}
 
 			reporter.AddError(&EnhancedError{
-				ID:         generateErrorID("semantic", pos),
-				Severity:   SeverityError,
-				Title:      "Validation error",
-				Message:    validationErr.Message,
-				Position:   pos,
-				Category:   "semantic",
-				Suggestion: reporter.generateSemanticSuggestion(validationErr.Message),
+				ID:       generateErrorID("semantic", pos),
+				Severity: SeverityError,
+				Title:    "Validation error",
+				Message:  validationErr.Message,
+				Position: pos,
+				Category: "semantic",
 			})
 		}
 

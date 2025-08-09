@@ -161,64 +161,6 @@ workflow:
 	})
 }
 
-func TestErrorSuggestions(t *testing.T) {
-	reporter := NewErrorReporter(nil, "test.yaml")
-
-	t.Run("YAML suggestions", func(t *testing.T) {
-		tests := []struct {
-			message  string
-			expected string
-		}{
-			{"indentation error", "Fix YAML indentation"},
-			{"duplicate key found", "Remove duplicate keys"},
-			{"cannot unmarshal string into int", "Check data type"},
-			{"unknown yaml error", "Check YAML syntax"},
-		}
-
-		for _, tt := range tests {
-			suggestion := reporter.generateYAMLSuggestion(tt.message)
-			assert.Contains(t, suggestion.Title, tt.expected)
-			assert.NotEmpty(t, suggestion.Description)
-		}
-	})
-
-	t.Run("Schema suggestions", func(t *testing.T) {
-		tests := []struct {
-			message  string
-			expected string
-		}{
-			{"missing version field", "Set the version field"},
-			{"invalid agents definition", "Check agent definitions"},
-			{"steps validation failed", "Check step definitions"},
-			{"unknown schema error", "Check the schema requirements"},
-		}
-
-		for _, tt := range tests {
-			suggestion := reporter.generateSchemaSuggestion(tt.message)
-			assert.Contains(t, suggestion.Title, tt.expected)
-			assert.NotEmpty(t, suggestion.Description)
-		}
-	})
-
-	t.Run("Semantic suggestions", func(t *testing.T) {
-		tests := []struct {
-			message  string
-			expected string
-		}{
-			{"agent 'foo' not found", "Define the agent"},
-			{"circular dependency detected", "Remove circular dependencies"},
-			{"undefined variable reference", "Check variable references"},
-			{"unknown semantic error", "Check workflow logic"},
-		}
-
-		for _, tt := range tests {
-			suggestion := reporter.generateSemanticSuggestion(tt.message)
-			assert.Contains(t, suggestion.Title, tt.expected)
-			assert.NotEmpty(t, suggestion.Description)
-		}
-	})
-}
-
 func TestMultiErrorEnhanced(t *testing.T) {
 	t.Run("single error", func(t *testing.T) {
 		err := &MultiErrorEnhanced{

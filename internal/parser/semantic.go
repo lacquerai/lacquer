@@ -2,10 +2,10 @@ package parser
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/expression"
 )
 
 // SemanticValidator provides comprehensive semantic validation for workflows
@@ -42,10 +42,8 @@ func (sv *SemanticValidator) ValidateWorkflow(w *ast.Workflow) *ast.ValidationRe
 		variables: make(map[string]bool),
 	}
 
-	// Build context maps
 	sv.buildValidationContext(ctx)
 
-	// Perform semantic checks
 	sv.validateStepDependencies(ctx, result)
 	sv.validateControlFlow(ctx, result)
 	sv.validateResourceUsage(ctx, result)
@@ -57,24 +55,22 @@ func (sv *SemanticValidator) ValidateWorkflow(w *ast.Workflow) *ast.ValidationRe
 type validationContext struct {
 	workflow  *ast.Workflow
 	agents    map[string]*ast.Agent
-	stepIDs   map[string]int // stepID -> stepIndex
+	stepIDs   map[string]int
 	inputs    map[string]*ast.InputParam
 	outputs   map[string]interface{}
-	variables map[string]bool // All variables defined in workflow
+	variables map[string]bool
 }
 
 // buildValidationContext populates the validation context
 func (sv *SemanticValidator) buildValidationContext(ctx *validationContext) {
 	w := ctx.workflow
 
-	// Collect agents
 	if w.Agents != nil {
 		for name, agent := range w.Agents {
 			ctx.agents[name] = agent
 		}
 	}
 
-	// Collect step IDs
 	if w.Workflow != nil && w.Workflow.Steps != nil {
 		for i, step := range w.Workflow.Steps {
 			if step.ID != "" {
@@ -83,21 +79,18 @@ func (sv *SemanticValidator) buildValidationContext(ctx *validationContext) {
 		}
 	}
 
-	// Collect inputs
 	if w.Inputs != nil {
 		for name, param := range w.Inputs {
 			ctx.inputs[name] = param
 		}
 	}
 
-	// Collect state variables
 	if w.Workflow != nil && w.Workflow.State != nil {
 		for name := range w.Workflow.State {
 			ctx.variables[fmt.Sprintf("state.%s", name)] = true
 		}
 	}
 
-	// Collect step outputs
 	if w.Workflow != nil && w.Workflow.Steps != nil {
 		for _, step := range w.Workflow.Steps {
 			if step.Outputs != nil {
@@ -105,10 +98,8 @@ func (sv *SemanticValidator) buildValidationContext(ctx *validationContext) {
 					ctx.variables[fmt.Sprintf("steps.%s.%s", step.ID, key)] = true
 				}
 			}
-			// Default outputs that are always available for steps
 			ctx.variables[fmt.Sprintf("steps.%s.output", step.ID)] = true
 
-			// Add common output patterns that might be generated dynamically
 			commonOutputs := []string{"result", "data", "content", "findings", "summary", "analysis"}
 			for _, output := range commonOutputs {
 				ctx.variables[fmt.Sprintf("steps.%s.%s", step.ID, output)] = true
@@ -116,11 +107,10 @@ func (sv *SemanticValidator) buildValidationContext(ctx *validationContext) {
 		}
 	}
 
-	// Add built-in variables
 	ctx.variables["metadata.name"] = true
 	ctx.variables["metadata.version"] = true
 	ctx.variables["metadata.description"] = true
-	ctx.variables["env."] = true // Prefix match for environment variables
+	ctx.variables["env."] = true
 }
 
 // validateStepDependencies checks for circular dependencies and forward references
@@ -131,7 +121,7 @@ func (sv *SemanticValidator) validateStepDependencies(ctx *validationContext, re
 
 	steps := ctx.workflow.Workflow.Steps
 
-	dependencies := make(map[string][]string) // stepID -> dependencies
+	dependencies := make(map[string][]string)
 
 	for _, step := range steps {
 		deps := sv.extractStepDependencies(step)
@@ -175,22 +165,18 @@ func (sv *SemanticValidator) validateStepDependencies(ctx *validationContext, re
 func (sv *SemanticValidator) extractStepDependencies(step *ast.Step) []string {
 	var deps []string
 
-	// Check prompt for step references
 	if step.Prompt != "" {
 		deps = append(deps, sv.extractVariableReferences(step.Prompt, "steps")...)
 	}
 
-	// Check condition for step references
 	if step.Condition != "" {
 		deps = append(deps, sv.extractVariableReferences(step.Condition, "steps")...)
 	}
 
-	// Check skip_if for step references
 	if step.SkipIf != "" {
 		deps = append(deps, sv.extractVariableReferences(step.SkipIf, "steps")...)
 	}
 
-	// Check with parameters
 	if step.With != nil {
 		for _, value := range step.With {
 			if str, ok := value.(string); ok {
@@ -199,7 +185,6 @@ func (sv *SemanticValidator) extractStepDependencies(step *ast.Step) []string {
 		}
 	}
 
-	// Check updates
 	if step.Updates != nil {
 		for _, value := range step.Updates {
 			if str, ok := value.(string); ok {
@@ -217,7 +202,6 @@ func (sv *SemanticValidator) hasCycle(stepID string, dependencies map[string][]s
 	recursionStack[stepID] = true
 
 	for _, dep := range dependencies[stepID] {
-		// Skip self-references - they are allowed and don't constitute a cycle
 		if dep == stepID {
 			continue
 		}
@@ -237,9 +221,7 @@ func (sv *SemanticValidator) hasCycle(stepID string, dependencies map[string][]s
 
 // extractAllVariableReferences extracts all {{ variable }} references from text
 func (sv *SemanticValidator) extractAllVariableReferences(text string) []string {
-	// Match {{ variable.path }} patterns
-	re := regexp.MustCompile(`\{\{\s*([^}]+)\s*\}\}`)
-	matches := re.FindAllStringSubmatch(text, -1)
+	matches := expression.VariablePattern.FindAllStringSubmatch(text, -1)
 
 	var variables []string
 	for _, match := range matches {
@@ -278,12 +260,10 @@ func (sv *SemanticValidator) validateControlFlow(ctx *validationContext, result 
 	for i, step := range ctx.workflow.Workflow.Steps {
 		stepPath := fmt.Sprintf("workflow.steps[%d]", i)
 
-		// Validate condition syntax
 		if step.Condition != "" {
 			sv.validateConditionSyntax(step.Condition, stepPath+".condition", result)
 		}
 
-		// Validate skip_if syntax
 		if step.SkipIf != "" {
 			sv.validateConditionSyntax(step.SkipIf, stepPath+".skip_if", result)
 		}
@@ -292,7 +272,6 @@ func (sv *SemanticValidator) validateControlFlow(ctx *validationContext, result 
 
 // validateConditionSyntax validates the syntax of condition expressions
 func (sv *SemanticValidator) validateConditionSyntax(condition, path string, result *ast.ValidationResult) {
-	// Basic validation for common condition patterns
 	condition = strings.TrimSpace(condition)
 
 	if condition == "" {
@@ -300,12 +279,9 @@ func (sv *SemanticValidator) validateConditionSyntax(condition, path string, res
 		return
 	}
 
-	// Check for balanced parentheses
 	if !sv.hasBalancedParentheses(condition) {
 		result.AddError(path, "unbalanced parentheses in condition")
 	}
-
-	// Skip operator validation - template expressions can use any operators
 }
 
 // hasBalancedParentheses checks if parentheses are balanced
@@ -340,15 +316,12 @@ func (sv *SemanticValidator) validateResourceUsage(ctx *validationContext, resul
 			if step.Agent != "" {
 				if agent, exists := ctx.agents[step.Agent]; exists {
 					if agent.MaxTokens != nil && *agent.MaxTokens > 4000 {
-						// Note: high token limit detected - consider breaking into smaller steps
 						result.AddWarning(stepPath+".agent", "high token limit detected - consider breaking into smaller steps")
 					}
 				}
 			}
 		}
 	}
-
-	// Note: workflows with many expensive steps (>20) may benefit from being split into smaller workflows
 }
 
 // uniqueStrings returns unique strings from a slice
