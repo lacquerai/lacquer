@@ -2,1017 +2,768 @@ package engine
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/lacquerai/lacquer/internal/ast"
+	"github.com/lacquerai/lacquer/internal/execcontext"
+	"github.com/lacquerai/lacquer/internal/provider"
+	"github.com/lacquerai/lacquer/internal/schema"
+	pkgEvents "github.com/lacquerai/lacquer/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewExecutor(t *testing.T) {
-	// Create a simple test workflow with an agent
-	workflow := &ast.Workflow{
+func createTestWorkflow(steps []*ast.Step) *ast.Workflow {
+	return &ast.Workflow{
 		Version: "1.0",
-		Agents: map[string]*ast.Agent{
-			"test_agent": {
-				Provider: "local",
-				Model:    "claude-code",
-			},
+		Metadata: &ast.WorkflowMetadata{
+			Name:        "Test Workflow",
+			Description: "A workflow for testing",
 		},
 		Workflow: &ast.WorkflowDef{
-			Steps: []*ast.Step{
-				{ID: "step1", Agent: "test_agent", Prompt: "test"},
-			},
+			Steps: steps,
 		},
 	}
-
-	// Test with default config
-	executor, err := NewExecutor(nil, workflow, nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, executor)
-	assert.NotNil(t, executor.config)
-	assert.Equal(t, 3, executor.config.MaxConcurrentSteps)
-	assert.True(t, executor.config.EnableRetries)
-
-	// Test with custom config
-	config := &ExecutorConfig{
-		MaxConcurrentSteps: 5,
-		DefaultTimeout:     10 * time.Second,
-		EnableRetries:      false,
-	}
-	executor, err = NewExecutor(config, workflow, nil)
-	assert.NoError(t, err)
-	assert.Equal(t, config, executor.config)
 }
 
-func TestExecutor_ValidateInputs(t *testing.T) {
-	workflow := &ast.Workflow{
-		Version: "1.0",
-		Agents: map[string]*ast.Agent{
-			"test_agent": {
-				Provider: "local",
-				Model:    "claude-code",
-			},
-		},
-		Workflow: &ast.WorkflowDef{
-			Inputs: map[string]*ast.InputParam{
-				"required_param": {
-					Type:        "string",
-					Required:    true,
-					Description: "A required parameter",
-				},
-				"optional_param": {
-					Type:        "string",
-					Required:    false,
-					Default:     "default_value",
-					Description: "An optional parameter",
-				},
-				"required_with_default": {
-					Type:     "string",
-					Required: true,
-					Default:  "fallback_value",
-				},
-			},
-		},
-	}
-
-	executor, err := NewExecutor(nil, workflow, nil)
-	assert.NoError(t, err)
-
-	// Test valid inputs
-	inputs := map[string]interface{}{
-		"required_param": "provided_value",
-	}
-	err = executor.validateInputs(workflow, inputs)
-	assert.NoError(t, err)
-
-	// Check that defaults were applied
-	assert.Equal(t, "fallback_value", inputs["required_with_default"])
-
-	// Test missing required input
-	inputs = map[string]interface{}{}
-	err = executor.validateInputs(workflow, inputs)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "required input required_param is missing")
-}
-
-func TestExecutor_EvaluateSkipCondition(t *testing.T) {
-	workflow := &ast.Workflow{
-		Version: "1.0",
-		Agents: map[string]*ast.Agent{
-			"agent1": {
-				Provider: "local",
-				Model:    "claude-code",
-			},
-		},
-		Workflow: &ast.WorkflowDef{
-			State: map[string]interface{}{
-				"skip_flag": true,
-				"condition": false,
-			},
-			Steps: []*ast.Step{
-				{ID: "step1", Agent: "agent1", Prompt: "test"},
-			},
-		},
-	}
-
-	executor, err := NewExecutor(nil, workflow, nil)
-	assert.NoError(t, err)
-
+func createTestExecutionContext(workflow *ast.Workflow) *execcontext.ExecutionContext {
 	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
 
-	// Test no condition
-	step := &ast.Step{ID: "test"}
-	shouldSkip, err := executor.evaluateSkipCondition(execCtx, step)
-	assert.NoError(t, err)
-	assert.False(t, shouldSkip)
+	execCtx := execcontext.NewExecutionContext(
+		execcontext.RunContext{Context: ctx},
+		workflow,
+		map[string]interface{}{}, // inputs
+		"/tmp",                   // working directory
+	)
 
-	// Test skip_if condition (true)
-	step = &ast.Step{
-		ID:     "test",
-		SkipIf: "{{ state.skip_flag }}",
-	}
-	shouldSkip, err = executor.evaluateSkipCondition(execCtx, step)
-	assert.NoError(t, err)
-	assert.True(t, shouldSkip)
-
-	// Test skip_if condition (false)
-	step = &ast.Step{
-		ID:     "test",
-		SkipIf: "{{ state.condition }}",
-	}
-	shouldSkip, err = executor.evaluateSkipCondition(execCtx, step)
-	assert.NoError(t, err)
-	assert.False(t, shouldSkip)
-
-	// Test condition (true - should not skip)
-	step = &ast.Step{
-		ID:        "test",
-		Condition: "{{ state.skip_flag }}",
-	}
-	shouldSkip, err = executor.evaluateSkipCondition(execCtx, step)
-	assert.NoError(t, err)
-	assert.False(t, shouldSkip)
-
-	// Test condition (false - should skip)
-	step = &ast.Step{
-		ID:        "test",
-		Condition: "{{ state.condition }}",
-	}
-	shouldSkip, err = executor.evaluateSkipCondition(execCtx, step)
-	assert.NoError(t, err)
-	assert.True(t, shouldSkip)
+	return execCtx
 }
 
-func TestExecutor_ExecuteActionStep_UpdateState(t *testing.T) {
-	workflow := &ast.Workflow{
-		Version: "1.0",
-		Workflow: &ast.WorkflowDef{
-			State: map[string]interface{}{
-				"counter": 5,
-			},
-			Steps: []*ast.Step{
-				{ID: "step1", Agent: "agent1", Prompt: "test"},
-			},
-		},
+func createMockExecutor(workflow *ast.Workflow) (*Executor, error) {
+	config := DefaultExecutorConfig()
+	config.MaxConcurrentSteps = 1 // Sequential execution for deterministic tests
+
+	registry := provider.NewRegistry(false)
+
+	mockModels := []provider.Info{
+		{ID: "test-model", Name: "Test Model"},
+		{ID: "gpt-4", Name: "GPT-4"},
+		{ID: "claude-3", Name: "Claude 3"},
 	}
+	mockProvider := provider.NewMockProvider("anthropic", mockModels)
+	mockProvider.SetResponse("test prompt", "test response")
+	mockProvider.SetResponse("Hello, world!", "Hello from test agent!")
 
-	executor, err := NewExecutor(nil, workflow, nil)
-	assert.NoError(t, err)
-
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, map[string]interface{}{
-		"name": "Alice",
-	})
-
-	step := &ast.Step{
-		ID:     "update_test",
-		Action: "update_state",
-		Updates: map[string]interface{}{
-			"new_value":     "hello",
-			"dynamic_value": "{{ inputs.name }}",
-			"counter":       10,
-		},
-	}
-
-	output, err := executor.executeActionStep(execCtx, step)
-	assert.NoError(t, err)
-	assert.NotNil(t, output)
-
-	// Check updated state
-	value, exists := execCtx.GetState("new_value")
-	assert.True(t, exists)
-	assert.Equal(t, "hello", value)
-
-	value, exists = execCtx.GetState("dynamic_value")
-	assert.True(t, exists)
-	assert.Equal(t, "Alice", value)
-
-	value, exists = execCtx.GetState("counter")
-	assert.True(t, exists)
-	assert.Equal(t, 10, value)
-}
-
-func TestExecutor_ExecuteActionStep_HumanInput(t *testing.T) {
-	workflow := &ast.Workflow{
-		Version: "1.0",
-		Workflow: &ast.WorkflowDef{
-			Steps: []*ast.Step{
-				{ID: "step1", Agent: "agent1", Prompt: "test"},
-			},
-		},
-	}
-	executor, err := NewExecutor(nil, workflow, nil)
-	assert.NoError(t, err)
-
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
-
-	step := &ast.Step{
-		ID:     "human_input_test",
-		Action: "human_input",
-	}
-
-	output, err := executor.executeActionStep(execCtx, step)
-	assert.NoError(t, err)
-	assert.NotNil(t, output)
-	assert.Contains(t, output, "human_input")
-}
-
-func TestExecutor_ExecuteActionStep_UnknownAction(t *testing.T) {
-	workflow := &ast.Workflow{
-		Version: "1.0",
-		Workflow: &ast.WorkflowDef{
-			Steps: []*ast.Step{
-				{ID: "step1", Agent: "agent1", Prompt: "test"},
-			},
-		},
-	}
-
-	executor, err := NewExecutor(nil, workflow, nil)
-	assert.NoError(t, err)
-
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
-
-	step := &ast.Step{
-		ID:     "unknown_test",
-		Action: "unknown_action",
-	}
-
-	_, err = executor.executeActionStep(execCtx, step)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown action")
-}
-
-func TestExecutor_ExecuteBlockStep(t *testing.T) {
-
-	workflow := &ast.Workflow{
-		Version: "1.0",
-		Workflow: &ast.WorkflowDef{
-			Steps: []*ast.Step{
-				{ID: "step1", Agent: "agent1", Prompt: "test"},
-			},
-		},
-	}
-	executor, err := NewExecutor(nil, workflow, nil)
-	assert.NoError(t, err)
-
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
-
-	step := &ast.Step{
-		ID:   "block_test",
-		Uses: "lacquer/http-request@v1",
-		With: map[string]interface{}{
-			"url": "https://api.example.com/test",
-		},
-	}
-
-	output, err := executor.executeBlockStep(execCtx, step)
-	assert.NoError(t, err)
-	assert.NotNil(t, output)
-	assert.Contains(t, output, "block_output")
-}
-
-func TestExecutor_ExecuteAgentStep(t *testing.T) {
-
-	// Register mock provider
-
-	workflow := &ast.Workflow{
-		Version: "1.0",
-		Agents: map[string]*ast.Agent{
-			"test_agent": {
-				Provider:     "mock",
-				Model:        "test-model",
-				SystemPrompt: "You are helpful",
-			},
-		},
-		Workflow: &ast.WorkflowDef{
-			Steps: []*ast.Step{
-				{ID: "step1", Agent: "test_agent", Prompt: "Hello, {{ inputs.name }}!"},
-			},
-		},
-	}
-	registry := NewModelRegistry(true)
-	mockProvider := NewMockModelProvider("mock", []ModelInfo{
-		{
-			ID:       "test-model",
-			Name:     "test-model",
-			Provider: "mock",
-		},
-	})
-	mockProvider.SetResponse("Hello, Alice!", "Hello, Alice! How can I help?")
-	registry.RegisterProvider(mockProvider)
-	executor, err := NewExecutor(nil, workflow, registry)
-	assert.NoError(t, err)
-
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, map[string]interface{}{
-		"name": "Alice",
-	})
-
-	step := workflow.Workflow.Steps[0]
-
-	response, usage, err := executor.executeAgentStep(execCtx, step)
-	assert.NoError(t, err)
-	assert.Equal(t, "Hello, Alice! How can I help?", response)
-	assert.NotNil(t, usage)
-	assert.Greater(t, usage.TotalTokens, 0)
-}
-
-func TestExecutor_ExecuteAgentStep_MissingAgent(t *testing.T) {
-
-	workflow := &ast.Workflow{
-		Version: "1.0",
-		Agents:  map[string]*ast.Agent{},
-		Workflow: &ast.WorkflowDef{
-			Steps: []*ast.Step{
-				{ID: "step1", Agent: "missing_agent", Prompt: "test"},
-			},
-		},
-	}
-
-	executor, err := NewExecutor(nil, workflow, nil)
-	assert.NoError(t, err)
-
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
-
-	step := workflow.Workflow.Steps[0]
-
-	_, _, err = executor.executeAgentStep(execCtx, step)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "agent missing_agent not found")
-}
-
-func TestExecutor_ExecuteAgentStep_MissingModel(t *testing.T) {
-	workflow := &ast.Workflow{
-		Version: "1.0",
-		Agents: map[string]*ast.Agent{
-			"test_agent": {
-				Provider: "mock",
-				Model:    "nonexistent-model",
-			},
-		},
-		Workflow: &ast.WorkflowDef{
-			Steps: []*ast.Step{
-				{ID: "step1", Agent: "test_agent", Prompt: "test"},
-			},
-		},
-	}
-
-	// Create registry and register mock provider that doesn't support the model
-	registry := NewModelRegistry(true)
-	mockProvider := NewMockModelProvider("mock", []ModelInfo{
-		{
-			ID:       "other-model",
-			Name:     "other-model",
-			Provider: "mock",
-		},
-	})
 	err := registry.RegisterProvider(mockProvider)
-	assert.NoError(t, err)
+	if err != nil {
+		return nil, err
+	}
 
-	executor, err := NewExecutor(nil, workflow, registry)
-	assert.NoError(t, err)
+	runner := &Runner{}
 
-	ctx := context.Background()
-	execCtx := NewExecutionContext(ctx, workflow, nil)
+	ctx := execcontext.RunContext{
+		Context: context.Background(),
+	}
 
-	step := workflow.Workflow.Steps[0]
-
-	_, _, err = executor.executeAgentStep(execCtx, step)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "model nonexistent-model not supported by provider mock")
+	return NewExecutor(ctx, config, workflow, registry, runner)
 }
 
-func TestExecutor_CollectWorkflowOutputs(t *testing.T) {
-	tests := []struct {
-		name            string
-		workflowDef     *ast.WorkflowDef
-		stepResults     map[string]*StepResult
-		inputs          map[string]interface{}
-		expectedOutputs map[string]interface{}
-		expectError     bool
-	}{
+func collectProgressEvents() (chan pkgEvents.ExecutionEvent, *[]pkgEvents.ExecutionEvent) {
+	eventsChan := make(chan pkgEvents.ExecutionEvent, 100)
+	var events []pkgEvents.ExecutionEvent
+
+	go func() {
+		for event := range eventsChan {
+			events = append(events, event)
+		}
+	}()
+
+	return eventsChan, &events
+}
+
+func TestExecuteWorkflow_BasicScriptStep(t *testing.T) {
+	steps := []*ast.Step{
 		{
-			name: "simple string template output",
-			workflowDef: &ast.WorkflowDef{
-				Outputs: map[string]interface{}{
-					"greeting": "Hello {{ inputs.name }}",
-				},
-			},
-			inputs: map[string]interface{}{
-				"name": "World",
-			},
-			expectedOutputs: map[string]interface{}{
-				"greeting": "Hello World",
-			},
-		},
-		{
-			name: "multiple outputs with step references",
-			workflowDef: &ast.WorkflowDef{
-				Outputs: map[string]interface{}{
-					"result":    "{{ steps.test_step.output }}",
-					"input_ref": "{{ inputs.test_input }}",
-					"literal":   "static value",
-				},
-			},
-			stepResults: map[string]*StepResult{
-				"test_step": {
-					StepID: "test_step",
-					Output: map[string]interface{}{
-						"output": "test response",
-					},
-					Response: "test response",
-				},
-			},
-			inputs: map[string]interface{}{
-				"test_input": "test value",
-			},
-			expectedOutputs: map[string]interface{}{
-				"result":    "test response",
-				"input_ref": "test value",
-				"literal":   "static value",
-			},
-		},
-		{
-			name: "no outputs defined",
-			workflowDef: &ast.WorkflowDef{
-				Outputs: nil,
-			},
-			expectedOutputs: map[string]interface{}{},
-		},
-		{
-			name: "empty outputs",
-			workflowDef: &ast.WorkflowDef{
-				Outputs: map[string]interface{}{},
-			},
-			expectedOutputs: map[string]interface{}{},
-		},
-		{
-			name: "non-string template value",
-			workflowDef: &ast.WorkflowDef{
-				Outputs: map[string]interface{}{
-					"number": 42,
-					"bool":   true,
-				},
-			},
-			expectedOutputs: map[string]interface{}{
-				"number": 42,
-				"bool":   true,
-			},
+			ID:  "test_script",
+			Run: "echo 'Hello, World!'",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create workflow
-			workflow := &ast.Workflow{
-				Version:  "1.0",
-				Workflow: tt.workflowDef,
-			}
+	workflow := createTestWorkflow(steps)
+	execCtx := createTestExecutionContext(workflow)
 
-			// Create execution context
-			ctx := context.Background()
-			execCtx := NewExecutionContext(ctx, workflow, tt.inputs)
+	executor, err := createMockExecutor(workflow)
+	require.NoError(t, err)
 
-			// Set step results if provided
-			if tt.stepResults != nil {
-				for stepID, result := range tt.stepResults {
-					execCtx.SetStepResult(stepID, result)
-				}
-			}
+	eventsChan, events := collectProgressEvents()
+	defer close(eventsChan)
 
-			// Create executor
-			config := DefaultExecutorConfig()
-			registry := NewModelRegistry(true)
-			executor, err := NewExecutor(config, workflow, registry)
-			require.NoError(t, err)
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	require.NoError(t, err)
 
-			// Test collectWorkflowOutputs
-			err = executor.collectWorkflowOutputs(execCtx)
+	result, exists := execCtx.GetStepResult("test_script")
+	require.True(t, exists)
+	require.NotNil(t, result)
+	assert.Equal(t, execcontext.StepStatusCompleted, result.Status)
+	assert.Equal(t, "Hello, World!\n", result.Response)
+	assert.NoError(t, result.Error)
 
-			if tt.expectError {
-				assert.Error(t, err)
-				return
-			}
+	time.Sleep(10 * time.Millisecond)
+	assert.True(t, len(*events) > 0, "Expected events to be generated")
 
-			require.NoError(t, err)
+	hasWorkflowStarted := false
+	hasWorkflowCompleted := false
+	hasStepStarted := false
+	hasStepCompleted := false
 
-			// Verify outputs
-			actualOutputs := execCtx.GetWorkflowOutputs()
-
-			if len(tt.expectedOutputs) == 0 {
-				assert.Empty(t, actualOutputs)
-			} else {
-				assert.Equal(t, tt.expectedOutputs, actualOutputs)
-			}
-
-			// Verify outputs are included in execution summary
-			summary := execCtx.GetExecutionSummary()
-			assert.Equal(t, actualOutputs, summary.Outputs)
-		})
+	for _, event := range *events {
+		switch event.Type {
+		case pkgEvents.EventWorkflowStarted:
+			hasWorkflowStarted = true
+		case pkgEvents.EventWorkflowCompleted:
+			hasWorkflowCompleted = true
+		case pkgEvents.EventStepStarted:
+			hasStepStarted = true
+		case pkgEvents.EventStepCompleted:
+			hasStepCompleted = true
+		}
 	}
+
+	assert.True(t, hasWorkflowStarted, "Expected workflow started event")
+	assert.True(t, hasWorkflowCompleted, "Expected workflow completed event")
+	assert.True(t, hasStepStarted, "Expected step started event")
+	assert.True(t, hasStepCompleted, "Expected step completed event")
 }
 
-func TestExecutor_WorkflowOutputsInExecutionSummary(t *testing.T) {
-	// Create a simple workflow with outputs
+func TestExecuteWorkflow_AgentStep(t *testing.T) {
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Metadata: &ast.WorkflowMetadata{
-			Name: "test-outputs",
+			Name:        "Agent Test Workflow",
+			Description: "Testing agent step execution",
+		},
+		Agents: map[string]*ast.Agent{
+			"test_agent": {
+				Name:         "test_agent",
+				Provider:     "anthropic",
+				Model:        "test-model",
+				SystemPrompt: "You are a helpful assistant.",
+			},
 		},
 		Workflow: &ast.WorkflowDef{
 			Steps: []*ast.Step{
 				{
-					ID: "dummy_step",
+					ID:     "agent_step",
+					Agent:  "test_agent",
+					Prompt: "Hello, world!",
 				},
-			},
-			Outputs: map[string]interface{}{
-				"result": "test result",
-				"count":  123,
 			},
 		},
 	}
 
-	// Create execution context
-	ctx := context.Background()
-	inputs := map[string]interface{}{"test": "value"}
-	execCtx := NewExecutionContext(ctx, workflow, inputs)
+	execCtx := createTestExecutionContext(workflow)
 
-	// Create executor
-	config := DefaultExecutorConfig()
-	registry := NewModelRegistry(true)
-	executor, err := NewExecutor(config, workflow, registry)
+	executor, err := createMockExecutor(workflow)
 	require.NoError(t, err)
 
-	// Collect outputs
-	err = executor.collectWorkflowOutputs(execCtx)
+	eventsChan, events := collectProgressEvents()
+	defer close(eventsChan)
+
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
 	require.NoError(t, err)
 
-	// Get execution summary
-	summary := execCtx.GetExecutionSummary()
+	result, exists := execCtx.GetStepResult("agent_step")
+	require.True(t, exists)
+	require.NotNil(t, result)
+	assert.Equal(t, execcontext.StepStatusCompleted, result.Status)
+	assert.Equal(t, "Hello from test agent!", result.Response)
+	assert.NoError(t, result.Error)
+	assert.NotEmpty(t, result.Response)
 
-	// Verify outputs are included
-	expectedOutputs := map[string]interface{}{
-		"result": "test result",
-		"count":  123,
-	}
-	assert.Equal(t, expectedOutputs, summary.Outputs)
+	time.Sleep(10 * time.Millisecond)
+	assert.True(t, len(*events) > 0)
 }
 
-func TestExecutor_executeBlockStep_Native(t *testing.T) {
-	testCases := []struct {
-		name          string
-		step          *ast.Step
-		expectError   bool
-		expectedError string
-	}{
+func TestExecuteWorkflow_ContainerStep(t *testing.T) {
+	steps := []*ast.Step{
 		{
-			name: "Valid native block step",
-			step: &ast.Step{
-				ID:   "test_block",
-				Uses: "./test-block.laq.yaml",
-				With: map[string]interface{}{
-					"input_text": "Hello world",
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "Block file not found",
-			step: &ast.Step{
-				ID:   "missing_block",
-				Uses: "./nonexistent-block.laq.yaml",
-				With: map[string]interface{}{
-					"input_text": "Hello world",
-				},
-			},
-			expectError: true, // Should fail with real implementation
-		},
-		{
-			name: "Block with invalid inputs",
-			step: &ast.Step{
-				ID:   "invalid_inputs",
-				Uses: "./test-block.laq.yaml",
-				With: map[string]interface{}{
-					"wrong_input": "value",
-				},
-			},
-			expectError: true, // Should fail with real implementation
+			ID:        "container_step",
+			Container: "alpine:latest",
+			Command:   []string{"echo", "Hello from container"},
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Create a test workflow
-			workflow := &ast.Workflow{
-				Version: "1.0",
-				Workflow: &ast.WorkflowDef{
-					Steps: []*ast.Step{tc.step},
+	workflow := createTestWorkflow(steps)
+	execCtx := createTestExecutionContext(workflow)
+
+	executor, err := createMockExecutor(workflow)
+	require.NoError(t, err)
+
+	eventsChan, _ := collectProgressEvents()
+	defer close(eventsChan)
+
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	require.NoError(t, err)
+
+	result, exists := execCtx.GetStepResult("container_step")
+	require.True(t, exists)
+	require.NotNil(t, result)
+	assert.Equal(t, execcontext.StepStatusCompleted, result.Status)
+	assert.Equal(t, "Hello from container\n", result.Response)
+	assert.NoError(t, result.Error)
+}
+
+func TestExecuteWorkflow_MultipleSteps(t *testing.T) {
+	workflow := &ast.Workflow{
+		Version: "1.0",
+		Metadata: &ast.WorkflowMetadata{
+			Name: "Multi-Step Test Workflow",
+		},
+		Agents: map[string]*ast.Agent{
+			"test_agent": {
+				Name:     "test_agent",
+				Provider: "anthropic",
+				Model:    "test-model",
+			},
+		},
+		Workflow: &ast.WorkflowDef{
+			Steps: []*ast.Step{
+				{
+					ID:  "script_step",
+					Run: "echo 'First step'",
 				},
+				{
+					ID:     "agent_step",
+					Agent:  "test_agent",
+					Prompt: "test prompt",
+				},
+				{
+					ID:  "final_script",
+					Run: "echo 'Final step'",
+				},
+			},
+		},
+	}
+
+	execCtx := createTestExecutionContext(workflow)
+
+	executor, err := createMockExecutor(workflow)
+	require.NoError(t, err)
+
+	eventsChan, _ := collectProgressEvents()
+	defer close(eventsChan)
+
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	require.NoError(t, err)
+
+	scriptResult, exists := execCtx.GetStepResult("script_step")
+	require.True(t, exists)
+	require.NotNil(t, scriptResult)
+	assert.Equal(t, execcontext.StepStatusCompleted, scriptResult.Status)
+
+	agentResult, agentExists := execCtx.GetStepResult("agent_step")
+	require.True(t, agentExists)
+	require.NotNil(t, agentResult)
+	assert.Equal(t, execcontext.StepStatusCompleted, agentResult.Status)
+
+	finalResult, finalExists := execCtx.GetStepResult("final_script")
+	require.True(t, finalExists)
+	require.NotNil(t, finalResult)
+	assert.Equal(t, execcontext.StepStatusCompleted, finalResult.Status)
+}
+
+func TestExecuteWorkflow_SkipConditions(t *testing.T) {
+	t.Run("SkipIf condition skips step", func(t *testing.T) {
+		steps := []*ast.Step{
+			{
+				ID:     "skipped_step",
+				Run:    "echo 'This should be skipped'",
+				SkipIf: "true", // Always skip
+			},
+			{
+				ID:  "executed_step",
+				Run: "echo 'This should execute'",
+			},
+		}
+
+		workflow := createTestWorkflow(steps)
+		execCtx := createTestExecutionContext(workflow)
+
+		executor, err := createMockExecutor(workflow)
+		require.NoError(t, err)
+
+		eventsChan, _ := collectProgressEvents()
+		defer close(eventsChan)
+
+		err = executor.ExecuteWorkflow(execCtx, eventsChan)
+		require.NoError(t, err)
+
+		skippedResult, exists := execCtx.GetStepResult("skipped_step")
+		require.True(t, exists)
+		require.NotNil(t, skippedResult)
+		assert.Equal(t, execcontext.StepStatusSkipped, skippedResult.Status)
+
+		executedResult, exists := execCtx.GetStepResult("executed_step")
+		require.True(t, exists)
+		require.NotNil(t, executedResult)
+		assert.Equal(t, execcontext.StepStatusCompleted, executedResult.Status)
+	})
+
+	t.Run("Condition false skips step", func(t *testing.T) {
+		steps := []*ast.Step{
+			{
+				ID:        "conditional_step",
+				Run:       "echo 'This should be skipped'",
+				Condition: "false", // Skip when false
+			},
+		}
+
+		workflow := createTestWorkflow(steps)
+		execCtx := createTestExecutionContext(workflow)
+
+		executor, err := createMockExecutor(workflow)
+		require.NoError(t, err)
+
+		eventsChan, _ := collectProgressEvents()
+		defer close(eventsChan)
+
+		err = executor.ExecuteWorkflow(execCtx, eventsChan)
+		require.NoError(t, err)
+
+		result, exists := execCtx.GetStepResult("conditional_step")
+		require.True(t, exists)
+		require.NotNil(t, result)
+		assert.Equal(t, execcontext.StepStatusSkipped, result.Status)
+	})
+}
+
+func TestExecuteWorkflow_StateUpdates(t *testing.T) {
+	workflow := &ast.Workflow{
+		Version: "1.0",
+		Workflow: &ast.WorkflowDef{
+			State: map[string]interface{}{
+				"counter": 0,
+			},
+			Steps: []*ast.Step{
+				{
+					ID:  "update_state",
+					Run: "echo 'Updating state'",
+					Updates: map[string]interface{}{
+						"counter":   1,
+						"message":   "Hello from step",
+						"timestamp": "{{ now }}",
+					},
+				},
+				{
+					ID:  "check_state",
+					Run: "echo 'Counter is {{ state.counter }}'",
+				},
+			},
+		},
+	}
+
+	execCtx := createTestExecutionContext(workflow)
+
+	executor, err := createMockExecutor(workflow)
+	require.NoError(t, err)
+
+	eventsChan, _ := collectProgressEvents()
+	defer close(eventsChan)
+
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	require.NoError(t, err)
+
+	// Verify both steps completed
+	updateResult, exists := execCtx.GetStepResult("update_state")
+	require.True(t, exists)
+	require.NotNil(t, updateResult)
+	assert.Equal(t, execcontext.StepStatusCompleted, updateResult.Status)
+
+	checkResult, checkExists := execCtx.GetStepResult("check_state")
+	require.True(t, checkExists)
+	require.NotNil(t, checkResult)
+	assert.Equal(t, execcontext.StepStatusCompleted, checkResult.Status)
+
+	// Verify state was updated
+	counter, counterExists := execCtx.GetState("counter")
+	assert.True(t, counterExists)
+	assert.Equal(t, 1, counter)
+	message, messageExists := execCtx.GetState("message")
+	assert.True(t, messageExists)
+	assert.Equal(t, "Hello from step", message)
+}
+
+func TestExecuteWorkflow_WhileLoop(t *testing.T) {
+	workflow := &ast.Workflow{
+		Version: "1.0",
+		Workflow: &ast.WorkflowDef{
+			State: map[string]interface{}{
+				"counter": 0,
+			},
+			Steps: []*ast.Step{
+				{
+					ID:    "while_loop",
+					While: "${{ state.counter < 3 }}",
+					Steps: []*ast.Step{
+						{
+							ID:  "inner_step",
+							Run: "echo ${{ state.counter }}",
+							Updates: map[string]interface{}{
+								"counter": "${{ state.counter + 1 }}",
+							},
+						},
+					},
+				},
+				{
+					ID:  "after_while",
+					Run: "echo 'After while loop ${{ steps.while_loop.steps.inner_step.output }}'",
+				},
+			},
+		},
+	}
+
+	execCtx := createTestExecutionContext(workflow)
+
+	executor, err := createMockExecutor(workflow)
+	require.NoError(t, err)
+
+	eventsChan, _ := collectProgressEvents()
+	defer close(eventsChan)
+
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	require.NoError(t, err)
+
+	result, exists := execCtx.GetStepResult("while_loop")
+	require.True(t, exists)
+	require.NotNil(t, result)
+	assert.Equal(t, execcontext.StepStatusCompleted, result.Status)
+
+	afterResult, exists := execCtx.GetStepResult("after_while")
+	require.True(t, exists)
+	require.NotNil(t, afterResult)
+	assert.Equal(t, execcontext.StepStatusCompleted, afterResult.Status)
+	assert.Equal(t, "After while loop 2\n\n", afterResult.Response)
+}
+
+func TestExecuteWorkflow_ErrorHandling(t *testing.T) {
+	t.Run("Script step failure", func(t *testing.T) {
+		steps := []*ast.Step{
+			{
+				ID:  "failing_step",
+				Run: "exit 1", // This will fail
+			},
+			{
+				ID:  "should_not_execute",
+				Run: "echo 'This should not run'",
+			},
+		}
+
+		workflow := createTestWorkflow(steps)
+		execCtx := createTestExecutionContext(workflow)
+
+		executor, err := createMockExecutor(workflow)
+		require.NoError(t, err)
+
+		eventsChan, events := collectProgressEvents()
+		defer close(eventsChan)
+
+		err = executor.ExecuteWorkflow(execCtx, eventsChan)
+		require.Error(t, err)
+
+		failedResult, exists := execCtx.GetStepResult("failing_step")
+		require.True(t, exists)
+		require.NotNil(t, failedResult)
+		assert.Equal(t, execcontext.StepStatusFailed, failedResult.Status)
+		assert.Error(t, failedResult.Error)
+
+		secondResult, _ := execCtx.GetStepResult("should_not_execute")
+		assert.Equal(t, execcontext.StepStatusPending, secondResult.Status)
+
+		time.Sleep(10 * time.Millisecond)
+
+		hasStepFailed := false
+		hasWorkflowFailed := false
+
+		for _, event := range *events {
+			switch event.Type {
+			case pkgEvents.EventStepFailed:
+				hasStepFailed = true
+			case pkgEvents.EventWorkflowFailed:
+				hasWorkflowFailed = true
 			}
+		}
 
-			// Create executor
-			executor, err := NewExecutor(nil, workflow, nil)
-			require.NoError(t, err)
+		assert.True(t, hasStepFailed, "Expected step failed event")
+		assert.True(t, hasWorkflowFailed, "Expected workflow failed event")
+	})
 
-			// Create execution context
-			ctx := context.Background()
-			execCtx := NewExecutionContext(ctx, workflow, map[string]interface{}{})
+	t.Run("Unknown step type", func(t *testing.T) {
+		steps := []*ast.Step{
+			{
+				ID: "unknown_step",
+				// No Run, Agent, Uses, Container, or While - should be unknown type
+			},
+		}
 
-			// Execute the step (which should handle block steps)
-			err = executor.executeStep(execCtx, tc.step)
+		workflow := createTestWorkflow(steps)
+		execCtx := createTestExecutionContext(workflow)
 
-			if tc.expectError {
-				assert.Error(t, err)
-				if tc.expectedError != "" {
-					assert.Contains(t, err.Error(), tc.expectedError)
-				}
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+		executor, err := createMockExecutor(workflow)
+		require.NoError(t, err)
+
+		eventsChan, _ := collectProgressEvents()
+		defer close(eventsChan)
+
+		err = executor.ExecuteWorkflow(execCtx, eventsChan)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown step type")
+	})
+
+	t.Run("Missing agent", func(t *testing.T) {
+		steps := []*ast.Step{
+			{
+				ID:     "agent_step",
+				Agent:  "nonexistent_agent",
+				Prompt: "test",
+			},
+		}
+
+		workflow := createTestWorkflow(steps)
+		execCtx := createTestExecutionContext(workflow)
+
+		executor, err := createMockExecutor(workflow)
+		require.NoError(t, err)
+
+		eventsChan, _ := collectProgressEvents()
+		defer close(eventsChan)
+
+		err = executor.ExecuteWorkflow(execCtx, eventsChan)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "agent nonexistent_agent not found")
+	})
 }
 
-func TestExecutor_executeBlockStep_Script(t *testing.T) {
-	testCases := []struct {
-		name          string
-		step          *ast.Step
-		expectError   bool
-		expectedError string
-	}{
-		{
-			name: "Valid script from file",
-			step: &ast.Step{
-				ID:     "test_script",
-				Script: "./test-scripts/test-script.go",
-				With: map[string]interface{}{
-					"input": "test data",
-				},
+func TestExecuteWorkflow_WorkflowOutputs(t *testing.T) {
+	workflow := &ast.Workflow{
+		Version: "1.0",
+		Workflow: &ast.WorkflowDef{
+			State: map[string]interface{}{
+				"result": "initial",
 			},
-			expectError: false,
-		},
-		{
-			name: "Valid inline script",
-			step: &ast.Step{
-				ID: "inline_script",
-				Script: `package main
-import (
-	"encoding/json"
-	"os"
-)
-
-type Input struct {
-	Message string ` + "`json:\"message\"`" + `
-}
-
-type Output struct {
-	Result string ` + "`json:\"result\"`" + `
-}
-
-func main() {
-	var input Input
-	json.NewDecoder(os.Stdin).Decode(&input)
-	
-	output := Output{Result: "Hello " + input.Message}
-	json.NewEncoder(os.Stdout).Encode(output)
-}`,
-				With: map[string]interface{}{
-					"message": "world",
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "Script file not found",
-			step: &ast.Step{
-				ID:     "missing_script",
-				Script: "./nonexistent-script.go",
-				With: map[string]interface{}{
-					"input": "test",
-				},
-			},
-			expectError: true, // Should fail with real implementation
-		},
-		{
-			name: "Invalid script syntax",
-			step: &ast.Step{
-				ID:     "invalid_script",
-				Script: "invalid go code",
-				With: map[string]interface{}{
-					"input": "test",
-				},
-			},
-			expectError: true, // Should fail with real implementation
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Create a test workflow
-			workflow := &ast.Workflow{
-				Version: "1.0",
-				Workflow: &ast.WorkflowDef{
-					Steps: []*ast.Step{tc.step},
-				},
-			}
-
-			// Create executor
-			executor, err := NewExecutor(nil, workflow, nil)
-			require.NoError(t, err)
-
-			// Create execution context
-			ctx := context.Background()
-			execCtx := NewExecutionContext(ctx, workflow, map[string]interface{}{})
-
-			// Execute the step (which should handle script steps)
-			err = executor.executeStep(execCtx, tc.step)
-
-			if tc.expectError {
-				assert.Error(t, err)
-				if tc.expectedError != "" {
-					assert.Contains(t, err.Error(), tc.expectedError)
-				}
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestExecutor_executeBlockStep_Container(t *testing.T) {
-	testCases := []struct {
-		name          string
-		step          *ast.Step
-		expectError   bool
-		expectedError string
-		skipReason    string
-	}{
-		{
-			name: "Valid container execution",
-			step: &ast.Step{
-				ID:        "test_container",
-				Container: "alpine:latest",
-				With: map[string]interface{}{
-					"command": "echo hello",
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "Container with JSON output",
-			step: &ast.Step{
-				ID:        "json_container",
-				Container: "alpine:latest",
-				With: map[string]interface{}{
-					"data": map[string]interface{}{
-						"key": "value",
+			Steps: []*ast.Step{
+				{
+					ID:  "set_result",
+					Run: "echo 'Setting result'",
+					Updates: map[string]interface{}{
+						"result": "final_value",
+						"count":  42,
 					},
 				},
 			},
-			expectError: false,
-		},
-		{
-			name: "Nonexistent image",
-			step: &ast.Step{
-				ID:        "missing_image",
-				Container: "nonexistent:latest",
-				With: map[string]interface{}{
-					"input": "test",
-				},
+			Outputs: map[string]interface{}{
+				"final_result": "${{ state.result }}",
+				"final_count":  "${{ state.count }}",
+				"static":       "This is static",
 			},
-			expectError: true, // Should fail with real implementation
-		},
-		{
-			name: "Docker daemon unavailable",
-			step: &ast.Step{
-				ID:        "daemon_test",
-				Container: "alpine:latest",
-				With: map[string]interface{}{
-					"input": "test",
-				},
-			},
-			expectError: false, // Currently passes due to placeholder implementation
-			skipReason:  "Requires Docker daemon to be unavailable",
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if tc.skipReason != "" {
-				t.Skip(tc.skipReason)
-			}
+	execCtx := createTestExecutionContext(workflow)
 
-			// Create a test workflow
-			workflow := &ast.Workflow{
-				Version: "1.0",
-				Workflow: &ast.WorkflowDef{
-					Steps: []*ast.Step{tc.step},
-				},
-			}
-
-			// Create executor
-			executor, err := NewExecutor(nil, workflow, nil)
-			require.NoError(t, err)
-
-			// Create execution context
-			ctx := context.Background()
-			execCtx := NewExecutionContext(ctx, workflow, map[string]interface{}{})
-
-			// Execute the step (which should handle container steps)
-			err = executor.executeStep(execCtx, tc.step)
-
-			if tc.expectError {
-				assert.Error(t, err)
-				if tc.expectedError != "" {
-					assert.Contains(t, err.Error(), tc.expectedError)
-				}
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestExecutor_executeStep_BlockTypeIntegration(t *testing.T) {
-	testCases := []struct {
-		name        string
-		step        *ast.Step
-		expectError bool
-	}{
-		{
-			name: "Native block step",
-			step: &ast.Step{
-				ID:   "native_block",
-				Uses: "./test-block.laq.yaml",
-				With: map[string]interface{}{
-					"input_text": "test",
-				},
-			},
-			expectError: false, // Will fail until implemented
-		},
-		{
-			name: "Script step",
-			step: &ast.Step{
-				ID:     "script_step",
-				Script: "./test-scripts/test-script.go",
-				With: map[string]interface{}{
-					"input": "test",
-				},
-			},
-			expectError: false, // Will fail until implemented
-		},
-		{
-			name: "Container step",
-			step: &ast.Step{
-				ID:        "container_step",
-				Container: "alpine:latest",
-				With: map[string]interface{}{
-					"input": "test",
-				},
-			},
-			expectError: false, // Will fail until implemented
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Create a test workflow
-			workflow := &ast.Workflow{
-				Version: "1.0",
-				Workflow: &ast.WorkflowDef{
-					Steps: []*ast.Step{tc.step},
-				},
-			}
-
-			// Create executor
-			executor, err := NewExecutor(nil, workflow, nil)
-			require.NoError(t, err)
-
-			// Create execution context
-			ctx := context.Background()
-			execCtx := NewExecutionContext(ctx, workflow, map[string]interface{}{})
-
-			// Execute the step
-			err = executor.executeStep(execCtx, tc.step)
-
-			if tc.expectError {
-				assert.Error(t, err)
-			} else {
-				// These will currently fail as the methods aren't implemented yet
-				// They should pass once we implement the actual block execution
-				t.Logf("Step execution result: %v", err)
-			}
-		})
-	}
-}
-
-func TestExecutor_ProgressReporting_NestedBlocks(t *testing.T) {
-	// Test progress reporting for nested block execution
-	t.Skip("Will be implemented when progress reporting is added")
-}
-
-func TestExecutor_TokenUsage_Aggregation(t *testing.T) {
-	// Test token usage aggregation from nested blocks
-	t.Skip("Will be implemented when token usage aggregation is added")
-}
-
-func TestExecutor_Timeout_BlockExecution(t *testing.T) {
-	// Test timeout handling for block execution
-	t.Skip("Will be implemented when timeout handling is added")
-}
-
-// Helper function to create test files in a temporary directory
-func createTestFiles(t *testing.T) string {
-	tempDir, err := os.MkdirTemp("", "lacquer-test-*")
+	executor, err := createMockExecutor(workflow)
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		os.RemoveAll(tempDir)
-	})
+	eventsChan, _ := collectProgressEvents()
+	defer close(eventsChan)
 
-	// Create a test block workflow
-	blockContent := `version: "1.0"
-metadata:
-  name: test-block
-  description: A test block
-
-inputs:
-  input_text:
-    type: string
-    required: true
-
-workflow:
-  steps:
-    - id: process
-      action: update_state
-      updates:
-        processed: "{{ inputs.input_text | upper }}"
-
-outputs:
-  result: "{{ state.processed }}"
-`
-
-	blockPath := filepath.Join(tempDir, "test-block.laq.yaml")
-	err = os.WriteFile(blockPath, []byte(blockContent), 0644)
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
 	require.NoError(t, err)
 
-	// Create a test Go script
-	scriptContent := `package main
+	outputs := execCtx.GetWorkflowOutputs()
+	require.NotNil(t, outputs)
 
-import (
-	"encoding/json"
-	"os"
-)
-
-type Input struct {
-	Input string ` + "`json:\"input\"`" + `
+	assert.Equal(t, "final_value", outputs["final_result"])
+	assert.Equal(t, "42", outputs["final_count"])
+	assert.Equal(t, "This is static", outputs["static"])
 }
 
-type Output struct {
-	Result string ` + "`json:\"result\"`" + `
-}
+func TestExecuteWorkflow_WithInputs(t *testing.T) {
+	workflow := &ast.Workflow{
+		Version: "1.0",
+		Inputs: map[string]*ast.InputParam{
+			"name": {
+				Type:        "string",
+				Description: "Name input",
+				Required:    true,
+			},
+			"count": {
+				Type:    "integer",
+				Default: 5,
+			},
+		},
+		Workflow: &ast.WorkflowDef{
+			Steps: []*ast.Step{
+				{
+					ID:  "greet",
+					Run: "echo 'Hello ${{ inputs.name }}, count is ${{ inputs.count }}'",
+				},
+			},
+			Outputs: map[string]interface{}{
+				"greeting": "${{ steps.greet.output }}",
+			},
+		},
+	}
 
-func main() {
-	var input Input
-	json.NewDecoder(os.Stdin).Decode(&input)
-	
-	output := Output{Result: "Processed: " + input.Input}
-	json.NewEncoder(os.Stdout).Encode(output)
-}
-`
+	inputs := map[string]interface{}{
+		"name":  "World",
+		"count": 10,
+	}
 
-	scriptPath := filepath.Join(tempDir, "test-script.go")
-	err = os.WriteFile(scriptPath, []byte(scriptContent), 0644)
+	ctx := context.Background()
+
+	execCtx := execcontext.NewExecutionContext(
+		execcontext.RunContext{Context: ctx},
+		workflow,
+		inputs,
+		"/tmp", // working directory
+	)
+
+	executor, err := createMockExecutor(workflow)
 	require.NoError(t, err)
 
-	return tempDir
+	eventsChan, _ := collectProgressEvents()
+	defer close(eventsChan)
+
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	require.NoError(t, err)
+
+	result, exists := execCtx.GetStepResult("greet")
+	require.True(t, exists)
+	require.NotNil(t, result)
+	assert.Equal(t, execcontext.StepStatusCompleted, result.Status)
+
+	outputs := execCtx.GetWorkflowOutputs()
+	require.NotNil(t, outputs)
+	assert.Equal(t, "Hello World, count is 10\n", outputs["greeting"])
+}
+
+func TestExecuteWorkflow_BlockStep(t *testing.T) {
+	steps := []*ast.Step{
+		{
+			ID:   "block_step",
+			Uses: "testdata/block.laq.yml",
+			With: map[string]interface{}{
+				"name": "World",
+			},
+		},
+	}
+
+	workflow := createTestWorkflow(steps)
+	execCtx := createTestExecutionContext(workflow)
+
+	executor, err := createMockExecutor(workflow)
+	require.NoError(t, err)
+
+	eventsChan, _ := collectProgressEvents()
+	defer close(eventsChan)
+
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	require.NoError(t, err)
+
+	result, exists := execCtx.GetStepResult("block_step")
+	require.True(t, exists)
+	require.NotNil(t, result)
+	assert.Equal(t, execcontext.StepStatusCompleted, result.Status)
+	assert.NoError(t, result.Error)
+	assert.Equal(t, `{greeting: "Hello, World!\n"}`, result.Response)
+
+	assert.NotEmpty(t, result.Response)
+}
+
+func TestExecuteWorkflow_EmptyWorkflow(t *testing.T) {
+	workflow := &ast.Workflow{
+		Version: "1.0",
+		Workflow: &ast.WorkflowDef{
+			Steps: []*ast.Step{}, // Empty steps
+		},
+	}
+
+	execCtx := createTestExecutionContext(workflow)
+
+	executor, err := createMockExecutor(workflow)
+	require.NoError(t, err)
+
+	eventsChan, events := collectProgressEvents()
+	defer close(eventsChan)
+
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
+
+	hasStarted := false
+	hasCompleted := false
+
+	for _, event := range *events {
+		switch event.Type {
+		case pkgEvents.EventWorkflowStarted:
+			hasStarted = true
+		case pkgEvents.EventWorkflowCompleted:
+			hasCompleted = true
+		}
+	}
+
+	assert.True(t, hasStarted)
+	assert.True(t, hasCompleted)
+}
+
+func TestExecuteWorkflow_AgentStepWithOutputs(t *testing.T) {
+	workflow := &ast.Workflow{
+		Version: "1.0",
+		Agents: map[string]*ast.Agent{
+			"test_agent": {
+				Name:     "test_agent",
+				Provider: "anthropic",
+				Model:    "test-model",
+			},
+		},
+		Workflow: &ast.WorkflowDef{
+			Steps: []*ast.Step{
+				{
+					ID:     "agent_with_outputs",
+					Agent:  "test_agent",
+					Prompt: "Generate a structured response",
+					Outputs: map[string]schema.JSON{
+						"result": {
+							Type:        "string",
+							Description: "The result",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	execCtx := createTestExecutionContext(workflow)
+
+	executor, err := createMockExecutor(workflow)
+	require.NoError(t, err)
+
+	mockProvider, err := executor.modelRegistry.GetProviderByName("anthropic")
+	require.NoError(t, err)
+	mockProviderTyped := mockProvider.(*provider.MockProvider)
+	mockProviderTyped.SetResponse("Generate a structured response", `{"result": "test_value"}`)
+
+	eventsChan, _ := collectProgressEvents()
+	defer close(eventsChan)
+
+	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	require.NoError(t, err)
+
+	result, exists := execCtx.GetStepResult("agent_with_outputs")
+	require.True(t, exists)
+	require.NotNil(t, result)
+	assert.Equal(t, execcontext.StepStatusCompleted, result.Status)
+	assert.NotEmpty(t, result.Output)
 }
