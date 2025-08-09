@@ -91,7 +91,6 @@ func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *a
 		return nil, fmt.Errorf("failed to initialize required providers: %w", err)
 	}
 
-	// Create block manager with temporary cache directory
 	cacheDir := filepath.Join(os.TempDir(), "laq-blocks")
 	blockManager, err := block.NewManager(cacheDir)
 	if err != nil {
@@ -103,9 +102,8 @@ func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *a
 		return nil, fmt.Errorf("failed to create runtime manager: %w", err)
 	}
 
-	// install requirements so any script steps can be executed
+	// install any requirements so any script steps can be executed
 	if workflow.Requirements != nil {
-
 		for _, runtime := range workflow.Requirements.Runtimes {
 			if runtime.Version != "" {
 				_, err := runtimeManager.Get(ctx.Context, string(runtime.Name), runtime.Version)
@@ -122,10 +120,8 @@ func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *a
 		}
 	}
 
-	// Create tool registry
 	toolRegistry := tools.NewRegistry()
 
-	// Initialize tool providers for workflow
 	if err := initializeToolProviders(toolRegistry, workflow, cacheDir); err != nil {
 		return nil, fmt.Errorf("failed to initialize tool providers: %w", err)
 	}
@@ -154,7 +150,6 @@ func (e *Executor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progre
 		Int("total_steps", execCtx.TotalSteps).
 		Msg("Starting workflow execution")
 
-	// Send workflow started event
 	if e.progressChan != nil {
 		e.progressChan <- pkgEvents.ExecutionEvent{
 			Type:      pkgEvents.EventWorkflowStarted,
@@ -231,7 +226,6 @@ func (e *Executor) executeSteps(execCtx *execcontext.ExecutionContext, steps []*
 				}
 			}
 
-			// Mark step as failed
 			result := &execcontext.StepResult{
 				StepID:    step.ID,
 				Status:    execcontext.StepStatusFailed,
@@ -242,7 +236,6 @@ func (e *Executor) executeSteps(execCtx *execcontext.ExecutionContext, steps []*
 			}
 			execCtx.SetStepResult(step.ID, result)
 
-			// Send workflow failed event
 			if e.progressChan != nil {
 				e.progressChan <- pkgEvents.ExecutionEvent{
 					Type:      pkgEvents.EventWorkflowFailed,
@@ -254,7 +247,6 @@ func (e *Executor) executeSteps(execCtx *execcontext.ExecutionContext, steps []*
 
 			return err
 		} else {
-			// Send step completed event
 			if e.progressChan != nil {
 				e.progressChan <- pkgEvents.ExecutionEvent{
 					Type:      pkgEvents.EventStepCompleted,
@@ -295,7 +287,6 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 
 	start := time.Now()
 
-	// Mark step as running
 	result := &execcontext.StepResult{
 		StepID:    step.ID,
 		Status:    execcontext.StepStatusRunning,
@@ -307,7 +298,7 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 	if shouldSkip, err := e.evaluateSkipCondition(execCtx, step); err != nil {
 		return fmt.Errorf("failed to evaluate skip condition: %w", err)
 	} else if shouldSkip {
-		// TODO: should we send a step skipped event?
+		// @TODO: should we send a step skipped event?
 
 		result.Status = execcontext.StepStatusSkipped
 		result.EndTime = time.Now()
@@ -342,7 +333,6 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 		return err
 	}
 
-	// Update step result
 	result.EndTime = time.Now()
 	result.Duration = result.EndTime.Sub(start)
 	result.Response = stepResult.Response
@@ -355,7 +345,8 @@ func (e *Executor) executeStep(execCtx *execcontext.ExecutionContext, step *ast.
 	// of the current step in the updates
 	execCtx.SetStepResult(step.ID, result)
 
-	// Process state updates for any step type
+	// now let's update the state if there are any updates, we can no reference the
+	// current step if needed.
 	if step.Updates != nil {
 		updates := make(map[string]interface{})
 		for key, value := range step.Updates {
@@ -487,7 +478,6 @@ func (e *Executor) executeWhileStep(execCtx *execcontext.ExecutionContext, step 
 
 // executeAgentStep executes a step that uses an AI agent
 func (e *Executor) executeAgentStep(execCtx *execcontext.ExecutionContext, step *ast.Step) (*StepResult, error) {
-	// Get the agent configuration
 	agent, exists := execCtx.Workflow.GetAgent(step.Agent)
 	if !exists {
 		return nil, fmt.Errorf("agent %s not found", step.Agent)
@@ -580,7 +570,6 @@ func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionCo
 	}
 
 	for turn := 0; turn < maxTurns; turn++ {
-		// Create request with tools
 		request, err := e.createModelRequestWithTools(agent, messages, pr.GetName())
 		if err != nil {
 			return "", fmt.Errorf("failed to create model request: %w", err)
@@ -604,7 +593,8 @@ func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionCo
 
 		e.progressChan <- events.NewAgentCompletedEvent(step, actionID, execCtx.RunID)
 
-		// Check if the response contains tool calls
+		// Check if the response contains tool calls if there are no tool calls
+		// its safe to exit with a final response from the response
 		toolCalls := e.getToolCallsFromResponseMessages(responseMessages)
 		if len(toolCalls) == 0 {
 			return getLastContentBlock(responseMessages), nil
@@ -734,7 +724,6 @@ func (e *Executor) executeToolCalls(execCtx *execcontext.ExecutionContext, toolC
 		toolCallMsg := provider.FormatToolCall(toolCall)
 		e.progressChan <- events.NewToolUseEvent(step.ID, actionID, toolCall.Name, execCtx.RunID, toolCallMsg)
 
-		// Execute the tool
 		result, err := e.toolRegistry.ExecuteTool(execCtx, toolCall.Name, toolCall.Input)
 		if err != nil || result.Error != "" {
 			msg := result.Error
@@ -747,7 +736,6 @@ func (e *Executor) executeToolCalls(execCtx *execcontext.ExecutionContext, toolC
 				Str("tool", toolCall.Name).
 				Msg("Tool execution failed")
 
-			// Add error result
 			isError := true
 			results = append(results,
 				provider.Message{
@@ -788,15 +776,12 @@ func (e *Executor) executeBlockStep(execCtx *execcontext.ExecutionContext, step 
 		Str("block", step.Uses).
 		Msg("Executing block step")
 
-	// Resolve block path (handle relative paths)
 	blockPath := step.Uses
 	if !filepath.IsAbs(blockPath) && execCtx.Workflow.SourceFile != "" {
-		// Resolve relative to workflow file location
 		workflowDir := filepath.Dir(execCtx.Workflow.SourceFile)
 		blockPath = filepath.Join(workflowDir, blockPath)
 	}
 
-	// Prepare inputs from step.With
 	inputs := make(map[string]interface{})
 	for key, value := range step.With {
 		rendered, err := e.renderValueRecursively(value, execCtx)
@@ -821,7 +806,6 @@ func (e *Executor) executeScriptStep(execCtx *execcontext.ExecutionContext, step
 		Str("script", step.Run).
 		Msg("Executing script step")
 
-	// Prepare inputs from step.With
 	inputs := make(map[string]interface{})
 	for key, value := range step.With {
 		rendered, err := e.renderValueRecursively(value, execCtx)
@@ -857,7 +841,6 @@ func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, s
 		Str("container", step.Container).
 		Msg("Executing container step")
 
-	// Prepare inputs from step.With
 	inputs := make(map[string]interface{})
 	for key, value := range step.With {
 		rendered, err := e.renderValueRecursively(value, execCtx)
@@ -867,7 +850,6 @@ func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, s
 		inputs[key] = rendered
 	}
 
-	// Create a temporary block configuration for Docker container execution
 	tempBlock := &block.Block{
 		Name:    fmt.Sprintf("container-%s", step.ID),
 		Runtime: block.RuntimeDocker,
@@ -877,15 +859,13 @@ func (e *Executor) executeContainerStep(execCtx *execcontext.ExecutionContext, s
 		Command: step.Command,
 	}
 
-	// Define dynamic inputs based on step.With
 	for key := range inputs {
 		tempBlock.Inputs[key] = block.InputSchema{
-			Type:     "string", // Default type
+			Type:     "string",
 			Required: false,
 		}
 	}
 
-	// Execute using Docker executor
 	outputs, err := e.blockManager.ExecuteRawBlock(execCtx, tempBlock, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("container execution failed: %w", err)
@@ -923,10 +903,8 @@ func (e *Executor) evaluateSkipCondition(execCtx *execcontext.ExecutionContext, 
 func (e *Executor) renderValueRecursively(value interface{}, execCtx *execcontext.ExecutionContext) (interface{}, error) {
 	switch v := value.(type) {
 	case string:
-		// Render template strings
 		return e.templateEngine.Render(v, execCtx)
 	case map[string]interface{}:
-		// Recursively render nested maps
 		rendered := make(map[string]interface{})
 		for key, val := range v {
 			renderedVal, err := e.renderValueRecursively(val, execCtx)
@@ -937,7 +915,6 @@ func (e *Executor) renderValueRecursively(value interface{}, execCtx *execcontex
 		}
 		return rendered, nil
 	case []interface{}:
-		// Recursively render arrays
 		rendered := make([]interface{}, len(v))
 		for i, val := range v {
 			renderedVal, err := e.renderValueRecursively(val, execCtx)
@@ -957,7 +934,6 @@ func (e *Executor) renderValueRecursively(value interface{}, execCtx *execcontex
 func getRequiredProviders(workflow *ast.Workflow) map[string]map[string]interface{} {
 	providers := make(map[string]map[string]interface{})
 
-	// Check agents for provider usage
 	for _, agent := range workflow.Agents {
 		if agent.Provider != "" {
 			providers[agent.Provider] = agent.Config
@@ -970,7 +946,6 @@ func getRequiredProviders(workflow *ast.Workflow) map[string]map[string]interfac
 // initializeRequiredProviders initializes only the specified providers
 func initializeRequiredProviders(registry *provider.Registry, requiredProviders map[string]map[string]interface{}) error {
 	for providerName, config := range requiredProviders {
-		// Check if provider is already registered (e.g., mock providers in tests)
 		if _, err := registry.GetProviderByName(providerName); err == nil {
 			log.Debug().Str("provider", providerName).Msg("Provider already registered, skipping initialization")
 			continue
@@ -1015,13 +990,12 @@ func initializeToolProviders(toolRegistry *tools.Registry, workflow *ast.Workflo
 		return fmt.Errorf("failed to register script tool provider: %w", err)
 	}
 
-	// Register MCP tool provider
 	mcpProvider := mcp.NewMCPToolProvider()
 	if err := toolRegistry.RegisterProvider(mcpProvider); err != nil {
 		return fmt.Errorf("failed to register MCP tool provider: %w", err)
 	}
 
-	// TODO: register the workflow provider (block provider)
+	// @TODO: register the workflow provider (block provider)
 
 	for name, agent := range workflow.Agents {
 		if err := toolRegistry.RegisterToolsForAgent(agent); err != nil {
@@ -1042,7 +1016,6 @@ func (e *Executor) collectWorkflowOutputs(execCtx *execcontext.ExecutionContext)
 	outputs := make(map[string]interface{})
 
 	for key, valueTemplate := range workflowOutputs {
-		// Render the value recursively to handle nested structures with templates
 		renderedValue, err := e.renderValueRecursively(valueTemplate, execCtx)
 		if err != nil {
 			log.Error().
@@ -1056,7 +1029,6 @@ func (e *Executor) collectWorkflowOutputs(execCtx *execcontext.ExecutionContext)
 		outputs[key] = expression.ValueToString(renderedValue)
 	}
 
-	// Set the rendered outputs in the execution context
 	execCtx.SetWorkflowOutputs(outputs)
 
 	log.Info().
