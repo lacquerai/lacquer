@@ -1,0 +1,15 @@
+version: "1.0"
+
+inputs:
+  name:
+    type: string
+    description: The name to greet
+    required: true
+
+workflow:
+  steps:
+    - id: greet
+      run: echo "Hello, ${{ inputs.name }}!"
+
+  outputs:
+    greeting: ${{ steps.greet.output }}
