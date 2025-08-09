@@ -10,9 +10,9 @@ import (
 
 func TestValidateWorkflowInputs_NoInputDefinitions(t *testing.T) {
 	workflow := &ast.Workflow{
+		Inputs: nil,
 		Workflow: &ast.WorkflowDef{
-			Inputs: nil,
-			Steps:  []*ast.Step{{ID: "test"}},
+			Steps: []*ast.Step{{ID: "test"}},
 		},
 	}
 
@@ -29,13 +29,13 @@ func TestValidateWorkflowInputs_NoInputDefinitions(t *testing.T) {
 
 func TestValidateWorkflowInputs_RequiredFieldMissing(t *testing.T) {
 	workflow := &ast.Workflow{
-		Workflow: &ast.WorkflowDef{
-			Inputs: map[string]*ast.InputParam{
-				"name": {
-					Type:     "string",
-					Required: true,
-				},
+		Inputs: map[string]*ast.InputParam{
+			"name": {
+				Type:     "string",
+				Required: true,
 			},
+		},
+		Workflow: &ast.WorkflowDef{
 			Steps: []*ast.Step{{ID: "test"}},
 		},
 	}
@@ -51,17 +51,17 @@ func TestValidateWorkflowInputs_RequiredFieldMissing(t *testing.T) {
 
 func TestValidateWorkflowInputs_DefaultValues(t *testing.T) {
 	workflow := &ast.Workflow{
-		Workflow: &ast.WorkflowDef{
-			Inputs: map[string]*ast.InputParam{
-				"name": {
-					Type:    "string",
-					Default: "World",
-				},
-				"count": {
-					Type:    "integer",
-					Default: 5,
-				},
+		Inputs: map[string]*ast.InputParam{
+			"name": {
+				Type:    "string",
+				Default: "World",
 			},
+			"count": {
+				Type:    "integer",
+				Default: 5,
+			},
+		},
+		Workflow: &ast.WorkflowDef{
 			Steps: []*ast.Step{{ID: "test"}},
 		},
 	}
@@ -80,14 +80,14 @@ func TestValidateWorkflowInputs_DefaultValues(t *testing.T) {
 
 func TestValidateWorkflowInputs_TypeValidation(t *testing.T) {
 	workflow := &ast.Workflow{
+		Inputs: map[string]*ast.InputParam{
+			"name":     {Type: "string"},
+			"age":      {Type: "integer"},
+			"active":   {Type: "boolean"},
+			"tags":     {Type: "array"},
+			"metadata": {Type: "object"},
+		},
 		Workflow: &ast.WorkflowDef{
-			Inputs: map[string]*ast.InputParam{
-				"name":     {Type: "string"},
-				"age":      {Type: "integer"},
-				"active":   {Type: "boolean"},
-				"tags":     {Type: "array"},
-				"metadata": {Type: "object"},
-			},
 			Steps: []*ast.Step{{ID: "test"}},
 		},
 	}
@@ -108,12 +108,12 @@ func TestValidateWorkflowInputs_TypeValidation(t *testing.T) {
 
 func TestValidateWorkflowInputs_TypeConversion(t *testing.T) {
 	workflow := &ast.Workflow{
+		Inputs: map[string]*ast.InputParam{
+			"count":   {Type: "integer"},
+			"enabled": {Type: "boolean"},
+			"label":   {Type: "string"},
+		},
 		Workflow: &ast.WorkflowDef{
-			Inputs: map[string]*ast.InputParam{
-				"count":   {Type: "integer"},
-				"enabled": {Type: "boolean"},
-				"label":   {Type: "string"},
-			},
 			Steps: []*ast.Step{{ID: "test"}},
 		},
 	}
@@ -134,10 +134,10 @@ func TestValidateWorkflowInputs_TypeConversion(t *testing.T) {
 
 func TestValidateWorkflowInputs_TypeValidationFailure(t *testing.T) {
 	workflow := &ast.Workflow{
+		Inputs: map[string]*ast.InputParam{
+			"age": {Type: "integer"},
+		},
 		Workflow: &ast.WorkflowDef{
-			Inputs: map[string]*ast.InputParam{
-				"age": {Type: "integer"},
-			},
 			Steps: []*ast.Step{{ID: "test"}},
 		},
 	}
@@ -156,13 +156,13 @@ func TestValidateWorkflowInputs_TypeValidationFailure(t *testing.T) {
 func TestValidateWorkflowInputs_StringConstraints(t *testing.T) {
 	t.Run("Pattern validation", func(t *testing.T) {
 		workflow := &ast.Workflow{
-			Workflow: &ast.WorkflowDef{
-				Inputs: map[string]*ast.InputParam{
-					"email": {
-						Type:    "string",
-						Pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
-					},
+			Inputs: map[string]*ast.InputParam{
+				"email": {
+					Type:    "string",
+					Pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
 				},
+			},
+			Workflow: &ast.WorkflowDef{
 				Steps: []*ast.Step{{ID: "test"}},
 			},
 		}
@@ -181,13 +181,13 @@ func TestValidateWorkflowInputs_StringConstraints(t *testing.T) {
 
 	t.Run("Enum validation", func(t *testing.T) {
 		workflow := &ast.Workflow{
-			Workflow: &ast.WorkflowDef{
-				Inputs: map[string]*ast.InputParam{
-					"size": {
-						Type: "string",
-						Enum: []string{"small", "medium", "large"},
-					},
+			Inputs: map[string]*ast.InputParam{
+				"size": {
+					Type: "string",
+					Enum: []string{"small", "medium", "large"},
 				},
+			},
+			Workflow: &ast.WorkflowDef{
 				Steps: []*ast.Step{{ID: "test"}},
 			},
 		}
@@ -209,14 +209,14 @@ func TestValidateWorkflowInputs_NumericConstraints(t *testing.T) {
 	min := 0.0
 	max := 100.0
 	workflow := &ast.Workflow{
-		Workflow: &ast.WorkflowDef{
-			Inputs: map[string]*ast.InputParam{
-				"score": {
-					Type:    "integer",
-					Minimum: &min,
-					Maximum: &max,
-				},
+		Inputs: map[string]*ast.InputParam{
+			"score": {
+				Type:    "integer",
+				Minimum: &min,
+				Maximum: &max,
 			},
+		},
+		Workflow: &ast.WorkflowDef{
 			Steps: []*ast.Step{{ID: "test"}},
 		},
 	}
@@ -243,14 +243,14 @@ func TestValidateWorkflowInputs_ArrayConstraints(t *testing.T) {
 	minItems := 1
 	maxItems := 5
 	workflow := &ast.Workflow{
-		Workflow: &ast.WorkflowDef{
-			Inputs: map[string]*ast.InputParam{
-				"items": {
-					Type:     "array",
-					MinItems: &minItems,
-					MaxItems: &maxItems,
-				},
+		Inputs: map[string]*ast.InputParam{
+			"items": {
+				Type:     "array",
+				MinItems: &minItems,
+				MaxItems: &maxItems,
 			},
+		},
+		Workflow: &ast.WorkflowDef{
 			Steps: []*ast.Step{{ID: "test"}},
 		},
 	}
@@ -275,10 +275,10 @@ func TestValidateWorkflowInputs_ArrayConstraints(t *testing.T) {
 
 func TestValidateWorkflowInputs_UnexpectedFields(t *testing.T) {
 	workflow := &ast.Workflow{
+		Inputs: map[string]*ast.InputParam{
+			"name": {Type: "string"},
+		},
 		Workflow: &ast.WorkflowDef{
-			Inputs: map[string]*ast.InputParam{
-				"name": {Type: "string"},
-			},
 			Steps: []*ast.Step{{ID: "test"}},
 		},
 	}
@@ -304,33 +304,33 @@ func TestValidateWorkflowInputs_ComplexScenario(t *testing.T) {
 	minItems := 1
 
 	workflow := &ast.Workflow{
-		Workflow: &ast.WorkflowDef{
-			Inputs: map[string]*ast.InputParam{
-				"name": {
-					Type:     "string",
-					Required: true,
-					Pattern:  `^[A-Za-z\s]+$`,
-				},
-				"age": {
-					Type:    "integer",
-					Minimum: &min,
-					Maximum: &max,
-					Default: 25,
-				},
-				"email": {
-					Type:    "string",
-					Pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
-				},
-				"skills": {
-					Type:     "array",
-					MinItems: &minItems,
-				},
-				"role": {
-					Type:    "string",
-					Enum:    []string{"user", "admin", "moderator"},
-					Default: "user",
-				},
+		Inputs: map[string]*ast.InputParam{
+			"name": {
+				Type:     "string",
+				Required: true,
+				Pattern:  `^[A-Za-z\s]+$`,
 			},
+			"age": {
+				Type:    "integer",
+				Minimum: &min,
+				Maximum: &max,
+				Default: 25,
+			},
+			"email": {
+				Type:    "string",
+				Pattern: `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`,
+			},
+			"skills": {
+				Type:     "array",
+				MinItems: &minItems,
+			},
+			"role": {
+				Type:    "string",
+				Enum:    []string{"user", "admin", "moderator"},
+				Default: "user",
+			},
+		},
+		Workflow: &ast.WorkflowDef{
 			Steps: []*ast.Step{{ID: "test"}},
 		},
 	}

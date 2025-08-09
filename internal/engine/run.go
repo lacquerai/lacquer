@@ -17,7 +17,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// ExecutionResult represents the result of running a workflow
+// ExecutionResult contains the complete outcome of workflow execution including
+// timing, status, step results, and resource usage metrics.
 type ExecutionResult struct {
 	WorkflowFile string                 `json:"workflow_file" yaml:"workflow_file"`
 	RunID        string                 `json:"run_id" yaml:"run_id"`
@@ -34,7 +35,8 @@ type ExecutionResult struct {
 	TokenUsage   *TokenUsageSummary     `json:"token_usage,omitempty" yaml:"token_usage,omitempty"`
 }
 
-// StepExecutionResult represents the result of executing a single step
+// StepExecutionResult contains the execution outcome for an individual workflow step
+// including its output, timing, retry information, and token usage.
 type StepExecutionResult struct {
 	StepID     string                 `json:"step_id" yaml:"step_id"`
 	Status     string                 `json:"status" yaml:"status"`
@@ -48,14 +50,14 @@ type StepExecutionResult struct {
 	TokenUsage *TokenUsage            `json:"token_usage,omitempty" yaml:"token_usage,omitempty"`
 }
 
-// TokenUsageSummary represents aggregated token usage across all steps
+// TokenUsageSummary aggregates token consumption metrics across all workflow steps.
 type TokenUsageSummary struct {
 	TotalTokens      int `json:"total_tokens" yaml:"total_tokens"`
 	PromptTokens     int `json:"prompt_tokens" yaml:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens" yaml:"completion_tokens"`
 }
 
-// TokenUsage represents token usage for a single step
+// TokenUsage tracks token consumption and estimated cost for a single step execution.
 type TokenUsage struct {
 	PromptTokens     int     `json:"prompt_tokens" yaml:"prompt_tokens"`
 	CompletionTokens int     `json:"completion_tokens" yaml:"completion_tokens"`
@@ -63,7 +65,8 @@ type TokenUsage struct {
 	EstimatedCost    float64 `json:"estimated_cost" yaml:"estimated_cost"`
 }
 
-// StepProgressState tracks the visual state of each step for spinner display
+// StepProgressState manages the visual display state for a workflow step,
+// including its spinner animation and nested action states.
 type StepProgressState struct {
 	stepID     string
 	stepIndex  int
@@ -77,12 +80,17 @@ type StepProgressState struct {
 	mu         sync.RWMutex
 }
 
+// String returns a formatted representation of the step progress state
+// including its title and action states.
 func (s *StepProgressState) String() string {
 	return fmt.Sprintf(" %s\n%s", s.title, s.actions.String())
 }
 
+// ActionStates is a collection of action states within a workflow step.
 type ActionStates []ActionState
 
+// Add appends a new action state and marks all previous actions as completed
+// if they haven't already been marked with success or error icons.
 func (as *ActionStates) Add(action ActionState) {
 	newActions := make(ActionStates, len(*as)+1)
 	// make sure the previous actions are all marked as success if they are not already
@@ -98,7 +106,8 @@ func (as *ActionStates) Add(action ActionState) {
 	*as = newActions
 }
 
-// wrapLine wraps a line to the specified width, preserving word boundaries when possible
+// wrapLine splits text into multiple lines respecting word boundaries.
+// Falls back to hard breaks if no suitable word boundary is found.
 func wrapLine(line string, maxWidth int) []string {
 	if len(line) <= maxWidth {
 		return []string{line}
@@ -128,6 +137,7 @@ func wrapLine(line string, maxWidth int) []string {
 	return wrapped
 }
 
+// String formats all action states with proper indentation and line wrapping.
 func (as ActionStates) String() string {
 	var text strings.Builder
 	for _, action := range as {
@@ -181,32 +191,63 @@ func (as ActionStates) String() string {
 	return text.String()
 }
 
+// ActionState represents a single action within a workflow step,
+// tracking its identifier and display text.
 type ActionState struct {
 	id   string
 	text string
 }
 
+// Runner orchestrates workflow execution with progress tracking capabilities.
 type Runner struct {
 	progressListener pkgEvents.Listener
+	newExecutor      ExecutorFunc
 }
 
-func NewRunner(progressListener pkgEvents.Listener) *Runner {
-	return &Runner{
-		progressListener: progressListener,
+// RunnerOption is a function that can be used to configure a Runner.
+type RunnerOption func(*Runner)
+
+// WithExecutorFunc sets the function that creates a new Executor instance.
+// This allows for custom Executor implementations to be used.
+// In general this is only used for testing.
+func WithExecutorFunc(newExecutor ExecutorFunc) RunnerOption {
+	return func(r *Runner) {
+		r.newExecutor = newExecutor
 	}
 }
 
+// NewRunner creates a workflow runner with the specified progress listener.
+func NewRunner(progressListener pkgEvents.Listener, options ...RunnerOption) *Runner {
+	r := &Runner{
+		progressListener: progressListener,
+	}
+
+	for _, option := range options {
+		option(r)
+	}
+
+	return r
+}
+
+// SetProgressListener updates the progress listener for workflow execution events.
 func (r *Runner) SetProgressListener(listener pkgEvents.Listener) {
 	r.progressListener = listener
 }
 
+// RunWorkflowRaw executes a parsed workflow with the provided execution context.
+// Returns detailed execution results including step outcomes and resource usage.
 func (r *Runner) RunWorkflowRaw(execCtx *execcontext.ExecutionContext, workflow *ast.Workflow, startTime time.Time, prefix ...string) (*ExecutionResult, error) {
+	// If no executor function is set, use the default implementation
+	if r.newExecutor == nil {
+		r.newExecutor = NewExecutor
+	}
+
 	executorConfig := &ExecutorConfig{
 		MaxConcurrentSteps: 3,
 		DefaultTimeout:     5 * time.Minute,
 		EnableRetries:      true,
 	}
-	executor, err := NewExecutor(execCtx.Context, executorConfig, workflow, nil, r)
+	executor, err := r.newExecutor(execCtx.Context, executorConfig, workflow, nil, r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create executor: %w", err)
 	}
@@ -250,6 +291,8 @@ func (r *Runner) RunWorkflowRaw(execCtx *execcontext.ExecutionContext, workflow 
 	return &result, nil
 }
 
+// RunWorkflow parses and executes a workflow file with the given inputs.
+// Handles input validation, default value assignment, and progress tracking.
 func (r *Runner) RunWorkflow(ctx execcontext.RunContext, workflowFile string, inputs map[string]interface{}, prefix ...string) (*ExecutionResult, error) {
 	startTime := time.Now()
 
@@ -263,16 +306,6 @@ func (r *Runner) RunWorkflow(ctx execcontext.RunContext, workflowFile string, in
 	if err != nil {
 		return nil, err
 	}
-
-	// add prefix to step IDs if provided
-	// this is used to identify the step in the progress tracker if the workflow is run
-	// in a nested workflow
-	// if prefix != nil {
-	// 	prefixStr := strings.Join(prefix, ".")
-	// 	for i, step := range workflow.Workflow.Steps {
-	// 		workflow.Workflow.Steps[i].ID = fmt.Sprintf("%s.%s", prefixStr, step.ID)
-	// 	}
-	// }
 
 	log.Info().
 		Str("version", workflow.Version).
@@ -310,7 +343,9 @@ func (r *Runner) RunWorkflow(ctx execcontext.RunContext, workflowFile string, in
 	return r.RunWorkflowRaw(execCtx, workflow, startTime, prefix...)
 }
 
-func (r *Runner) executeWithProgress(executor *Executor, execCtx *execcontext.ExecutionContext, result *ExecutionResult) error {
+// executeWithProgress runs the workflow executor while sending real-time
+// progress events to registered listeners.
+func (r *Runner) executeWithProgress(executor WorkflowExecutor, execCtx *execcontext.ExecutionContext, result *ExecutionResult) error {
 	// Create a progress channel for real-time updates
 	progressChan := make(chan pkgEvents.ExecutionEvent, 100)
 	defer close(progressChan)
@@ -323,34 +358,38 @@ func (r *Runner) executeWithProgress(executor *Executor, execCtx *execcontext.Ex
 	return err
 }
 
+// Close stops the progress listener and cleans up resources.
 func (r *Runner) Close() {
 	if r.progressListener != nil {
 		r.progressListener.StopListening()
 	}
 }
 
-// ProgressTracker manages the visual progress display for all steps
+// CLIProgressTracker manages visual progress display for workflow execution,
+// coordinating step-level spinners and action states.
 type CLIProgressTracker struct {
-	steps      map[string]*StepProgressState
-	mu         sync.RWMutex
-	writer     io.Writer
-	totalSteps int
-	done       chan struct{}
-	prefix     string
+	steps          map[string]*StepProgressState
+	mu             sync.RWMutex
+	writer         io.Writer
+	totalSteps     int
+	done           chan struct{}
+	prefix         string
+	spinnerManager *style.SpinnerManager
 }
 
-// NewProgressTracker creates a new progress tracker
+// NewProgressTracker creates a progress tracker for displaying workflow execution status.
 func NewProgressTracker(writer io.Writer, prefix string, totalSteps int) *CLIProgressTracker {
 	return &CLIProgressTracker{
-		steps:      make(map[string]*StepProgressState),
-		writer:     writer,
-		totalSteps: totalSteps,
-		done:       make(chan struct{}),
-		prefix:     prefix,
+		steps:          make(map[string]*StepProgressState),
+		writer:         writer,
+		totalSteps:     totalSteps,
+		done:           make(chan struct{}),
+		prefix:         prefix,
+		spinnerManager: style.NewSpinnerManager(writer),
 	}
 }
 
-// Start begins the progress tracking
+// StartListening processes execution events and updates the visual progress display.
 func (pt *CLIProgressTracker) StartListening(progressChan <-chan pkgEvents.ExecutionEvent) {
 	// Process events - spinners handle their own animation
 	for event := range progressChan {
@@ -381,7 +420,7 @@ func (pt *CLIProgressTracker) StartListening(progressChan <-chan pkgEvents.Execu
 	}
 }
 
-// Stop halts the progress tracker and ensures all spinners are stopped
+// StopListening halts progress tracking and stops all active spinners.
 func (pt *CLIProgressTracker) StopListening() {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
@@ -396,13 +435,13 @@ func (pt *CLIProgressTracker) StopListening() {
 	close(pt.done)
 }
 
-// startStep initializes a new step in running state
+// startStep creates and starts a spinner for a new workflow step.
 func (pt *CLIProgressTracker) startStep(stepID string, stepIndex, totalSteps int) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 
 	// Create and configure spinner
-	s := style.NewSpinner(pt.writer)
+	s := pt.spinnerManager.Start()
 	title := fmt.Sprintf(" Running step %s (%d/%d)", style.AccentStyle.Render(stepID), stepIndex, totalSteps)
 	s.SetSuffix(title)
 
@@ -422,7 +461,7 @@ func (pt *CLIProgressTracker) startStep(stepID string, stepIndex, totalSteps int
 	s.Start()
 }
 
-// updateStepProgress updates the progress of a step
+// updateStepProgress updates the display text for an active step's spinner.
 func (pt *CLIProgressTracker) updateStepProgress(stepID string, actionID string, text string) {
 	pt.mu.RLock()
 	defer pt.mu.RUnlock()
@@ -434,6 +473,7 @@ func (pt *CLIProgressTracker) updateStepProgress(stepID string, actionID string,
 	}
 }
 
+// createActionSpinner adds a new action to a step's progress display.
 func (pt *CLIProgressTracker) createActionSpinner(stepID string, actionID string, text string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
@@ -451,6 +491,7 @@ func (pt *CLIProgressTracker) createActionSpinner(stepID string, actionID string
 	}
 }
 
+// completeActionSpinner marks an action as completed with a success icon.
 func (pt *CLIProgressTracker) completeActionSpinner(stepID string, actionID string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
@@ -469,6 +510,7 @@ func (pt *CLIProgressTracker) completeActionSpinner(stepID string, actionID stri
 	}
 }
 
+// failActionSpinner marks an action as failed with an error icon.
 func (pt *CLIProgressTracker) failActionSpinner(stepID string, actionID string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
@@ -487,7 +529,7 @@ func (pt *CLIProgressTracker) failActionSpinner(stepID string, actionID string) 
 	}
 }
 
-// completeStep marks a step as completed
+// completeStep finalizes a step's display with a success indicator and stops its spinner.
 func (pt *CLIProgressTracker) completeStep(stepID string, duration time.Duration) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
@@ -502,7 +544,7 @@ func (pt *CLIProgressTracker) completeStep(stepID string, duration time.Duration
 	}
 }
 
-// failStep marks a step as failed
+// failStep finalizes a step's display with an error indicator and stops its spinner.
 func (pt *CLIProgressTracker) failStep(stepID string, duration time.Duration, _ string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
@@ -517,7 +559,7 @@ func (pt *CLIProgressTracker) failStep(stepID string, duration time.Duration, _ 
 	}
 }
 
-// retryStep shows retry information
+// retryStep updates the step display to show retry attempt information.
 func (pt *CLIProgressTracker) retryStep(stepID string, attempt int) {
 	pt.mu.RLock()
 	defer pt.mu.RUnlock()
@@ -530,8 +572,8 @@ func (pt *CLIProgressTracker) retryStep(stepID string, attempt int) {
 	}
 }
 
-// No animation functions needed - briandowns/spinner handles animation automatically
-
+// collectExecutionResults aggregates step execution data and token usage
+// statistics into the final execution result.
 func collectExecutionResults(execCtx *execcontext.ExecutionContext, result *ExecutionResult) {
 	summary := execCtx.GetExecutionSummary()
 
@@ -576,6 +618,7 @@ func collectExecutionResults(execCtx *execcontext.ExecutionContext, result *Exec
 	}
 }
 
+// printWorkflowInfo displays workflow metadata including name and step count.
 func printWorkflowInfo(w io.Writer, workflow *ast.Workflow) {
 	name := getWorkflowName(workflow)
 	stepCount := len(workflow.Workflow.Steps)
@@ -584,6 +627,7 @@ func printWorkflowInfo(w io.Writer, workflow *ast.Workflow) {
 
 }
 
+// getWorkflowName extracts the workflow name from metadata or returns a default.
 func getWorkflowName(workflow *ast.Workflow) string {
 	if workflow.Metadata != nil && workflow.Metadata.Name != "" {
 		return workflow.Metadata.Name

@@ -37,17 +37,14 @@ func (p *OutputParser) extractJSON(response string) map[string]interface{} {
 		response = matches[1]
 	}
 
-	// Clean up the response
 	response = strings.TrimSpace(response)
 
-	// Try to parse as JSON
 	var result map[string]interface{}
 	err := json.Unmarshal([]byte(response), &result)
 	if err == nil {
 		return result
 	}
 
-	// Try to find JSON-like structures in the text
 	jsonMatches := p.jsonPattern.FindAllString(response, -1)
 	for _, match := range jsonMatches {
 		err := json.Unmarshal([]byte(match), &result)
