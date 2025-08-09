@@ -79,7 +79,15 @@ fi
 echo "Version: ${VERSION}"
 
 # Construct download URL
-ARCHIVE_NAME="lacquer_${VERSION#v}_$(echo ${PLATFORM} | sed 's/.*/\u&/')_${ARCH}"
+# Capitalize platform name for archive naming
+case "${PLATFORM}" in
+    linux)   PLATFORM_CAPITALIZED="Linux";;
+    darwin)  PLATFORM_CAPITALIZED="Darwin";;
+    windows) PLATFORM_CAPITALIZED="Windows";;
+    *)       PLATFORM_CAPITALIZED="${PLATFORM}";;
+esac
+
+ARCHIVE_NAME="lacquer_${VERSION#v}_${PLATFORM_CAPITALIZED}_${ARCH}"
 if [ "${PLATFORM}" = "windows" ]; then
     ARCHIVE_NAME="${ARCHIVE_NAME}.zip"
 else
