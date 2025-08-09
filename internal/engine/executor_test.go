@@ -40,7 +40,7 @@ func createTestExecutionContext(workflow *ast.Workflow) *execcontext.ExecutionCo
 	return execCtx
 }
 
-func createMockExecutor(workflow *ast.Workflow) (*Executor, error) {
+func createMockExecutor(workflow *ast.Workflow) (WorkflowExecutor, error) {
 	config := DefaultExecutorConfig()
 	config.MaxConcurrentSteps = 1 // Sequential execution for deterministic tests
 
@@ -750,7 +750,9 @@ func TestExecuteWorkflow_AgentStepWithOutputs(t *testing.T) {
 	executor, err := createMockExecutor(workflow)
 	require.NoError(t, err)
 
-	mockProvider, err := executor.modelRegistry.GetProviderByName("anthropic")
+	mockExecutor, ok := executor.(*Executor)
+	require.True(t, ok)
+	mockProvider, err := mockExecutor.modelRegistry.GetProviderByName("anthropic")
 	require.NoError(t, err)
 	mockProviderTyped := mockProvider.(*provider.MockProvider)
 	mockProviderTyped.SetResponse("Generate a structured response", `{"result": "test_value"}`)

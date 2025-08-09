@@ -72,11 +72,21 @@ func DefaultExecutorConfig() *ExecutorConfig {
 	}
 }
 
+// ExecutorFunc is a function that creates a new Executor instance.
+type ExecutorFunc func(ctx execcontext.RunContext, config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry, runner *Runner) (WorkflowExecutor, error)
+
+// WorkflowExecutor is an interface that defines the methods that an executor must implement.
+// This is used to allow for custom executor implementations to be used.
+// In general this is only used for testing.
+type WorkflowExecutor interface {
+	ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progressChan chan<- pkgEvents.ExecutionEvent) error
+}
+
 // NewExecutor creates a workflow executor instance with lazy initialization of
 // AI providers, tool registries, and runtime dependencies. Only providers and
 // tools referenced in the workflow are initialized to minimize resource usage.
 // Returns an error if provider initialization or dependency resolution fails.
-func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry, runner *Runner) (*Executor, error) {
+func NewExecutor(ctx execcontext.RunContext, config *ExecutorConfig, workflow *ast.Workflow, registry *provider.Registry, runner *Runner) (WorkflowExecutor, error) {
 	if config == nil {
 		config = DefaultExecutorConfig()
 	}
