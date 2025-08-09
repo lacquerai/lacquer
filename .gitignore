@@ -89,7 +89,6 @@ tmp/
 
 # GoReleaser
 dist/
-.goreleaser.yml
 
 # Local configuration
 config.local.yaml

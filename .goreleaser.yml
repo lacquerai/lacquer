@@ -1,0 +1,101 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: laq
+    main: ./cmd/laq
+    binary: laq
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - "386"
+    ignore:
+      - goos: windows
+        goarch: arm64
+      - goos: windows
+        goarch: "386"
+    ldflags:
+      - -s -w -X github.com/lacquerai/lacquer/internal/version.Version={{.Version}}
+      - -X github.com/lacquerai/lacquer/internal/version.Commit={{.Commit}}
+      - -X github.com/lacquerai/lacquer/internal/version.Date={{.Date}}
+      - -X github.com/lacquerai/lacquer/internal/version.BuiltBy=goreleaser
+
+archives:
+  - id: laq
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+  groups:
+    - title: 'Features'
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: lacquerai
+    name: lacquer
+  draft: true
+  prerelease: auto
+  mode: append
+  header: |
+    ## Lacquer {{ .Tag }} ({{ .Date }})
+
+    Welcome to this new release of Lacquer! Where AI workflows get their shine.
+  footer: |
+    ## Thanks!
+
+    Thanks to all contributors who made this release possible!
+
+sboms:
+  - artifacts: archive
+
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: '${artifact}.pem'
+    args:
+      - sign-blob
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+      - '--yes'
+    artifacts: checksum
+    output: true
