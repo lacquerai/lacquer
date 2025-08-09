@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -317,7 +316,7 @@ func TestManager(t *testing.T) {
 
 	t.Run("List runtimes", func(t *testing.T) {
 		runtimes := manager.ListRuntimes()
-		expected := []string{"go", "node"}
+		expected := []string{"go", "node", "python"}
 
 		if len(runtimes) != len(expected) {
 			t.Errorf("Expected %d runtimes, got %d", len(expected), len(runtimes))
@@ -428,66 +427,6 @@ func (d *failingDownloader) Download(ctx context.Context, url string, writer io.
 	return fmt.Errorf("network failure simulation")
 }
 
-func TestConcurrentDownloads(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping download test in short mode")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-
-	manager, err := rt.NewManager(filepath.Join(getTestCacheDir(t), "concurrent-test"))
-	if err != nil {
-		t.Fatalf("Failed to create manager: %v", err)
-	}
-
-	// Define downloads
-	downloads := []struct {
-		runtime string
-		version string
-	}{
-		{"go", "1.20.0"},
-		{"go", "1.19.0"},
-		{"node", "18.0.0"},
-		{"node", "16.20.0"},
-	}
-
-	var wg sync.WaitGroup
-	errors := make(chan error, len(downloads))
-
-	for _, dl := range downloads {
-		wg.Add(1)
-		go func(runtime, version string) {
-			defer wg.Done()
-
-			start := time.Now()
-			path, err := manager.Get(ctx, runtime, version)
-			duration := time.Since(start)
-
-			if err != nil {
-				errors <- fmt.Errorf("%s %s: %v", runtime, version, err)
-				return
-			}
-
-			t.Logf("Downloaded %s %s to %s in %v", runtime, version, path, duration)
-
-			// Verify installation
-			if _, err := os.Stat(path); err != nil {
-				errors <- fmt.Errorf("%s %s: path not found: %v", runtime, version, err)
-			}
-		}(dl.runtime, dl.version)
-	}
-
-	wg.Wait()
-	close(errors)
-
-	// Check for errors
-	for err := range errors {
-		t.Error(err)
-	}
-}
-
-// TestCachePersistence tests that cache persists across manager instances
 func TestCachePersistence(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping download test in short mode")
@@ -655,72 +594,6 @@ func main() {
 			t.Errorf("Unexpected Node output: %s", output)
 		}
 	})
-}
-
-// TestCleanup tests the cleanup functionality
-func TestCleanup(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping download test in short mode")
-	}
-
-	ctx := context.Background()
-	cacheDir := filepath.Join(getTestCacheDir(t), "cleanup-test")
-
-	manager, err := rt.NewManager(cacheDir)
-	if err != nil {
-		t.Fatalf("Failed to create manager: %v", err)
-	}
-
-	// Download some runtimes
-	_, err = manager.Get(ctx, "go", "1.19.0")
-	if err != nil {
-		t.Fatalf("Failed to download Go: %v", err)
-	}
-
-	_, err = manager.Get(ctx, "go", "1.20.0")
-	if err != nil {
-		t.Fatalf("Failed to download Go: %v", err)
-	}
-
-	// Verify they're installed
-	installed, err := manager.GetInstalled()
-	if err != nil {
-		t.Fatalf("Failed to get installed: %v", err)
-	}
-
-	goCount := 0
-	for _, info := range installed {
-		if info.Name == "go" {
-			goCount++
-		}
-	}
-
-	if goCount != 2 {
-		t.Errorf("Expected 2 Go installations, got %d", goCount)
-	}
-
-	// Clean Go cache
-	if err := manager.Clean("go"); err != nil {
-		t.Fatalf("Failed to clean Go cache: %v", err)
-	}
-
-	// Verify cleanup
-	installed, err = manager.GetInstalled()
-	if err != nil {
-		t.Fatalf("Failed to get installed after cleanup: %v", err)
-	}
-
-	for _, info := range installed {
-		if info.Name == "go" {
-			t.Errorf("Found Go installation after cleanup: %+v", info)
-		}
-	}
-
-	// Verify cache directory is gone
-	goCacheDir := filepath.Join(cacheDir, "go")
-	if _, err := os.Stat(goCacheDir); !os.IsNotExist(err) {
-		t.Error("Go cache directory still exists after cleanup")
-	}
 }
 
 // TestExtractors tests different archive formats

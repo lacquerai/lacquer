@@ -112,7 +112,6 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 func (s *Server) executeWorkflowAsync(_ context.Context, workflow *ast.Workflow, execCtx *execcontext.ExecutionContext, runID, workflowID string) {
 	runner := engine.NewRunner(s.manager)
 	result, err := runner.RunWorkflowRaw(execCtx, workflow, time.Now())
-	defer runner.Close()
 	var outputs map[string]any
 	if err == nil {
 		outputs = result.Outputs

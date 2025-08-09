@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/internal/provider"
 	pkgEvents "github.com/lacquerai/lacquer/pkg/events"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,6 +22,30 @@ import (
 // mockWorkflowExecutor is a mock implementation of WorkflowExecutor for testing
 type mockWorkflowExecutor struct {
 	events []pkgEvents.ExecutionEvent
+}
+
+// safeBuffer provides thread-safe access to a bytes.Buffer
+type safeBuffer struct {
+	buf *bytes.Buffer
+	mu  sync.RWMutex
+}
+
+func newSafeBuffer() *safeBuffer {
+	return &safeBuffer{
+		buf: &bytes.Buffer{},
+	}
+}
+
+func (sb *safeBuffer) Write(p []byte) (n int, err error) {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.Write(p)
+}
+
+func (sb *safeBuffer) String() string {
+	sb.mu.RLock()
+	defer sb.mu.RUnlock()
+	return sb.buf.String()
 }
 
 func (m *mockWorkflowExecutor) ExecuteWorkflow(execCtx *execcontext.ExecutionContext, progressChan chan<- pkgEvents.ExecutionEvent) error {
@@ -52,7 +78,6 @@ func TestRunWorkflow_Success(t *testing.T) {
 			Duration: 10 * time.Millisecond,
 		},
 	})))
-	defer runner.Close()
 
 	ctx := execcontext.RunContext{
 		Context: context.Background(),
@@ -77,7 +102,7 @@ func TestRunWorkflow_Success(t *testing.T) {
 func TestRunWorkflow_WithProgressTracker(t *testing.T) {
 	t.Setenv("LACQUER_TEST", "true")
 
-	out := &bytes.Buffer{}
+	out := newSafeBuffer()
 	progressTracker := NewProgressTracker(out, "", 1)
 	runner := NewRunner(progressTracker, WithExecutorFunc(mockExecutorFunc([]pkgEvents.ExecutionEvent{
 		{
@@ -91,7 +116,6 @@ func TestRunWorkflow_WithProgressTracker(t *testing.T) {
 			Duration: 10 * time.Millisecond,
 		},
 	})))
-	defer runner.Close()
 
 	ctx := execcontext.RunContext{
 		Context: context.Background(),
@@ -107,7 +131,17 @@ func TestRunWorkflow_WithProgressTracker(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "completed", result.Status)
-	time.Sleep(10 * time.Millisecond)
+
+	// Wait for progress tracker to complete
+	startTime := time.Now()
+	for completed := progressTracker.HasCompleted(); !completed; {
+		time.Sleep(10 * time.Millisecond)
+
+		if time.Since(startTime) > 10*time.Second {
+			log.Warn().Msg("Progress tracker did not complete in 10 seconds")
+			break
+		}
+	}
 
 	snaps.MatchSnapshot(t, out.String())
 }

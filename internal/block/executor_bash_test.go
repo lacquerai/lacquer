@@ -78,6 +78,4 @@ echo "{\"sum\": $sum}"
 	if sum["sum"] != 8.0 {
 		t.Errorf("Expected sum to be 8.0, got %v", sum)
 	}
-
-	t.Logf("Execution successful, outputs: %+v", outputs)
 }

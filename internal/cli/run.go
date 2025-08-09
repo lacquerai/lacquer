@@ -118,7 +118,6 @@ func init() {
 func runWorkflow(ctx execcontext.RunContext, workflowFile string, inputs map[string]interface{}) error {
 	runner := engine.NewRunner(engine.NewProgressTracker(ctx.StdOut, "", 0))
 	result, err := runner.RunWorkflow(ctx, workflowFile, inputs)
-	runner.Close()
 	if err != nil {
 		switch e := err.(type) {
 		case *engine.InputValidationResult:

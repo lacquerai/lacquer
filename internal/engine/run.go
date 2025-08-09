@@ -343,26 +343,22 @@ func (r *Runner) RunWorkflow(ctx execcontext.RunContext, workflowFile string, in
 	return r.RunWorkflowRaw(execCtx, workflow, startTime, prefix...)
 }
 
-// executeWithProgress runs the workflow executor while sending real-time
-// progress events to registered listeners.
+// executeWithProgress runs the workflow executor while sending progress events to registered listeners.
 func (r *Runner) executeWithProgress(executor WorkflowExecutor, execCtx *execcontext.ExecutionContext, _ *ExecutionResult) error {
-	// Create a progress channel for real-time updates
 	progressChan := make(chan pkgEvents.ExecutionEvent, 100)
-	defer close(progressChan)
 
 	if r.progressListener != nil {
 		go r.progressListener.StartListening(progressChan)
 	}
 
 	err := executor.ExecuteWorkflow(execCtx, progressChan)
-	return err
-}
+	close(progressChan)
 
-// Close stops the progress listener and cleans up resources.
-func (r *Runner) Close() {
 	if r.progressListener != nil {
 		r.progressListener.StopListening()
 	}
+
+	return err
 }
 
 // CLIProgressTracker manages visual progress display for workflow execution,
@@ -372,7 +368,7 @@ type CLIProgressTracker struct {
 	mu             sync.RWMutex
 	writer         io.Writer
 	totalSteps     int
-	done           chan struct{}
+	done           bool
 	prefix         string
 	spinnerManager *style.SpinnerManager
 }
@@ -383,7 +379,7 @@ func NewProgressTracker(writer io.Writer, prefix string, totalSteps int) *CLIPro
 		steps:          make(map[string]*StepProgressState),
 		writer:         writer,
 		totalSteps:     totalSteps,
-		done:           make(chan struct{}),
+		done:           false,
 		prefix:         prefix,
 		spinnerManager: style.NewSpinnerManager(writer),
 	}
@@ -391,6 +387,10 @@ func NewProgressTracker(writer io.Writer, prefix string, totalSteps int) *CLIPro
 
 // StartListening processes execution events and updates the visual progress display.
 func (pt *CLIProgressTracker) StartListening(progressChan <-chan pkgEvents.ExecutionEvent) {
+	pt.mu.Lock()
+	pt.done = false
+	pt.mu.Unlock()
+
 	// Process events - spinners handle their own animation
 	for event := range progressChan {
 		switch event.Type {
@@ -432,7 +432,15 @@ func (pt *CLIProgressTracker) StopListening() {
 		}
 	}
 
-	close(pt.done)
+	pt.done = true
+}
+
+// HasCompleted checks if the progress tracker has completed.
+func (pt *CLIProgressTracker) HasCompleted() bool {
+	pt.mu.RLock()
+	defer pt.mu.RUnlock()
+
+	return pt.done
 }
 
 // startStep creates and starts a spinner for a new workflow step.

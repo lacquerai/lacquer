@@ -2,8 +2,8 @@ package engine
 
 import (
 	"context"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/execcontext"
@@ -69,17 +69,44 @@ func createMockExecutor(workflow *ast.Workflow) (WorkflowExecutor, error) {
 	return NewExecutor(ctx, config, workflow, registry, runner)
 }
 
-func collectProgressEvents() (chan pkgEvents.ExecutionEvent, *[]pkgEvents.ExecutionEvent) {
+type safeEventCollector struct {
+	events []pkgEvents.ExecutionEvent
+	mu     sync.RWMutex
+	done   chan struct{}
+}
+
+func (s *safeEventCollector) getEvents() []pkgEvents.ExecutionEvent {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	// Return a copy to avoid race conditions
+	eventsCopy := make([]pkgEvents.ExecutionEvent, len(s.events))
+	copy(eventsCopy, s.events)
+	return eventsCopy
+}
+
+func (s *safeEventCollector) waitForCompletion() {
+	<-s.done
+}
+
+func collectProgressEvents() (chan pkgEvents.ExecutionEvent, *safeEventCollector) {
 	eventsChan := make(chan pkgEvents.ExecutionEvent, 100)
-	var events []pkgEvents.ExecutionEvent
+	collector := &safeEventCollector{
+		events: make([]pkgEvents.ExecutionEvent, 0),
+		done:   make(chan struct{}),
+	}
 
 	go func() {
 		for event := range eventsChan {
-			events = append(events, event)
+			collector.mu.Lock()
+			collector.events = append(collector.events, event)
+			collector.mu.Unlock()
 		}
+
+		collector.done <- struct{}{}
+		close(collector.done)
 	}()
 
-	return eventsChan, &events
+	return eventsChan, collector
 }
 
 func TestExecuteWorkflow_BasicScriptStep(t *testing.T) {
@@ -96,10 +123,10 @@ func TestExecuteWorkflow_BasicScriptStep(t *testing.T) {
 	executor, err := createMockExecutor(workflow)
 	require.NoError(t, err)
 
-	eventsChan, events := collectProgressEvents()
-	defer close(eventsChan)
+	eventsChan, collector := collectProgressEvents()
 
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
 	result, exists := execCtx.GetStepResult("test_script")
@@ -109,15 +136,16 @@ func TestExecuteWorkflow_BasicScriptStep(t *testing.T) {
 	assert.Equal(t, "Hello, World!\n", result.Response)
 	assert.NoError(t, result.Error)
 
-	time.Sleep(10 * time.Millisecond)
-	assert.True(t, len(*events) > 0, "Expected events to be generated")
+	collector.waitForCompletion()
+	events := collector.getEvents()
+	assert.True(t, len(events) > 0, "Expected events to be generated")
 
 	hasWorkflowStarted := false
 	hasWorkflowCompleted := false
 	hasStepStarted := false
 	hasStepCompleted := false
 
-	for _, event := range *events {
+	for _, event := range events {
 		switch event.Type {
 		case pkgEvents.EventWorkflowStarted:
 			hasWorkflowStarted = true
@@ -167,10 +195,10 @@ func TestExecuteWorkflow_AgentStep(t *testing.T) {
 	executor, err := createMockExecutor(workflow)
 	require.NoError(t, err)
 
-	eventsChan, events := collectProgressEvents()
-	defer close(eventsChan)
+	eventsChan, collector := collectProgressEvents()
 
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
 	result, exists := execCtx.GetStepResult("agent_step")
@@ -181,8 +209,9 @@ func TestExecuteWorkflow_AgentStep(t *testing.T) {
 	assert.NoError(t, result.Error)
 	assert.NotEmpty(t, result.Response)
 
-	time.Sleep(10 * time.Millisecond)
-	assert.True(t, len(*events) > 0)
+	collector.waitForCompletion()
+	events := collector.getEvents()
+	assert.True(t, len(events) > 0)
 }
 
 func TestExecuteWorkflow_ContainerStep(t *testing.T) {
@@ -201,9 +230,9 @@ func TestExecuteWorkflow_ContainerStep(t *testing.T) {
 	require.NoError(t, err)
 
 	eventsChan, _ := collectProgressEvents()
-	defer close(eventsChan)
 
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
 	result, exists := execCtx.GetStepResult("container_step")
@@ -252,9 +281,8 @@ func TestExecuteWorkflow_MultipleSteps(t *testing.T) {
 	require.NoError(t, err)
 
 	eventsChan, _ := collectProgressEvents()
-	defer close(eventsChan)
-
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
 	scriptResult, exists := execCtx.GetStepResult("script_step")
@@ -294,9 +322,8 @@ func TestExecuteWorkflow_SkipConditions(t *testing.T) {
 		require.NoError(t, err)
 
 		eventsChan, _ := collectProgressEvents()
-		defer close(eventsChan)
-
 		err = executor.ExecuteWorkflow(execCtx, eventsChan)
+		close(eventsChan)
 		require.NoError(t, err)
 
 		skippedResult, exists := execCtx.GetStepResult("skipped_step")
@@ -326,9 +353,9 @@ func TestExecuteWorkflow_SkipConditions(t *testing.T) {
 		require.NoError(t, err)
 
 		eventsChan, _ := collectProgressEvents()
-		defer close(eventsChan)
 
 		err = executor.ExecuteWorkflow(execCtx, eventsChan)
+		close(eventsChan)
 		require.NoError(t, err)
 
 		result, exists := execCtx.GetStepResult("conditional_step")
@@ -369,9 +396,9 @@ func TestExecuteWorkflow_StateUpdates(t *testing.T) {
 	require.NoError(t, err)
 
 	eventsChan, _ := collectProgressEvents()
-	defer close(eventsChan)
 
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
 	// Verify both steps completed
@@ -429,9 +456,9 @@ func TestExecuteWorkflow_WhileLoop(t *testing.T) {
 	require.NoError(t, err)
 
 	eventsChan, _ := collectProgressEvents()
-	defer close(eventsChan)
 
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
 	result, exists := execCtx.GetStepResult("while_loop")
@@ -465,10 +492,10 @@ func TestExecuteWorkflow_ErrorHandling(t *testing.T) {
 		executor, err := createMockExecutor(workflow)
 		require.NoError(t, err)
 
-		eventsChan, events := collectProgressEvents()
-		defer close(eventsChan)
+		eventsChan, collector := collectProgressEvents()
 
 		err = executor.ExecuteWorkflow(execCtx, eventsChan)
+		close(eventsChan)
 		require.Error(t, err)
 
 		failedResult, exists := execCtx.GetStepResult("failing_step")
@@ -480,12 +507,13 @@ func TestExecuteWorkflow_ErrorHandling(t *testing.T) {
 		secondResult, _ := execCtx.GetStepResult("should_not_execute")
 		assert.Equal(t, execcontext.StepStatusPending, secondResult.Status)
 
-		time.Sleep(10 * time.Millisecond)
+		collector.waitForCompletion()
+		events := collector.getEvents()
 
 		hasStepFailed := false
 		hasWorkflowFailed := false
 
-		for _, event := range *events {
+		for _, event := range events {
 			switch event.Type {
 			case pkgEvents.EventStepFailed:
 				hasStepFailed = true
@@ -513,9 +541,8 @@ func TestExecuteWorkflow_ErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		eventsChan, _ := collectProgressEvents()
-		defer close(eventsChan)
-
 		err = executor.ExecuteWorkflow(execCtx, eventsChan)
+		close(eventsChan)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown step type")
 	})
@@ -536,9 +563,8 @@ func TestExecuteWorkflow_ErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		eventsChan, _ := collectProgressEvents()
-		defer close(eventsChan)
-
 		err = executor.ExecuteWorkflow(execCtx, eventsChan)
+		close(eventsChan)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "agent nonexistent_agent not found")
 	})
@@ -575,9 +601,9 @@ func TestExecuteWorkflow_WorkflowOutputs(t *testing.T) {
 	require.NoError(t, err)
 
 	eventsChan, _ := collectProgressEvents()
-	defer close(eventsChan)
 
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
 	outputs := execCtx.GetWorkflowOutputs()
@@ -633,9 +659,9 @@ func TestExecuteWorkflow_WithInputs(t *testing.T) {
 	require.NoError(t, err)
 
 	eventsChan, _ := collectProgressEvents()
-	defer close(eventsChan)
 
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
 	result, exists := execCtx.GetStepResult("greet")
@@ -666,9 +692,9 @@ func TestExecuteWorkflow_BlockStep(t *testing.T) {
 	require.NoError(t, err)
 
 	eventsChan, _ := collectProgressEvents()
-	defer close(eventsChan)
 
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
 	result, exists := execCtx.GetStepResult("block_step")
@@ -694,18 +720,19 @@ func TestExecuteWorkflow_EmptyWorkflow(t *testing.T) {
 	executor, err := createMockExecutor(workflow)
 	require.NoError(t, err)
 
-	eventsChan, events := collectProgressEvents()
-	defer close(eventsChan)
+	eventsChan, collector := collectProgressEvents()
 
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
-	time.Sleep(10 * time.Millisecond)
+	collector.waitForCompletion()
+	events := collector.getEvents()
 
 	hasStarted := false
 	hasCompleted := false
 
-	for _, event := range *events {
+	for _, event := range events {
 		switch event.Type {
 		case pkgEvents.EventWorkflowStarted:
 			hasStarted = true
@@ -758,9 +785,9 @@ func TestExecuteWorkflow_AgentStepWithOutputs(t *testing.T) {
 	mockProviderTyped.SetResponse("Generate a structured response", `{"result": "test_value"}`)
 
 	eventsChan, _ := collectProgressEvents()
-	defer close(eventsChan)
 
 	err = executor.ExecuteWorkflow(execCtx, eventsChan)
+	close(eventsChan)
 	require.NoError(t, err)
 
 	result, exists := execCtx.GetStepResult("agent_with_outputs")

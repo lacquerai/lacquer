@@ -1,13 +1,13 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lacquerai/lacquer/internal/execcontext"
@@ -128,8 +128,8 @@ func newSingleDirectoryValidateTest(t *testing.T) {
 		}
 	}()
 
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
+	stdout := &safeBuffer{mu: &sync.Mutex{}}
+	stderr := &safeBuffer{mu: &sync.Mutex{}}
 	runCtx := execcontext.RunContext{
 		Context: context.Background(),
 		StdOut:  stdout,
@@ -140,7 +140,7 @@ func newSingleDirectoryValidateTest(t *testing.T) {
 	assertGoldenFile(t, directory, stdout, stderr)
 }
 
-func assertGoldenFile(t *testing.T, directory string, stdout *bytes.Buffer, stderr *bytes.Buffer) {
+func assertGoldenFile(t *testing.T, directory string, stdout *safeBuffer, stderr *safeBuffer) {
 	t.Helper()
 
 	goldenFile := filepath.Join(directory, "golden.txt")

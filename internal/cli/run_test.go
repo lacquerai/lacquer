@@ -406,6 +406,17 @@ func Test_While(t *testing.T) {
 	newSingleDirectoryRunTest(t)
 }
 
+type safeBuffer struct {
+	bytes.Buffer
+	mu *sync.Mutex
+}
+
+func (sb *safeBuffer) Write(p []byte) (n int, err error) {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.Buffer.Write(p)
+}
+
 func newSingleDirectoryRunTest(t *testing.T) {
 	t.Helper()
 
@@ -468,8 +479,8 @@ func newSingleDirectoryRunTest(t *testing.T) {
 		ots.Close()
 	}()
 
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
+	stdout := &safeBuffer{mu: &sync.Mutex{}}
+	stderr := &safeBuffer{mu: &sync.Mutex{}}
 	runCtx := execcontext.RunContext{
 		Context: context.Background(),
 		StdOut:  stdout,
