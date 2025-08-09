@@ -57,7 +57,7 @@ summary:
   • Quantum computing ...
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
 Install `laq` with a single command:
 
@@ -107,7 +107,7 @@ Lacquer is Apache 2.0 licensed. See [LICENSE](LICENSE) for details.
 
 ## 🚦 Project Status
 
-Lacquer is in **early alpha** (v0.1.0). The core engine is functional and being actively developed. Expect breaking changes as we iterate based on community feedback.
+Lacquer is in **early alpha**, the core engine is functional but still being actively developed. Expect breaking changes as we iterate based on community feedback.
 
 ---
 
