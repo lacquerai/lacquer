@@ -14,7 +14,7 @@ DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS=-ldflags "-w -s -X github.com/lacquerai/lacquer/internal/version.Version=$(VERSION) -X github.com/lacquerai/lacquer/internal/version.Commit=$(COMMIT) -X github.com/lacquerai/lacquer/internal/version.Date=$(DATE)"
 
 # Default target
-all: lint test build
+all: lint fmt test build
 
 ## help: Show this help message
 help:
@@ -219,12 +219,3 @@ deps-update:
 verify:
 	@echo "Verifying dependencies..."
 	go mod verify
-
-## dev: Run in development mode with hot reload (requires air)
-dev:
-	@if command -v air >/dev/null 2>&1; then \
-		air; \
-	else \
-		echo "air not installed. Install it with: go install github.com/air-verse/air@latest"; \
-		exit 1; \
-	fi
