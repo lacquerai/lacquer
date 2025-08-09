@@ -451,8 +451,6 @@ func TestExpressionEvaluator_TypeConversions(t *testing.T) {
 	}
 }
 
-// Helper functions for tests
-
 func createTestExecutionContext() *execcontext.ExecutionContext {
 	workflow := &ast.Workflow{
 		Version: "1.0",

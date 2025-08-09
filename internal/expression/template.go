@@ -28,7 +28,7 @@ func NewTemplateEngine() *TemplateEngine {
 // Render renders a template string with variables from the execution context
 func (te *TemplateEngine) Render(template string, execCtx *execcontext.ExecutionContext) (interface{}, error) {
 	if template == "" {
-		return nil, nil
+		return "", nil
 	}
 
 	// Find all expressions

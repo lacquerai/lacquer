@@ -62,8 +62,6 @@ const (
 	TypeUnknown ValueType = "unknown"
 )
 
-// Basic value types
-
 type NilValue struct{}
 
 func (v NilValue) Type() ValueType         { return TypeNil }
@@ -219,20 +217,17 @@ func NewExpressionEvaluator() *ExpressionEvaluator {
 
 // Evaluate evaluates an expression
 func (ee *ExpressionEvaluator) Evaluate(expression string, execCtx *execcontext.ExecutionContext) (interface{}, error) {
-	// Parse the expression
 	expr, err := Parse(expression)
 	if err != nil {
 		return nil, fmt.Errorf("parse error: %w", err)
 	}
 
-	// Create evaluation context
 	evalCtx := &EvalContext{
 		Variables: NewVariableScope(execCtx),
 		Functions: ee.functions,
 		ExecCtx:   execCtx,
 	}
 
-	// Evaluate the expression
 	val, err := expr.Eval(evalCtx)
 	if err != nil {
 		return nil, fmt.Errorf("evaluation error: %w", err)
@@ -270,7 +265,6 @@ func (vs *VariableScope) Get(name string) (Value, error) {
 		return NilValue{}, nil
 	}
 
-	// Try to resolve as a context variable
 	parts := strings.Split(name, ".")
 	if len(parts) > 0 {
 		switch parts[0] {
@@ -333,7 +327,7 @@ func GoToValue(v interface{}) Value {
 		}
 		return MapValue{Vals: result}
 	default:
-		// For unknown types, convert to string
+		// For unknown types, convert to string as a safe fallback
 		return StringValue{Val: fmt.Sprintf("%v", v)}
 	}
 }
@@ -1036,8 +1030,6 @@ func (p *Parser) parsePrimary() (Expression, error) {
 	}
 }
 
-// Tokenizer
-
 type TokenType int
 
 const (
@@ -1046,7 +1038,6 @@ const (
 	TokenNumber
 	TokenString
 
-	// Operators
 	TokenEq       // ==
 	TokenNe       // !=
 	TokenLt       // <
@@ -1064,7 +1055,6 @@ const (
 	TokenQuestion // ?
 	TokenColon    // :
 
-	// Delimiters
 	TokenLParen   // (
 	TokenRParen   // )
 	TokenLBracket // [
@@ -1092,7 +1082,6 @@ func Tokenize(input string) ([]Token, error) {
 			break
 		}
 
-		// Multi-character operators
 		if i+1 < len(input) {
 			two := input[i : i+2]
 			switch two {
@@ -1123,7 +1112,6 @@ func Tokenize(input string) ([]Token, error) {
 			}
 		}
 
-		// Single character tokens
 		switch input[i] {
 		case '<':
 			tokens = append(tokens, Token{Type: TokenLt, Value: "<"})
@@ -1174,7 +1162,6 @@ func Tokenize(input string) ([]Token, error) {
 			tokens = append(tokens, Token{Type: TokenComma, Value: ","})
 			i++
 		case '\'', '"':
-			// String
 			quote := input[i]
 			i++
 			start := i
@@ -1196,7 +1183,6 @@ func Tokenize(input string) ([]Token, error) {
 			tokens = append(tokens, Token{Type: TokenString, Value: val})
 			i++
 		default:
-			// Number
 			if unicode.IsDigit(rune(input[i])) {
 				start := i
 				for i < len(input) && (unicode.IsDigit(rune(input[i])) || input[i] == '.') {
@@ -1204,7 +1190,6 @@ func Tokenize(input string) ([]Token, error) {
 				}
 				tokens = append(tokens, Token{Type: TokenNumber, Value: input[start:i]})
 			} else if unicode.IsLetter(rune(input[i])) {
-				// Identifier
 				start := i
 				for i < len(input) && (unicode.IsLetter(rune(input[i])) || unicode.IsDigit(rune(input[i])) || input[i] == '_') {
 					i++

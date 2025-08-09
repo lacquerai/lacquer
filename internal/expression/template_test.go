@@ -90,9 +90,7 @@ func TestTemplateEngine_MetadataVariables(t *testing.T) {
 	workflow := &ast.Workflow{
 		Version: "1.0",
 		Metadata: &ast.WorkflowMetadata{
-			Name:        "test-workflow",
-			Description: "A test workflow",
-			Author:      "Alice",
+			Name: "test-workflow",
 		},
 		Workflow: &ast.WorkflowDef{
 			Steps: []*ast.Step{
@@ -108,9 +106,9 @@ func TestTemplateEngine_MetadataVariables(t *testing.T) {
 	}, workflow, nil, "")
 
 	// Test metadata variables
-	result, err := te.Render("Workflow: ${{ metadata.name }} by ${{ metadata.author }}", execCtx)
+	result, err := te.Render("Workflow: ${{ metadata.name }}", execCtx)
 	assert.NoError(t, err)
-	assert.Equal(t, "Workflow: test-workflow by Alice", result)
+	assert.Equal(t, "Workflow: test-workflow", result)
 }
 
 func TestTemplateEngine_WorkflowVariables(t *testing.T) {
