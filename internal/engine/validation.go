@@ -50,32 +50,26 @@ func ValidateWorkflowInputs(workflow *ast.Workflow, providedInputs map[string]an
 		ProcessedInputs: make(map[string]any),
 	}
 
-	// If workflow has no input definitions, accept any inputs
 	if workflow.Inputs == nil {
 		result.ProcessedInputs = providedInputs
 		return result
 	}
 
-	// Process each defined input parameter
 	for paramName, paramDef := range workflow.Inputs {
 		providedValue, hasValue := providedInputs[paramName]
 
-		// Check if required parameter is missing
 		if !hasValue {
 			if paramDef.Required {
 				result.AddError(paramName, "required field is missing", nil)
 				continue
 			}
-			// Apply default value if available
 			if paramDef.Default != nil {
 				result.ProcessedInputs[paramName] = paramDef.Default
 				continue
 			}
-			// Optional field without default - skip
 			continue
 		}
 
-		// Validate and process the provided value
 		processedValue, err := validateInputValue(paramName, providedValue, paramDef)
 		if err != nil {
 			result.AddError(paramName, err.Error(), providedValue)
@@ -84,7 +78,6 @@ func ValidateWorkflowInputs(workflow *ast.Workflow, providedInputs map[string]an
 		}
 	}
 
-	// Check for unexpected input fields
 	for inputName := range providedInputs {
 		if _, defined := workflow.Inputs[inputName]; !defined {
 			result.AddError(inputName, "unexpected input field", providedInputs[inputName])
@@ -96,18 +89,15 @@ func ValidateWorkflowInputs(workflow *ast.Workflow, providedInputs map[string]an
 
 // validateInputValue validates a single input value against its parameter definition
 func validateInputValue(fieldName string, value any, param *ast.InputParam) (any, error) {
-	// If no type is specified, accept any value
 	if param.Type == "" {
 		return value, nil
 	}
 
-	// Validate and convert type
 	convertedValue, err := convertAndValidateType(value, param.Type)
 	if err != nil {
 		return nil, fmt.Errorf("invalid type: expected %s, got %T", param.Type, value)
 	}
 
-	// Apply additional constraints based on type
 	switch param.Type {
 	case "string":
 		return validateStringConstraints(convertedValue.(string), param)
@@ -209,7 +199,6 @@ func validateStringConstraints(value string, param *ast.InputParam) (string, err
 		}
 	}
 
-	// Validate enum
 	if len(param.Enum) > 0 {
 		found := false
 		for _, enumValue := range param.Enum {
@@ -245,12 +234,10 @@ func validateNumericConstraints(value any, param *ast.InputParam) (any, error) {
 		return value, nil // Not a numeric type, skip numeric validation
 	}
 
-	// Validate minimum
 	if param.Minimum != nil && numValue < *param.Minimum {
 		return nil, fmt.Errorf("value %v is less than minimum %v", numValue, *param.Minimum)
 	}
 
-	// Validate maximum
 	if param.Maximum != nil && numValue > *param.Maximum {
 		return nil, fmt.Errorf("value %v is greater than maximum %v", numValue, *param.Maximum)
 	}
@@ -267,12 +254,10 @@ func validateArrayConstraints(value any, param *ast.InputParam) (any, error) {
 
 	length := rv.Len()
 
-	// Validate minimum items
 	if param.MinItems != nil && length < *param.MinItems {
 		return nil, fmt.Errorf("array has %d items, minimum required is %d", length, *param.MinItems)
 	}
 
-	// Validate maximum items
 	if param.MaxItems != nil && length > *param.MaxItems {
 		return nil, fmt.Errorf("array has %d items, maximum allowed is %d", length, *param.MaxItems)
 	}
