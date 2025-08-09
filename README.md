@@ -2,7 +2,7 @@
 <img width="1240" height="480" alt="lacquer-banner-stars" src="https://github.com/user-attachments/assets/42844a33-c8cb-404b-ba56-54b803615e03" />
 
 
-[Quick Start](#-quick-start) • [Examples](#-examples) • [Documentation](https://lacquer.ai/docs)
+[Quick Start](#-quick-start) • [Features](#-features) • [Documentation](https://lacquer.ai/docs)
 </div>
 
 ---
@@ -54,9 +54,7 @@ Running research_workflow (2 steps)
 Outputs:
 
 summary: 
-  • Quantum computing uses quantum-mechanical phenomena like superposition and entanglement for calculations
-  • It represents a revolutionary approach to processing information beyond classical computing limitations
-  • Current applications include cryptography, optimization, and simulation of quantum systems
+  • Quantum computing ...
 ```
 
 ## Quick Start
@@ -82,159 +80,18 @@ laq run workflow.laq.yml
 Now explore the [documentation](https://lacquer.ai/docs) to find out how to improve your workflow.
 
 
-## Examples
+## Features
+Lacquer comes with all the tools you need to build production-ready AI workflows
 
-### 🔧 Agent Tools
+* **Script & Container Support** - Extend your workflows with custom scripts and containers
+* **Agent Tools** - Extend your agents easily by defining local tools that the model can use
+* **State Management** - Maintain workflow state across steps with automatic updates
+* **Conditional Logic** - Build complex workflows with conditionals and loops
+* **MCP Integration** - Connect your agents to Model Context Protocol servers for enhanced capabilities
+* **Built in HTTP Server** - Lacquer comes with a built in HTTP server that you can use to expose your workflows as APIs
+* **Seamless Integration with Claude Code** - Bullet proof your local development workflows with Claude Code and lacquer, no need to wrestle with your CLAUDE.md file to get claude to do what you want
 
-Extend your agents with custom tools for web search, file operations, and more:
-
-```yaml
-agents:
-  researcher:
-    provider: openai
-    model: gpt-4
-    temperature: 0.2
-    system_prompt: You are a helpful researcher that answers questions about a given topic.
-    tools:
-      - name: search_web
-        script: "node ./scripts/web_search.js"
-        description: |
-          the search_web tool provides a easy way to search the web for information.
-          Use this tool to get the latest information on a given topic, it will provide
-          a short summary of the latest information on the given topic.
-        parameters:
-          type: object
-          properties:
-            query:
-              type: string
-              description: |
-                The given topic that you want to search for.
-```
-
-### 📊 State Management
-
-Maintain workflow state across steps with automatic updates:
-
-```yaml
-state:
-  counter: 0
-  status: "pending"
-
-workflow:
-  steps:
-    - id: process_item
-      agent: processor
-      prompt: "Process: ${{ inputs.item }}"
-      updates:
-        counter: "${{ state.counter + 1 }}"
-        status: "${{ steps.process_item.outputs.success ? 'processing' : 'error' }}"
-```
-
-### 🔀 Conditional Logic
-
-Build complex workflows with conditionals and loops:
-
-```yaml
-steps:
-  - id: check_length
-    agent: analyzer
-    prompt: "Count words in: ${{ inputs.text }}"
-    outputs:
-      word_count: 
-        type: integer
-
-  # Conditionally execute steps
-  - id: expand_text
-    condition: ${{ steps.check_length.outputs.word_count < 100 }}
-    agent: writer
-    prompt: "Expand this text to at least 100 words: ${{ inputs.text }}"
-
-  # Iterative refinement with while loops
-  - id: refine_text
-    while: ${{ steps.refine_text.iteration < 3 && steps.refine_text.outputs.quality_score < 8 }}
-    steps:
-      - id: analyze_quality
-        agent: analyzer
-        prompt: |
-          Analyze the quality of this text on a scale of 1-10:
-          ${{ steps.expand_text.outputs.expanded_text || inputs.text }}
-        outputs:
-          quality_score: integer
-          improvement_suggestions: string
-
-      - id: apply_improvements
-        condition: ${{ steps.refine_text.steps.analyze_quality.outputs.quality_score < 8 }}
-        agent: editor
-        prompt: |
-          Improve this text based on these suggestions:
-          Text: ${{ steps.expand_text.outputs.expanded_text || inputs.text }}
-          Suggestions: ${{ steps.refine_text.steps.analyze_quality.outputs.improvement_suggestions }}
-```
-
-### 🛠️ Custom Scripts & Containers
-
-Execute custom code alongside AI agents:
-
-```yaml
-requirements:
-  runtimes:
-    - name: python
-      version: "3.9"
-
-workflow:
-  steps:
-    - id: create_fix
-      agent: fixer
-      prompt: |
-        We've encountered the following error in production
-        ${{ inputs.error }}
-
-        Please create a fix for the error in the following code:
-        ${{ inputs.code }}
-
-    # Execute custom Python scripts
-    - id: validate_fix
-      run: "python3 scripts/validate.py"
-      with:
-        patch: ${{ steps.create_fix.outputs.patch }}
-        code: ${{ inputs.code }}
-
-    # Or run in isolated containers
-    - id: validate_fix_container
-      container: ./validate/Dockerfile
-      command:
-        - scripts/validate.py
-        - ${{ steps.create_fix.outputs.patch }}
-        - ${{ inputs.code }}
-```
-
-### 🔌 MCP Integration
-
-Connect to Model Context Protocol servers for enhanced capabilities:
-
-```yaml
-agents:
-  fixer:
-    provider: anthropic
-    model: claude-4-sonnet-20240229
-    system_prompt: |
-      You are an expert code reviewer who:
-
-      - Identifies bugs and security issues
-      - Suggests performance improvements
-      - Ensures code follows best practices
-      - Provides constructive feedback
-    tools:
-      - name: filesystem
-        description: Filesystem access for code analysis
-        mcp_server:
-          type: local
-          command: npx
-          args:
-            - "-y"
-            - "@modelcontextprotocol/server-filesystem"
-            - "/usr/src/app"
-```
+Check out the [documentation](https://lacquer.ai/docs) for more details on each feature and how to get building your first workflow.
 
 ## 🤝 Contributing
 
@@ -243,8 +100,6 @@ We welcome contributions! Lacquer is in early alpha, and we're actively seeking 
 - Bug fixes and performance optimizations
 - Additional provider integrations
 - DSL improvements
-- Documentation improvements  
-- Example workflows
 
 ## 📄 License
 
