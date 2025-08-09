@@ -17,8 +17,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// HTTP Handlers
-
 // listWorkflows returns all available workflows
 func (s *Server) listWorkflows(w http.ResponseWriter, r *http.Request) {
 	workflows := make(map[string]any)
@@ -49,20 +47,17 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	workflowID := vars["id"]
 
-	// Get workflow
 	workflow, exists := s.registry.Get(workflowID)
 	if !exists {
 		http.Error(w, fmt.Sprintf("Workflow '%s' not found", workflowID), http.StatusNotFound)
 		return
 	}
 
-	// Check capacity
 	if !s.manager.CanStartExecution() {
 		http.Error(w, "Server at capacity, try again later", http.StatusServiceUnavailable)
 		return
 	}
 
-	// Parse request body for inputs
 	var req struct {
 		Inputs map[string]any `json:"inputs"`
 	}
@@ -78,7 +73,6 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 		req.Inputs = make(map[string]any)
 	}
 
-	// Validate inputs against workflow definition
 	validationResult := engine.ValidateWorkflowInputs(workflow, req.Inputs)
 	if !validationResult.Valid {
 		w.Header().Set("Content-Type", "application/json")
@@ -87,7 +81,6 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use the processed inputs (with defaults applied and type conversions)
 	processedInputs := validationResult.ProcessedInputs
 
 	// use background context as hanging off the request context
@@ -102,10 +95,8 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 	execCtx := execcontext.NewExecutionContext(runCtx, workflow, processedInputs, workflow.SourceFile)
 	runID := execCtx.RunID
 
-	// Start execution tracking
 	status := s.manager.StartExecution(runID, workflowID, cancel, processedInputs)
 
-	// Return execution info immediately
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"run_id":      runID,
@@ -114,7 +105,6 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 		"started_at":  status.StartTime,
 	})
 
-	// Execute workflow asynchronously
 	go s.executeWorkflowAsync(ctx, workflow, execCtx, runID, workflowID)
 }
 
@@ -128,7 +118,6 @@ func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflo
 		outputs = result.Outputs
 	}
 
-	// Finish execution
 	s.manager.FinishExecution(runID, outputs, err)
 
 	log.Info().
@@ -156,23 +145,20 @@ func (s *Server) getExecution(w http.ResponseWriter, r *http.Request) {
 // streamWorkflow provides WebSocket streaming for workflow execution
 func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	_ = vars["id"] // workflowID not used in this function
+	_ = vars["id"]
 
-	// Get run ID from query params
 	runID := r.URL.Query().Get("run_id")
 	if runID == "" {
 		http.Error(w, "run_id query parameter required", http.StatusBadRequest)
 		return
 	}
 
-	// Check if execution exists
 	status, exists := s.manager.GetExecution(runID)
 	if !exists {
 		http.Error(w, fmt.Sprintf("Execution '%s' not found", runID), http.StatusNotFound)
 		return
 	}
 
-	// Upgrade to WebSocket
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("WebSocket upgrade failed")
@@ -180,18 +166,15 @@ func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Register client
 	status.clientsMu.Lock()
 	status.clients[conn] = true
 	status.clientsMu.Unlock()
 
-	// Send existing progress events
 	for _, event := range status.Progress {
 		eventJSON, _ := json.Marshal(event)
 		conn.WriteMessage(websocket.TextMessage, eventJSON)
 	}
 
-	// Send final status if execution is complete
 	if status.Status != "running" {
 		finalEvent := pkgEvents.ExecutionEvent{
 			Type:      pkgEvents.EventWorkflowCompleted,
@@ -206,7 +189,6 @@ func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
 		conn.WriteMessage(websocket.TextMessage, eventJSON)
 	}
 
-	// Keep connection alive until execution is done or client disconnects
 	for {
 		_, _, err := conn.ReadMessage()
 		if err != nil {
@@ -219,7 +201,6 @@ func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Unregister client
 	status.clientsMu.Lock()
 	delete(status.clients, conn)
 	status.clientsMu.Unlock()

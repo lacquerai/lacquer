@@ -28,7 +28,6 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		// Create a response writer wrapper to capture status code
 		wrapper := &responseWriterWrapper{ResponseWriter: w, statusCode: http.StatusOK}
 
 		next.ServeHTTP(wrapper, r)

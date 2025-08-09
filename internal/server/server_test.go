@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/lacquerai/lacquer/internal/runtime"
+	"github.com/lacquerai/lacquer/pkg/events"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -586,42 +586,6 @@ func TestServerIntegration_EmptyWorkflowList(t *testing.T) {
 	assert.Contains(t, err.Error(), "no workflow files specified")
 }
 
-// Benchmark tests
-
-func BenchmarkServer_ListWorkflows(b *testing.B) {
-	suite := setupTestSuite(&testing.T{})
-	defer suite.cleanup(&testing.T{})
-
-	addr := suite.startServerInBackground(&testing.T{})
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := http.Get(fmt.Sprintf("http://%s/api/v1/workflows", addr))
-		if err != nil {
-			b.Fatal(err)
-		}
-		resp.Body.Close()
-	}
-}
-
-func BenchmarkServer_HealthCheck(b *testing.B) {
-	suite := setupTestSuite(&testing.T{})
-	defer suite.cleanup(&testing.T{})
-
-	addr := suite.startServerInBackground(&testing.T{})
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := http.Get(fmt.Sprintf("http://%s/health", addr))
-		if err != nil {
-			b.Fatal(err)
-		}
-		resp.Body.Close()
-	}
-}
-
-// Input Validation Integration Tests
-
 const validationTestWorkflowYAML = `version: "1.0"
 metadata:
   name: validation-test-workflow
@@ -633,46 +597,46 @@ agents:
     model: claude-3-5-sonnet-20241022
     temperature: 0.7
     system_prompt: You are a validation test assistant.
+inputs:
+  name:
+    type: string
+    description: User name
+    required: true
+    pattern: '^[A-Za-z\s]+$'
+  age:
+    type: integer
+    description: User age
+    minimum: 18
+    maximum: 120
+    default: 25
+  email:
+    type: string
+    description: Email address
+    pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+  skills:
+    type: array
+    description: List of skills
+    min_items: 1
+    max_items: 10
+  role:
+    type: string
+    description: User role
+    enum: ["user", "admin", "moderator"]
+    default: "user"
+  active:
+    type: boolean
+    description: Is user active
+    default: true
+  metadata:
+    type: object
+    description: Additional metadata
 workflow:
-  inputs:
-    name:
-      type: string
-      description: User name
-      required: true
-      pattern: '^[A-Za-z\s]+$'
-    age:
-      type: integer
-      description: User age
-      minimum: 18
-      maximum: 120
-      default: 25
-    email:
-      type: string
-      description: Email address
-      pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    skills:
-      type: array
-      description: List of skills
-      min_items: 1
-      max_items: 10
-    role:
-      type: string
-      description: User role
-      enum: ["user", "admin", "moderator"]
-      default: "user"
-    active:
-      type: boolean
-      description: Is user active
-      default: true
-    metadata:
-      type: object
-      description: Additional metadata
   steps:
     - id: validationStep
       agent: validationAgent
-      prompt: "Hello {{ inputs.name }}! You are {{ inputs.age }} years old."
+      prompt: "Hello ${{ inputs.name }}! You are ${{ inputs.age }} years old."
   outputs:
-    result: "{{ steps.validationStep.output }}"
+    result: "${{ steps.validationStep.output }}"
 `
 
 func setupValidationTestSuite(t *testing.T) *ServerTestSuite {
@@ -1289,7 +1253,7 @@ func TestExecutionManager_StartExecution(t *testing.T) {
 
 	inputs := map[string]any{"test": "value"}
 
-	status := manager.StartExecution("run-123", "workflow-test", inputs)
+	status := manager.StartExecution("run-123", "workflow-test", func() {}, inputs)
 
 	assert.NotNil(t, status)
 	assert.Equal(t, "run-123", status.RunID)
@@ -1314,13 +1278,13 @@ func TestExecutionManager_ConcurrencyLimit(t *testing.T) {
 	manager := NewExecutionManagerWithRegistry(2, registry)
 
 	// Start first execution
-	status1 := manager.StartExecution("run-1", "workflow-1", map[string]any{})
+	status1 := manager.StartExecution("run-1", "workflow-1", func() {}, map[string]any{})
 	assert.NotNil(t, status1)
 	assert.True(t, manager.CanStartExecution())
 	assert.Equal(t, 1, manager.GetActiveExecutions())
 
 	// Start second execution
-	status2 := manager.StartExecution("run-2", "workflow-2", map[string]any{})
+	status2 := manager.StartExecution("run-2", "workflow-2", func() {}, map[string]any{})
 	assert.NotNil(t, status2)
 	assert.False(t, manager.CanStartExecution()) // Should be at capacity
 	assert.Equal(t, 2, manager.GetActiveExecutions())
@@ -1344,7 +1308,7 @@ func TestExecutionManager_FinishExecutionWithError(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	manager := NewExecutionManagerWithRegistry(1, registry)
 
-	status := manager.StartExecution("run-error", "workflow-error", map[string]any{})
+	status := manager.StartExecution("run-error", "workflow-error", func() {}, map[string]any{})
 	assert.Equal(t, "running", status.Status)
 
 	// Finish with error
@@ -1375,12 +1339,11 @@ func TestExecutionManager_AddProgressEvent(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	manager := NewExecutionManagerWithRegistry(1, registry)
 
-	status := manager.StartExecution("run-progress", "workflow-progress", map[string]any{})
+	status := manager.StartExecution("run-progress", "workflow-progress", func() {}, map[string]any{})
 	assert.Empty(t, status.Progress)
 
-	// Add progress event
-	event := runtime.ExecutionEvent{
-		Type:      runtime.EventStepStarted,
+	event := events.ExecutionEvent{
+		Type:      events.EventStepActionStarted,
 		Timestamp: time.Now(),
 		RunID:     "run-progress",
 		StepID:    "step-1",
@@ -1394,8 +1357,8 @@ func TestExecutionManager_AddProgressEvent(t *testing.T) {
 	assert.Equal(t, event, updated.Progress[0])
 
 	// Add another event
-	event2 := runtime.ExecutionEvent{
-		Type:      runtime.EventStepCompleted,
+	event2 := events.ExecutionEvent{
+		Type:      events.EventStepActionCompleted,
 		Timestamp: time.Now(),
 		RunID:     "run-progress",
 		StepID:    "step-1",
@@ -1413,14 +1376,13 @@ func TestExecutionManager_AddProgressEvent_NonExistentExecution(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	manager := NewExecutionManagerWithRegistry(1, registry)
 
-	event := runtime.ExecutionEvent{
-		Type:      runtime.EventStepStarted,
+	event := events.ExecutionEvent{
+		Type:      events.EventStepActionStarted,
 		Timestamp: time.Now(),
 		RunID:     "non-existent",
 		StepID:    "step-1",
 	}
 
-	// Should not panic or error when adding event to non-existent execution
 	manager.AddProgressEvent("non-existent", event)
 }
 
@@ -1444,7 +1406,7 @@ func TestExecutionManager_MultipleExecutions(t *testing.T) {
 		workflowID := fmt.Sprintf("workflow-%d", i)
 		inputs := map[string]any{"index": i}
 
-		status := manager.StartExecution(runID, workflowID, inputs)
+		status := manager.StartExecution(runID, workflowID, func() {}, inputs)
 		assert.NotNil(t, status)
 		assert.Equal(t, runID, status.RunID)
 		assert.Equal(t, workflowID, status.WorkflowID)
