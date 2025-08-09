@@ -45,7 +45,7 @@ func NewScriptToolProvider(name string, cacheDir string) (*ScriptToolProvider, e
 	}
 
 	// Create cache directory
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}
 

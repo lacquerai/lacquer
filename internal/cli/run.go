@@ -72,7 +72,7 @@ This command:
 		inputsMap := make(map[string]interface{})
 
 		if inputFile != "" {
-			file, err := os.Open(inputFile)
+			file, err := os.Open(inputFile) // #nosec G304 - inputFile is from CLI args
 			if err != nil {
 				fmt.Fprintf(cmd.OutOrStderr(), "failed to open input file: %s\n", err)
 				os.Exit(1)

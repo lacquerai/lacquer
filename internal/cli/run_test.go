@@ -112,7 +112,7 @@ func (ts *TestServer) loadResponses() {
 			urlPath = strings.ReplaceAll(urlPath, "_", "/") // normalize path separators
 
 			// Read and parse the JSON file
-			data, err := os.ReadFile(path)
+			data, err := os.ReadFile(path) // #nosec G304 - path is from controlled test data
 			if err != nil {
 				return err
 			}
@@ -311,7 +311,7 @@ func (ts *TestServer) Flush() error {
 		}
 
 		// Write to file
-		if err := os.WriteFile(filename, data, 0644); err != nil {
+		if err := os.WriteFile(filename, data, 0600); err != nil {
 			return fmt.Errorf("failed to write responses to %s: %w", filename, err)
 		}
 
@@ -338,7 +338,7 @@ func (ts *TestServer) Flush() error {
 		}
 
 		// Write to file
-		if err := os.WriteFile(filename, data, 0644); err != nil {
+		if err := os.WriteFile(filename, data, 0600); err != nil {
 			return fmt.Errorf("failed to write responses to %s: %w", filename, err)
 		}
 
@@ -466,7 +466,7 @@ func newSingleDirectoryRunTest(t *testing.T) {
 
 	var inputs map[string]interface{}
 	if _, err := os.Stat(filepath.Join(directory, "inputs.json")); err == nil {
-		b, err := os.ReadFile(filepath.Join(directory, "inputs.json"))
+		b, err := os.ReadFile(filepath.Join(directory, "inputs.json")) // #nosec G304 - test file path is controlled
 		require.NoError(t, err)
 
 		err = json.Unmarshal(b, &inputs)

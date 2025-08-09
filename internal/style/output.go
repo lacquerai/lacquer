@@ -325,7 +325,7 @@ func PrintYAML(w io.Writer, data interface{}) {
 	if err := encoder.Encode(data); err != nil {
 		fmt.Fprintf(w, "Error encoding YAML: %v\n", err)
 	}
-	encoder.Close()
+	_ = encoder.Close()
 }
 
 // Success prints a success message with styling

@@ -95,11 +95,11 @@ func setupTestSuite(t *testing.T) *ServerTestSuite {
 
 	// Create test workflow files
 	testWorkflowFile := filepath.Join(tempDir, "test-workflow.laq.yaml")
-	err = os.WriteFile(testWorkflowFile, []byte(testWorkflowYAML), 0644)
+	err = os.WriteFile(testWorkflowFile, []byte(testWorkflowYAML), 0600)
 	require.NoError(t, err)
 
 	simpleWorkflowFile := filepath.Join(tempDir, "simple-workflow.laq.yaml")
-	err = os.WriteFile(simpleWorkflowFile, []byte(simpleWorkflowYAML), 0644)
+	err = os.WriteFile(simpleWorkflowFile, []byte(simpleWorkflowYAML), 0600)
 	require.NoError(t, err)
 
 	workflowFiles := []string{testWorkflowFile, simpleWorkflowFile}
@@ -141,9 +141,9 @@ func (suite *ServerTestSuite) cleanup(_ *testing.T) {
 	if suite.server.server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		suite.server.Stop(ctx)
+		_ = suite.server.Stop(ctx) // #nosec G104 - test cleanup, error not critical
 	}
-	os.RemoveAll(suite.tempDir)
+	_ = os.RemoveAll(suite.tempDir) // #nosec G104 - test cleanup, error not critical
 }
 
 func (suite *ServerTestSuite) startServerInBackground(t *testing.T) string {
@@ -410,10 +410,10 @@ func TestServerIntegration_WebSocketStream_NotFound(t *testing.T) {
 	wsURL := fmt.Sprintf("ws://%s/api/v1/workflows/test-workflow/stream?run_id=non-existent", addr)
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if resp != nil && resp.Body != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close() // #nosec G104 - test cleanup, error not critical
 	}
 	if conn != nil {
-		conn.Close()
+		_ = conn.Close() // #nosec G104 - test cleanup, error not critical
 	}
 	assert.Error(t, err)
 	// WebSocket dial should fail or return error status
@@ -429,10 +429,10 @@ func TestServerIntegration_WebSocketStream_MissingRunID(t *testing.T) {
 	wsURL := fmt.Sprintf("ws://%s/api/v1/workflows/test-workflow/stream", addr)
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if resp != nil && resp.Body != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close() // #nosec G104 - test cleanup, error not critical
 	}
 	if conn != nil {
-		conn.Close()
+		_ = conn.Close() // #nosec G104 - test cleanup, error not critical
 	}
 	assert.Error(t, err)
 	// Should fail due to missing run_id parameter
@@ -468,7 +468,7 @@ func TestServerIntegration_PrometheusMetrics(t *testing.T) {
 
 	// Create test workflow file
 	testWorkflowFile := filepath.Join(tempDir, "test-workflow.laq.yaml")
-	err = os.WriteFile(testWorkflowFile, []byte(testWorkflowYAML), 0644)
+	err = os.WriteFile(testWorkflowFile, []byte(testWorkflowYAML), 0600)
 	require.NoError(t, err)
 
 	// Create config with metrics enabled and default Prometheus registry
@@ -497,7 +497,7 @@ func TestServerIntegration_PrometheusMetrics(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		server.Stop(ctx)
+		_ = server.Stop(ctx) // #nosec G104 - test cleanup, error not critical
 	}()
 
 	// Give server time to start
@@ -528,7 +528,7 @@ func TestServerIntegration_WorkflowDirectory(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create test workflow in directory
-	err = os.WriteFile(filepath.Join(tempDir, "dir-workflow.laq.yaml"), []byte(simpleWorkflowYAML), 0644)
+	err = os.WriteFile(filepath.Join(tempDir, "dir-workflow.laq.yaml"), []byte(simpleWorkflowYAML), 0600)
 	require.NoError(t, err)
 
 	config := &Config{
@@ -564,7 +564,7 @@ func TestServerIntegration_InvalidWorkflowFile(t *testing.T) {
 
 	// Create invalid workflow file
 	invalidWorkflow := `invalid: yaml: content: [[[`
-	err = os.WriteFile(filepath.Join(tempDir, "invalid.laq.yaml"), []byte(invalidWorkflow), 0644)
+	err = os.WriteFile(filepath.Join(tempDir, "invalid.laq.yaml"), []byte(invalidWorkflow), 0600)
 	require.NoError(t, err)
 
 	config := &Config{
@@ -657,7 +657,7 @@ func setupValidationTestSuite(t *testing.T) *ServerTestSuite {
 
 	// Create validation test workflow file
 	testWorkflowFile := filepath.Join(tempDir, "validation-test.laq.yaml")
-	err = os.WriteFile(testWorkflowFile, []byte(validationTestWorkflowYAML), 0644)
+	err = os.WriteFile(testWorkflowFile, []byte(validationTestWorkflowYAML), 0600)
 	require.NoError(t, err)
 
 	workflowFiles := []string{testWorkflowFile}

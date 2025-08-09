@@ -84,7 +84,7 @@ func (p *PythonRuntime) Get(ctx context.Context, version string) (string, error)
 
 	// Download archive
 	archivePath := filepath.Join(tempDir, filepath.Base(downloadURL))
-	file, err := os.Create(archivePath)
+	file, err := os.Create(archivePath) // #nosec G304 - archivePath is controlled
 	if err != nil {
 		return "", fmt.Errorf("creating archive file: %w", err)
 	}
@@ -102,7 +102,7 @@ func (p *PythonRuntime) Get(ctx context.Context, version string) (string, error)
 	}
 
 	extractDir := filepath.Join(tempDir, "extracted")
-	if err := os.MkdirAll(extractDir, 0755); err != nil {
+	if err := os.MkdirAll(extractDir, 0750); err != nil {
 		return "", fmt.Errorf("creating extract dir: %w", err)
 	}
 
@@ -290,7 +290,7 @@ func (p *PythonRuntime) checkInstalled(ctx context.Context, version string) (str
 	// Try python3 first, then python
 	for _, cmd := range []string{"python3", "python"} {
 		out := bytes.Buffer{}
-		execCmd := exec.CommandContext(ctx, cmd, "--version")
+		execCmd := exec.CommandContext(ctx, cmd, "--version") // #nosec G204 - cmd is from controlled list
 		execCmd.Stdout = &out
 		execCmd.Stderr = &out
 		if err := execCmd.Run(); err != nil {
@@ -301,7 +301,7 @@ func (p *PythonRuntime) checkInstalled(ctx context.Context, version string) (str
 		// Python version output format: "Python 3.11.5"
 		if strings.Contains(output, version) {
 			out := bytes.Buffer{}
-			whichCmd := exec.CommandContext(ctx, "which", cmd)
+			whichCmd := exec.CommandContext(ctx, "which", cmd) // #nosec G204 - cmd is from controlled list
 			whichCmd.Stdout = &out
 			whichCmd.Stderr = &out
 			if err := whichCmd.Run(); err == nil {
@@ -381,7 +381,7 @@ func (p *PythonRuntime) installWithHomebrew(ctx context.Context, version string)
 	formula := "python@" + version
 
 	// Check if the formula exists and install it
-	installCmd := exec.CommandContext(ctx, "brew", "install", formula)
+	installCmd := exec.CommandContext(ctx, "brew", "install", formula) // #nosec G204 - formula is controlled
 	var stderr bytes.Buffer
 	installCmd.Stderr = &stderr
 
@@ -389,7 +389,7 @@ func (p *PythonRuntime) installWithHomebrew(ctx context.Context, version string)
 		// Try with just "python" if specific version formula doesn't exist
 		if strings.Contains(stderr.String(), "No available formula") {
 			formula = "python"
-			installCmd = exec.CommandContext(ctx, "brew", "install", formula)
+			installCmd = exec.CommandContext(ctx, "brew", "install", formula) // #nosec G204 - formula is controlled
 			installCmd.Stderr = &stderr
 			if err := installCmd.Run(); err != nil {
 				return "", fmt.Errorf("homebrew install failed: %w, stderr: %s", err, stderr.String())
@@ -408,7 +408,7 @@ func (p *PythonRuntime) installWithHomebrew(ctx context.Context, version string)
 	// Cache the installation by creating a symlink in our cache
 	cachePath := p.cache.Path(p.Name(), version)
 	cacheDir := filepath.Dir(cachePath)
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		return "", fmt.Errorf("creating cache dir: %w", err)
 	}
 
@@ -444,7 +444,7 @@ func (p *PythonRuntime) findHomebrewPythonPath(ctx context.Context, version stri
 		if path, err := exec.LookPath(pythonCmd); err == nil {
 			// Verify this is the right version by checking its version output
 			out := bytes.Buffer{}
-			cmd := exec.CommandContext(ctx, path, "--version")
+			cmd := exec.CommandContext(ctx, path, "--version") // #nosec G204 - path is controlled and validated
 			cmd.Stdout = &out
 			cmd.Stderr = &out
 			if err := cmd.Run(); err == nil {

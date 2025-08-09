@@ -12,7 +12,7 @@ workflow:
   steps:
     - id: first_step
       agent: processor
-      prompt: "Process data using result from later step: {{ steps.third_step.output }}"
+      prompt: "Process data using result from later step: ${{ steps.third_step.output }}"
     
     - id: second_step
       agent: processor

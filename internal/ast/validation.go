@@ -158,7 +158,7 @@ func (v *Validator) ValidateWorkflow() *ValidationResult {
 }
 
 func (v *Validator) validateRequirements() {
-	for _, rr := range v.workflow.Requirements.Runtimes {
+	for i, rr := range v.workflow.Requirements.Runtimes {
 		isValidRuntime := false
 		for _, v := range ValidRuntimes {
 			if string(rr.Name) == v {
@@ -168,7 +168,7 @@ func (v *Validator) validateRequirements() {
 		}
 
 		if !isValidRuntime {
-			v.result.AddFieldError("requirements", "runtimes", fmt.Sprintf("runtimes must be one of: %s", ListToReadable(ValidRuntimes)))
+			v.result.AddFieldError("requirements", fmt.Sprintf("runtimes[%d]", i), fmt.Sprintf("runtimes must be one of: %s", ListToReadable(ValidRuntimes)))
 		}
 	}
 }
@@ -190,13 +190,8 @@ func (v *Validator) validateAgents() {
 
 // validateAgent validates a single agent
 func (v *Validator) validateAgent(agent *Agent, path string) {
-	if agent.Model == "" && agent.Uses == "" {
-		v.result.AddError(path, "agent must specify either 'model' or 'uses'")
-		return
-	}
-
-	if agent.Model != "" && agent.Uses != "" {
-		v.result.AddFieldError(path, "model", "agent cannot specify both 'model' and 'uses'")
+	if agent.Model == "" {
+		v.result.AddError(path, "agent must specify a model")
 		return
 	}
 
@@ -215,12 +210,6 @@ func (v *Validator) validateAgent(agent *Agent, path string) {
 			if !isValidProvider {
 				v.result.AddFieldError(path, "provider", fmt.Sprintf("provider must be one of: %v", ValidProviders))
 			}
-		}
-	}
-
-	if agent.Uses != "" {
-		if err := isValidBlockReference(v.wd, agent.Uses); err != nil {
-			v.result.AddFieldError(path, "uses", err.Error())
 		}
 	}
 

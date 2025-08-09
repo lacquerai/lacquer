@@ -78,6 +78,8 @@ func (p *MCPToolProvider) ExecuteTool(execCtx *execcontext.ExecutionContext, too
 
 	result, err := server.ExecuteTool(execCtx, toolName, parameters)
 	if err != nil {
+		// Convert error to result object, not returning the error
+		//nolint:nilerr // Intentional: converting error to result object
 		return &tools.Result{
 			ToolName: toolName,
 			Success:  false,
@@ -85,7 +87,7 @@ func (p *MCPToolProvider) ExecuteTool(execCtx *execcontext.ExecutionContext, too
 			Metadata: map[string]interface{}{
 				"server_type": server.config.Type,
 			},
-		}, nil //nolint:nilerr // Intentional: converting error to result object
+		}, nil
 	}
 
 	return &tools.Result{

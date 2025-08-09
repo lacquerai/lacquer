@@ -123,13 +123,6 @@ func (s *Step) HasOutput(name string) bool {
 	return exists
 }
 
-// Agent helper methods
-
-// IsPreBuilt returns true if this agent uses a pre-built configuration
-func (a *Agent) IsPreBuilt() bool {
-	return a.Uses != ""
-}
-
 // IsCustom returns true if this agent has a custom configuration
 func (a *Agent) IsCustom() bool {
 	return a.Model != ""

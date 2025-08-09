@@ -186,7 +186,7 @@ func (wm *WorkflowManager) pollWorkflowResults(workflowID string) (pollResultMsg
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return pollResultMsg{}, fmt.Errorf("polling error %d", resp.StatusCode)
 		}
 
@@ -197,10 +197,10 @@ func (wm *WorkflowManager) pollWorkflowResults(workflowID string) (pollResultMsg
 			Error    string        `json:"error"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&pollResult); err != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return pollResultMsg{}, fmt.Errorf("failed to decode poll response: %w", err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		if pollResult.Status == "completed" {
 			return pollResultMsg{
@@ -225,14 +225,14 @@ func (wm *WorkflowManager) saveGeneratedFiles(result pollResultMsg) (map[string]
 	generatedFiles := make(map[string]string)
 
 	// Create project directory
-	if err := os.MkdirAll(wm.answers.projectName, 0755); err != nil {
+	if err := os.MkdirAll(wm.answers.projectName, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create project directory: %w", err)
 	}
 
 	// Save main workflow
 	if result.workflow != "" {
 		workflowPath := filepath.Join(wm.answers.projectName, "workflow.laq.yml")
-		if err := os.WriteFile(workflowPath, []byte(result.workflow), 0644); err != nil {
+		if err := os.WriteFile(workflowPath, []byte(result.workflow), 0600); err != nil {
 			return nil, fmt.Errorf("failed to save workflow: %w", err)
 		}
 		generatedFiles["workflow.laq.yml"] = workflowPath
@@ -241,13 +241,13 @@ func (wm *WorkflowManager) saveGeneratedFiles(result pollResultMsg) (map[string]
 	// Save scripts
 	if len(result.scripts) > 0 {
 		scriptsDir := filepath.Join(wm.answers.projectName, "scripts")
-		if err := os.MkdirAll(scriptsDir, 0755); err != nil {
+		if err := os.MkdirAll(scriptsDir, 0750); err != nil {
 			return nil, fmt.Errorf("failed to create scripts directory: %w", err)
 		}
 
 		for _, script := range result.scripts {
 			scriptPath := filepath.Join(scriptsDir, script.Name)
-			if err := os.WriteFile(scriptPath, []byte(script.Content), 0755); err != nil {
+			if err := os.WriteFile(scriptPath, []byte(script.Content), 0600); err != nil {
 				return nil, fmt.Errorf("failed to save script %s: %w", script.Name, err)
 			}
 			generatedFiles["scripts/"+script.Name] = scriptPath

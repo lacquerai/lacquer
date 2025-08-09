@@ -68,7 +68,7 @@ func (p *YAMLParser) ParseFile(filename string) (*ast.Workflow, error) {
 		return nil, reporter.ToError()
 	}
 
-	data, err := os.ReadFile(filename)
+	data, err := os.ReadFile(filename) // #nosec G304 - filename is validated and controlled by CLI
 	if err != nil {
 		reporter.AddError(&EnhancedError{
 			ID:       "file_read_error",
@@ -145,13 +145,13 @@ func (p *YAMLParser) ParseBytes(data []byte, filename string) (*ast.Workflow, er
 	// First, try to parse using yaml.Node to get position information
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {
-		return nil, p.enhanceYAMLError(err, data, reporter)
+		return nil, p.enhanceYAMLError(err, reporter)
 	}
 
 	// Parse into workflow struct
 	var workflow ast.Workflow
 	if err := yaml.Unmarshal(data, &workflow); err != nil {
-		return nil, p.enhanceYAMLError(err, data, reporter)
+		return nil, p.enhanceYAMLError(err, reporter)
 	}
 
 	workflow.SourceFile = filename
@@ -345,12 +345,12 @@ func GetSupportedExtensions() []string {
 }
 
 // enhanceYAMLError converts a YAML error to an enhanced error
-func (p *YAMLParser) enhanceYAMLError(err error, data []byte, reporter *ErrorReporter) error {
+func (p *YAMLParser) enhanceYAMLError(err error, reporter *ErrorReporter) error {
 	switch yamlErr := err.(type) {
 	case *yaml.TypeError:
 		if len(yamlErr.Errors) > 0 {
 			for _, errMsg := range yamlErr.Errors {
-				pos := extractPositionFromMessage(errMsg, data)
+				pos := extractPositionFromMessage(errMsg)
 				reporter.AddError(&EnhancedError{
 					ID:       generateErrorID("yaml_type", pos),
 					Severity: SeverityError,
@@ -362,7 +362,7 @@ func (p *YAMLParser) enhanceYAMLError(err error, data []byte, reporter *ErrorRep
 			}
 		}
 	default:
-		pos := extractPositionFromMessage(err.Error(), data)
+		pos := extractPositionFromMessage(err.Error())
 		reporter.AddError(&EnhancedError{
 			ID:       generateErrorID("yaml_parse", pos),
 			Severity: SeverityError,

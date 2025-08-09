@@ -32,7 +32,7 @@ type CachedModels struct {
 // NewModelCache creates a new model cache
 func NewModelCache(disable bool) *ModelCache {
 	cacheDir := filepath.Join(utils.LacquerCacheDir, "models")
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		log.Warn().Err(err).Str("dir", cacheDir).Msg("Could not create cache directory")
 	}
 
@@ -114,7 +114,7 @@ func (mc *ModelCache) InvalidateCache(providerName string) {
 func (mc *ModelCache) loadFromCache(providerName string) *CachedModels {
 	cacheFile := mc.getCacheFilePath(providerName)
 
-	data, err := os.ReadFile(cacheFile)
+	data, err := os.ReadFile(cacheFile) // #nosec G304 - cacheFile path is controlled
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Debug().
@@ -158,7 +158,7 @@ func (mc *ModelCache) saveToCache(providerName string, models []Info) {
 	}
 
 	cacheFile := mc.getCacheFilePath(providerName)
-	if err := os.WriteFile(cacheFile, data, 0644); err != nil {
+	if err := os.WriteFile(cacheFile, data, 0600); err != nil {
 		log.Warn().
 			Err(err).
 			Str("provider", providerName).

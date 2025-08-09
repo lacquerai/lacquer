@@ -361,7 +361,7 @@ func (p *Provider) Close() error {
 }
 
 // buildAnthropicRequest converts a ModelRequest to an AnthropicRequest
-func (p *Provider) buildAnthropicRequest(request *provider.Request) (anthropic.MessageNewParams, error) {
+func (p *Provider) buildAnthropicRequest(request *provider.Request) (anthropic.MessageNewParams, error) { //nolint:unparam // error is intentionally always nil
 	maxTokens := 8192
 
 	for model, tokens := range maxTokenMap {

@@ -723,7 +723,7 @@ func (e *Executor) createOpenAIRequestWithTools(agent *ast.Agent, messages []pro
 }
 
 // executeToolCalls executes the tool calls and returns results
-func (e *Executor) executeToolCalls(execCtx *execcontext.ExecutionContext, toolCalls []*provider.ToolUseBlockParam, step *ast.Step) ([]provider.Message, error) {
+func (e *Executor) executeToolCalls(execCtx *execcontext.ExecutionContext, toolCalls []*provider.ToolUseBlockParam, step *ast.Step) ([]provider.Message, error) { //nolint:unparam // error is intentionally always nil
 	var results []provider.Message
 
 	for _, toolCall := range toolCalls {

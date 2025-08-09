@@ -244,7 +244,7 @@ func (c *MCPClient) receiveLoop() {
 
 		msgBytes, err := c.transport.Receive(context.Background())
 		if err != nil {
-			c.Close()
+			_ = c.Close()
 			return
 		}
 

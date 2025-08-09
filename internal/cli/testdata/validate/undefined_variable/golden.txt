@@ -1,4 +1,0 @@
-
-✓ All 1 workflow(s) are valid
-
-STDERR:

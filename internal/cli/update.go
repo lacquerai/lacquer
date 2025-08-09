@@ -286,7 +286,7 @@ func loadUpdateCache() *UpdateInfo {
 	}
 
 	cacheFile := filepath.Join(homeDir, updateCacheFile)
-	data, err := os.ReadFile(cacheFile)
+	data, err := os.ReadFile(cacheFile) // #nosec G304 - cacheFile path is controlled
 	if err != nil {
 		return nil
 	}
@@ -307,7 +307,7 @@ func saveUpdateCache(updateInfo *UpdateInfo) {
 	}
 
 	lacquerDir := filepath.Join(homeDir, ".lacquer")
-	_ = os.MkdirAll(lacquerDir, 0755)
+	_ = os.MkdirAll(lacquerDir, 0750)
 
 	cacheFile := filepath.Join(homeDir, updateCacheFile)
 	data, err := json.MarshalIndent(updateInfo, "", "  ")
@@ -315,7 +315,7 @@ func saveUpdateCache(updateInfo *UpdateInfo) {
 		return
 	}
 
-	_ = os.WriteFile(cacheFile, data, 0644)
+	_ = os.WriteFile(cacheFile, data, 0600)
 }
 
 // ShouldShowUpdateNotification checks if we should show an update notification

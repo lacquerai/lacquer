@@ -436,7 +436,7 @@ func (p *ClaudeCodeProvider) readStreamingResponse(ctx provider.GenerateContext,
 }
 
 // processLine processes a single line of output from Claude Code
-func (p *ClaudeCodeProvider) processLine(ctx provider.GenerateContext, line string, finalResponse **ClaudeCodeResponse) error {
+func (p *ClaudeCodeProvider) processLine(ctx provider.GenerateContext, line string, finalResponse **ClaudeCodeResponse) error { //nolint:unparam // error is intentionally always nil
 	// Parse JSON message
 	var message StreamMessage
 	if err := json.Unmarshal([]byte(line), &message); err != nil {

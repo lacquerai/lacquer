@@ -166,21 +166,21 @@ func (sv *SemanticValidator) extractStepDependencies(step *ast.Step) []string {
 	var deps []string
 
 	if step.Prompt != "" {
-		deps = append(deps, sv.extractVariableReferences(step.Prompt, "steps")...)
+		deps = append(deps, sv.extractVariableReferences(step.Prompt)...)
 	}
 
 	if step.Condition != "" {
-		deps = append(deps, sv.extractVariableReferences(step.Condition, "steps")...)
+		deps = append(deps, sv.extractVariableReferences(step.Condition)...)
 	}
 
 	if step.SkipIf != "" {
-		deps = append(deps, sv.extractVariableReferences(step.SkipIf, "steps")...)
+		deps = append(deps, sv.extractVariableReferences(step.SkipIf)...)
 	}
 
 	if step.With != nil {
 		for _, value := range step.With {
 			if str, ok := value.(string); ok {
-				deps = append(deps, sv.extractVariableReferences(str, "steps")...)
+				deps = append(deps, sv.extractVariableReferences(str)...)
 			}
 		}
 	}
@@ -188,7 +188,7 @@ func (sv *SemanticValidator) extractStepDependencies(step *ast.Step) []string {
 	if step.Updates != nil {
 		for _, value := range step.Updates {
 			if str, ok := value.(string); ok {
-				deps = append(deps, sv.extractVariableReferences(str, "steps")...)
+				deps = append(deps, sv.extractVariableReferences(str)...)
 			}
 		}
 	}
@@ -226,7 +226,7 @@ func (sv *SemanticValidator) extractAllVariableReferences(text string) []string 
 	var variables []string
 	for _, match := range matches {
 		if len(match) > 1 {
-			variable := strings.TrimSpace(match[1])
+			variable := strings.TrimSpace(match[2])
 			variables = append(variables, variable)
 		}
 	}
@@ -235,12 +235,12 @@ func (sv *SemanticValidator) extractAllVariableReferences(text string) []string 
 }
 
 // extractVariableReferences extracts step ID references from variable references
-func (sv *SemanticValidator) extractVariableReferences(text, prefix string) []string {
+func (sv *SemanticValidator) extractVariableReferences(text string) []string {
 	variables := sv.extractAllVariableReferences(text)
 	var stepIDs []string
 
 	for _, variable := range variables {
-		if strings.HasPrefix(variable, prefix+".") {
+		if strings.HasPrefix(variable, "steps.") {
 			parts := strings.Split(variable, ".")
 			if len(parts) >= 2 {
 				stepIDs = append(stepIDs, parts[1])

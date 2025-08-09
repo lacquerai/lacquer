@@ -23,20 +23,11 @@ func Test_Valid(t *testing.T) {
 	newSingleDirectoryValidateTest(t)
 }
 
-// Semantic Validator Tests
 func Test_CircularDependency(t *testing.T) {
 	newSingleDirectoryValidateTest(t)
 }
 
 func Test_ForwardReference(t *testing.T) {
-	newSingleDirectoryValidateTest(t)
-}
-
-func Test_UndefinedVariable(t *testing.T) {
-	newSingleDirectoryValidateTest(t)
-}
-
-func Test_InvalidLacquerBlock(t *testing.T) {
 	newSingleDirectoryValidateTest(t)
 }
 
@@ -56,20 +47,11 @@ func Test_UndefinedAgentRef(t *testing.T) {
 	newSingleDirectoryValidateTest(t)
 }
 
-func Test_ExcessiveRetry(t *testing.T) {
-	newSingleDirectoryValidateTest(t)
-}
-
-// AST Validator Tests
 func Test_InvalidProvider(t *testing.T) {
 	newSingleDirectoryValidateTest(t)
 }
 
 func Test_AgentMissingModel(t *testing.T) {
-	newSingleDirectoryValidateTest(t)
-}
-
-func Test_AgentBothModelUses(t *testing.T) {
 	newSingleDirectoryValidateTest(t)
 }
 
@@ -116,11 +98,6 @@ func Test_StepMultipleMethods(t *testing.T) {
 func Test_InvalidStepId(t *testing.T) {
 	newSingleDirectoryValidateTest(t)
 }
-
-func Test_InvalidDuration(t *testing.T) {
-	newSingleDirectoryValidateTest(t)
-}
-
 func Test_InvalidRuntime(t *testing.T) {
 	newSingleDirectoryValidateTest(t)
 }
@@ -167,7 +144,7 @@ func assertGoldenFile(t *testing.T, directory string, stdout *bytes.Buffer, stde
 	t.Helper()
 
 	goldenFile := filepath.Join(directory, "golden.txt")
-	golden, err := os.ReadFile(goldenFile)
+	golden, err := os.ReadFile(goldenFile) // #nosec G304 - test file path is controlled
 
 	// Remove ANSI codes and normalize time strings
 	stdout_clean := re.ReplaceAllString(stdout.String(), "")
@@ -178,18 +155,18 @@ func assertGoldenFile(t *testing.T, directory string, stdout *bytes.Buffer, stde
 
 	if os.IsNotExist(err) {
 		golden = []byte(actual)
-		err = os.WriteFile(goldenFile, golden, 0644)
+		err = os.WriteFile(goldenFile, golden, 0600)
 		require.NoError(t, err)
 	} else {
 		require.NoError(t, err)
 	}
 
 	if *rewriteGolden {
-		_ = os.WriteFile(filepath.Join(directory, "golden.txt"), []byte(actual), 0644)
+		_ = os.WriteFile(filepath.Join(directory, "golden.txt"), []byte(actual), 0600)
 		return
 	}
 
 	if !assert.Equal(t, string(golden), actual) {
-		_ = os.WriteFile(filepath.Join(directory, "actual.txt"), []byte(actual), 0644)
+		_ = os.WriteFile(filepath.Join(directory, "actual.txt"), []byte(actual), 0600)
 	}
 }

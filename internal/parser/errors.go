@@ -169,7 +169,7 @@ func (r *ErrorReporter) AddSimpleError(message string, pos ast.Position, categor
 		Message:    "",
 		Position:   pos,
 		Category:   category,
-		Suggestion: r.generateSuggestion(message, category),
+		Suggestion: r.generateSuggestion(message),
 	}
 	r.AddError(err)
 }
@@ -279,8 +279,9 @@ func (r *ErrorReporter) buildContext(pos ast.Position, radius int) *ErrorContext
 }
 
 // generateSuggestion creates helpful suggestions based on error patterns
-func (r *ErrorReporter) generateSuggestion(message, category string) *ErrorSuggestion {
+func (r *ErrorReporter) generateSuggestion(message string) *ErrorSuggestion {
 	_ = strings.ToLower(message) // For future TODO implementation
+	// category parameter removed as it was unused
 
 	// @TODO: Implement suggestion generation based on category and message
 
@@ -353,7 +354,7 @@ func min(a, b int) int {
 }
 
 // extractPositionFromMessage attempts to extract line/column from error messages
-func extractPositionFromMessage(message string, source []byte) ast.Position {
+func extractPositionFromMessage(message string) ast.Position {
 	lines := strings.Split(message, " ")
 	for i, word := range lines {
 		if word == "line" && i+1 < len(lines) {

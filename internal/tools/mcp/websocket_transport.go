@@ -94,12 +94,12 @@ func (t *WebSocketTransport) Send(ctx context.Context, message []byte) error {
 
 	deadline, ok := ctx.Deadline()
 	if ok {
-		t.conn.SetWriteDeadline(deadline)
+		_ = t.conn.SetWriteDeadline(deadline)
 	}
 
 	err := t.conn.WriteMessage(websocket.TextMessage, message)
 	if err != nil {
-		t.conn.Close()
+		_ = t.conn.Close() // #nosec G104 - cleanup operation, error not critical
 		t.conn = nil
 		return fmt.Errorf("failed to send message: %w", err)
 	}
@@ -123,14 +123,14 @@ func (t *WebSocketTransport) Receive(ctx context.Context) ([]byte, error) {
 	t.mu.Unlock()
 
 	if t.readTimeout > 0 {
-		conn.SetReadDeadline(time.Now().Add(t.readTimeout))
+		_ = conn.SetReadDeadline(time.Now().Add(t.readTimeout))
 	}
 
 	messageType, message, err := conn.ReadMessage()
 	if err != nil {
 		t.mu.Lock()
 		if t.conn != nil {
-			t.conn.Close()
+			_ = t.conn.Close()
 			t.conn = nil
 		}
 		t.mu.Unlock()
@@ -163,9 +163,9 @@ func (t *WebSocketTransport) Close() error {
 
 	if t.conn != nil {
 		deadline := time.Now().Add(5 * time.Second)
-		t.conn.WriteControl(websocket.CloseMessage,
+		_ = t.conn.WriteControl(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
-			deadline)
+			deadline) // #nosec G104 - close message, error not critical
 
 		err := t.conn.Close()
 		t.conn = nil
@@ -193,7 +193,7 @@ func (t *WebSocketTransport) pingLoop() {
 				deadline := time.Now().Add(10 * time.Second)
 				err := t.conn.WriteControl(websocket.PingMessage, nil, deadline)
 				if err != nil {
-					t.conn.Close()
+					_ = t.conn.Close() // #nosec G104 - cleanup operation, error not critical
 					t.conn = nil
 				}
 			}

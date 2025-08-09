@@ -205,7 +205,7 @@ func (e *DockerExecutor) buildImageFromLocal(execCtx *execcontext.ExecutionConte
 	}
 
 	args := []string{"build", "-t", imageName, "-f", relDockerfilePath, buildContext}
-	cmd := exec.CommandContext(buildCtx, "docker", args...)
+	cmd := exec.CommandContext(buildCtx, "docker", args...) // #nosec G204 - args are controlled and validated
 	cmd.Dir = buildContext
 
 	var stderr bytes.Buffer

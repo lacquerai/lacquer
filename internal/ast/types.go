@@ -183,8 +183,6 @@ type Agent struct {
 	TopP *float64 `yaml:"top_p,omitempty" json:"top_p,omitempty" validate:"omitempty,min=0,max=1"`
 	// Tools defines the tools and capabilities available to this agent
 	Tools []*Tool `yaml:"tools,omitempty" json:"tools,omitempty"`
-	// Uses references a predefined agent configuration or template
-	Uses string `yaml:"uses,omitempty" json:"uses,omitempty"`
 	// With provides additional configuration parameters for the referenced agent
 	With map[string]interface{} `yaml:"with,omitempty" json:"with,omitempty"`
 	// Config provides additional agent-specific configuration options

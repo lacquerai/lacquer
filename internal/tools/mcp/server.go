@@ -63,7 +63,7 @@ func (s *Server) Initialize(ctx context.Context) error {
 
 // initializeLocal starts a local MCP server process
 func (s *Server) initializeLocal(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, s.config.Command, s.config.Args...)
+	cmd := exec.CommandContext(ctx, s.config.Command, s.config.Args...) // #nosec G204 - command and args are from configuration
 
 	if len(s.config.Env) > 0 {
 		env := os.Environ()
@@ -118,7 +118,7 @@ func (s *Server) initializeLocal(ctx context.Context) error {
 	}()
 
 	if err := s.client.Initialize(ctx); err != nil {
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 		return fmt.Errorf("failed to initialize MCP client: %w", err)
 	}
 
@@ -218,7 +218,7 @@ func (s *Server) Close() error {
 
 	if s.process != nil {
 		if err := s.process.Process.Signal(os.Interrupt); err != nil {
-			s.process.Process.Kill()
+			_ = s.process.Process.Kill()
 		}
 
 		done := make(chan error, 1)
@@ -229,7 +229,7 @@ func (s *Server) Close() error {
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			s.process.Process.Kill()
+			_ = s.process.Process.Kill()
 		}
 	}
 

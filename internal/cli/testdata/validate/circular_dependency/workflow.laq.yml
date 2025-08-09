@@ -12,12 +12,12 @@ workflow:
   steps:
     - id: step_a
       agent: analyzer
-      prompt: "Analyze result from step C: {{ steps.step_c.output }}"
+      prompt: "Analyze result from step C: ${{ steps.step_c.output }}"
     
     - id: step_b
       agent: analyzer
-      prompt: "Analyze result from step A: {{ steps.step_a.output }}"
+      prompt: "Analyze result from step A: ${{ steps.step_a.output }}"
     
     - id: step_c
       agent: analyzer
-      prompt: "Analyze result from step B: {{ steps.step_b.output }}"
+      prompt: "Analyze result from step B: ${{ steps.step_b.output }}"

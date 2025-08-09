@@ -71,7 +71,7 @@ func (n *NodeRuntime) Get(ctx context.Context, version string) (string, error) {
 
 	// Download archive
 	archivePath := filepath.Join(tempDir, filepath.Base(downloadURL))
-	file, err := os.Create(archivePath)
+	file, err := os.Create(archivePath) // #nosec G304 - archivePath is controlled
 	if err != nil {
 		return "", fmt.Errorf("creating archive file: %w", err)
 	}
@@ -89,7 +89,7 @@ func (n *NodeRuntime) Get(ctx context.Context, version string) (string, error) {
 	}
 
 	extractDir := filepath.Join(tempDir, "extracted")
-	if err := os.MkdirAll(extractDir, 0755); err != nil {
+	if err := os.MkdirAll(extractDir, 0750); err != nil {
 		return "", fmt.Errorf("creating extract dir: %w", err)
 	}
 

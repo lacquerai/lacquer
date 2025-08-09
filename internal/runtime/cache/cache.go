@@ -28,7 +28,7 @@ func NewFileCache(baseDir string) (*FileCache, error) {
 		baseDir = filepath.Join(home, ".lacquer", "runtimes")
 	}
 
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
+	if err := os.MkdirAll(baseDir, 0750); err != nil {
 		return nil, fmt.Errorf("creating cache directory: %w", err)
 	}
 
@@ -57,7 +57,7 @@ func (c *FileCache) Set(runtime, version, path string) error {
 	cachePath := c.Path(runtime, version)
 	cacheDir := filepath.Dir(cachePath)
 
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		return fmt.Errorf("creating cache directory: %w", err)
 	}
 
@@ -68,7 +68,7 @@ func (c *FileCache) Set(runtime, version, path string) error {
 			if err := copyDir(path, cachePath); err != nil {
 				return fmt.Errorf("moving to cache: %w", err)
 			}
-			os.RemoveAll(path)
+			_ = os.RemoveAll(path)
 		}
 	}
 
@@ -82,7 +82,7 @@ func (c *FileCache) SetManifest(runtime string, manifest []types.Version) error 
 	cachePath := c.Path(runtime, "manifest.json")
 	cacheDir := filepath.Dir(cachePath)
 
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		return fmt.Errorf("creating cache directory: %w", err)
 	}
 
@@ -91,7 +91,7 @@ func (c *FileCache) SetManifest(runtime string, manifest []types.Version) error 
 		return fmt.Errorf("marshalling manifest: %w", err)
 	}
 
-	return os.WriteFile(cachePath, json, 0644)
+	return os.WriteFile(cachePath, json, 0600)
 }
 
 func (c *FileCache) GetManifest(runtime string) ([]types.Version, error) {
@@ -109,7 +109,7 @@ func (c *FileCache) GetManifest(runtime string) ([]types.Version, error) {
 		return nil, types.ErrManifestExpired
 	}
 
-	data, err := os.ReadFile(cachePath)
+	data, err := os.ReadFile(cachePath) // #nosec G304 - cachePath is controlled
 	if err != nil {
 		return nil, fmt.Errorf("reading manifest: %w", err)
 	}
@@ -160,13 +160,13 @@ func copyDir(src, dst string) error {
 
 // copyFile copies a single file
 func copyFile(src, dst string, mode os.FileMode) error {
-	srcFile, err := os.Open(src)
+	srcFile, err := os.Open(src) // #nosec G304 - src path is controlled
 	if err != nil {
 		return err
 	}
 	defer func() { _ = srcFile.Close() }()
 
-	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode) // #nosec G304 - dst path is controlled
 	if err != nil {
 		return err
 	}

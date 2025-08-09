@@ -118,11 +118,11 @@ func TestLoadUpdateCacheWithInvalidJSON(t *testing.T) {
 
 	// Create .lacquer directory
 	lacquerDir := filepath.Join(tempDir, ".lacquer")
-	_ = os.MkdirAll(lacquerDir, 0755)
+	_ = os.MkdirAll(lacquerDir, 0750)
 
 	// Write invalid JSON to cache file
 	cacheFile := filepath.Join(tempDir, updateCacheFile)
-	_ = os.WriteFile(cacheFile, []byte("invalid json"), 0644)
+	_ = os.WriteFile(cacheFile, []byte("invalid json"), 0600)
 
 	// Test loading invalid cache
 	loadedInfo := loadUpdateCache()
@@ -176,7 +176,7 @@ func TestSaveUpdateCacheCreatesDirectory(t *testing.T) {
 	assert.FileExists(t, cacheFile)
 
 	// Verify content is correct JSON
-	data, err := os.ReadFile(cacheFile)
+	data, err := os.ReadFile(cacheFile) // #nosec G304 - test file path is controlled
 	require.NoError(t, err)
 
 	var savedInfo UpdateInfo

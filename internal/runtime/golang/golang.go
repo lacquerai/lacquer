@@ -80,10 +80,10 @@ func (g *GoRuntime) Get(ctx context.Context, version string) (string, error) {
 	}
 
 	if err := g.downloader.Download(ctx, downloadURL, file); err != nil {
-		file.Close()
+		_ = file.Close()
 		return "", fmt.Errorf("downloading Go: %w", err)
 	}
-	file.Close()
+	_ = file.Close()
 
 	// Extract archive
 	extractor, err := utils.GetExtractor(archivePath)
@@ -92,7 +92,7 @@ func (g *GoRuntime) Get(ctx context.Context, version string) (string, error) {
 	}
 
 	extractDir := filepath.Join(tempDir, "extracted")
-	if err := os.MkdirAll(extractDir, 0755); err != nil {
+	if err := os.MkdirAll(extractDir, 0750); err != nil {
 		return "", fmt.Errorf("creating extract dir: %w", err)
 	}
 
