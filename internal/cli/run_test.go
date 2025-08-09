@@ -424,16 +424,28 @@ func newSingleDirectoryRunTest(t *testing.T) {
 	_ = godotenv.Load(".env.test")
 	t.Setenv("LACQUER_TEST", "true")
 
-	if os.Getenv("LACQUER_ANTHROPIC_TEST_API_KEY") == "" {
+	testAnthropicKey := os.Getenv("LACQUER_ANTHROPIC_TEST_API_KEY")
+	testOpenAIKey := os.Getenv("LACQUER_OPENAI_TEST_API_KEY")
+	if testAnthropicKey == "" && *captureResponse == true {
 		t.Skip("Skipping e2e tests as no LACQUER_ANTHROPIC_TEST_API_KEY is set")
 	}
 
-	if os.Getenv("LACQUER_OPENAI_TEST_API_KEY") == "" {
+	if testOpenAIKey == "" && *captureResponse == true {
 		t.Skip("Skipping e2e tests as no LACQUER_OPENAI_TEST_API_KEY is set")
 	}
 
-	t.Setenv("ANTHROPIC_API_KEY", os.Getenv("LACQUER_ANTHROPIC_TEST_API_KEY"))
-	t.Setenv("OPENAI_API_KEY", os.Getenv("LACQUER_OPENAI_TEST_API_KEY"))
+	// set stub api keys so that we can run the tests locally
+	// we only need the api keys for the capture mode
+	if testAnthropicKey == "" {
+		testAnthropicKey = "test"
+	}
+
+	if testOpenAIKey == "" {
+		testOpenAIKey = "test"
+	}
+
+	t.Setenv("ANTHROPIC_API_KEY", testAnthropicKey)
+	t.Setenv("OPENAI_API_KEY", testOpenAIKey)
 
 	defer func() {
 		if r := recover(); r != nil {

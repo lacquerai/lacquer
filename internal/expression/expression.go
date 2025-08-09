@@ -645,9 +645,18 @@ func (e *DotExpr) Eval(ctx *EvalContext) (Value, error) {
 	// Special handling for root-level accesses like inputs.name
 	if varExpr, ok := e.Object.(*VariableExpr); ok {
 		fullPath := varExpr.Name + "." + e.Field
-		if val, err := ctx.Variables.Get(fullPath); err == nil {
+		val, err := ctx.Variables.Get(fullPath)
+		if err == nil {
 			return val, nil
 		}
+
+		log.Debug().
+			Err(err).
+			Str("object", fmt.Sprintf("%v", e.Object)).
+			Str("field", e.Field).
+			Msg("failed to get variable")
+
+		return NilValue{}, nil
 	}
 
 	obj, err := e.Object.Eval(ctx)

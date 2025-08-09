@@ -221,24 +221,24 @@ func TestTemplateEngine_Errors(t *testing.T) {
 	}, workflow, nil, "")
 
 	// Test missing input
-	_, err := te.Render("${{ inputs.missing.foo }}", execCtx)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "input parameter missing not found")
+	result, err := te.Render("${{ inputs.missing.foo }}", execCtx)
+	assert.NoError(t, err)
+	assert.Equal(t, nil, result)
 
 	// Test missing state
-	_, err = te.Render("${{ state.missing }}", execCtx)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "state variable missing not found")
+	result, err = te.Render("${{ state.missing }}", execCtx)
+	assert.NoError(t, err)
+	assert.Equal(t, nil, result)
 
 	// Test missing step
-	_, err = te.Render("${{ steps.missing.output }}", execCtx)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "step missing not found")
+	result, err = te.Render("${{ steps.missing.output }}", execCtx)
+	assert.NoError(t, err)
+	assert.Equal(t, nil, result)
 
 	// Test invalid scope
-	_, err = te.Render("${{ invalid.scope }}", execCtx)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown variable scope: invalid")
+	result, err = te.Render("${{ invalid.scope }}", execCtx)
+	assert.NoError(t, err)
+	assert.Equal(t, nil, result)
 }
 
 func TestTemplateEngine_Integration(t *testing.T) {

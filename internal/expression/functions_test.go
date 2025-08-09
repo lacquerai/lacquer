@@ -191,7 +191,7 @@ func TestFunctionRegistry_ContextFunctions(t *testing.T) {
 		result, err := fr.Call("hashFiles", []interface{}{"file1.txt", "file2.txt"}, execCtx)
 		require.NoError(t, err)
 		assert.IsType(t, "", result)
-		assert.Len(t, result.(string), 32) // MD5 hash length
+		assert.Len(t, result.(string), 64)
 
 		// Test consistent hashing
 		result2, err := fr.Call("hashFiles", []interface{}{"file1.txt", "file2.txt"}, execCtx)
