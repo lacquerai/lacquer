@@ -80,7 +80,6 @@ func (stp *ScriptToolProvider) AddToolDefinition(tool *ast.Tool) ([]tools.Tool, 
 		return nil, fmt.Errorf("tool %s already exists", tool.Name)
 	}
 
-	// Convert the tool to a ScriptTool
 	scriptTool := &ScriptTool{
 		Name:        tool.Name,
 		Description: tool.Description,
@@ -137,7 +136,6 @@ func (stp *ScriptToolProvider) ExecuteTool(execCtx *execcontext.ExecutionContext
 }
 
 func (stp *ScriptToolProvider) executeBashScript(execCtx *execcontext.ExecutionContext, scriptTool *ScriptTool, parameters json.RawMessage) (interface{}, error) {
-	// Get script content
 	scriptContent := scriptTool.Content
 	if scriptContent == "" && scriptTool.ScriptPath != "" {
 		contentBytes, err := os.ReadFile(scriptTool.ScriptPath)
@@ -147,7 +145,6 @@ func (stp *ScriptToolProvider) executeBashScript(execCtx *execcontext.ExecutionC
 		scriptContent = string(contentBytes)
 	}
 
-	// Create a temporary block for execution
 	tempBlock := &block.Block{
 		Name:    fmt.Sprintf("tool-%s", scriptTool.Name),
 		Runtime: block.RuntimeBash,
@@ -156,13 +153,12 @@ func (stp *ScriptToolProvider) executeBashScript(execCtx *execcontext.ExecutionC
 		Outputs: make(map[string]block.OutputSchema),
 	}
 
-	// Execute using Go executor
 	return stp.bashExecutor.ExecuteRaw(execCtx, tempBlock, parameters)
 }
 
 // Close cleans up resources
 func (stp *ScriptToolProvider) Close() error {
-	// TODO: Implement
+	// @TODO: Implement
 	// close any running scripts
 	// purge any cached scripts if exists
 	return nil

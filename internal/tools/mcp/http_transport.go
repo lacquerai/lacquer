@@ -47,26 +47,22 @@ func (t *HTTPTransport) Send(ctx context.Context, message []byte) error {
 	authHeader := t.authHeader
 	t.mu.Unlock()
 
-	// Create request
 	req, err := http.NewRequestWithContext(ctx, "POST", t.url, bytes.NewReader(message))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	if authHeader != "" {
 		req.Header.Set("Authorization", authHeader)
 	}
 
-	// Send request
 	resp, err := t.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Check status
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("HTTP error %d: %s", resp.StatusCode, string(body))
@@ -147,32 +143,27 @@ func (t *HTTPRequestResponseTransport) SendAndReceive(ctx context.Context, messa
 	authHeader := t.authHeader
 	t.mu.Unlock()
 
-	// Create request
 	req, err := http.NewRequestWithContext(ctx, "POST", t.url, bytes.NewReader(message))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	if authHeader != "" {
 		req.Header.Set("Authorization", authHeader)
 	}
 
-	// Send request
 	resp, err := t.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Check status
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP error %d: %s", resp.StatusCode, string(body))
 	}
@@ -203,26 +194,21 @@ func (t *HTTPMCPTransport) SetAuthHeader(header string) {
 
 // Send sends a message and queues the response
 func (t *HTTPMCPTransport) Send(ctx context.Context, message []byte) error {
-	// Parse the message to check if it expects a response
 	var msg MCPMessage
 	if err := json.Unmarshal(message, &msg); err != nil {
 		return fmt.Errorf("failed to parse message: %w", err)
 	}
 
-	// If it's a notification (no ID), we don't expect a response
 	if msg.ID == nil {
-		// For notifications, we still send the request but don't queue the response
 		_, err := t.transport.SendAndReceive(ctx, message)
 		return err
 	}
 
-	// For regular RPC calls, send and queue the response
 	response, err := t.transport.SendAndReceive(ctx, message)
 	if err != nil {
 		return err
 	}
 
-	// Queue the response
 	select {
 	case t.responses <- response:
 		return nil

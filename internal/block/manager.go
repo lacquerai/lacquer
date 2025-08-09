@@ -18,7 +18,6 @@ type Manager struct {
 
 // NewManager creates a new block manager
 func NewManager(cacheDir string) (*Manager, error) {
-	// Create cache directory
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}
@@ -26,7 +25,6 @@ func NewManager(cacheDir string) (*Manager, error) {
 	loader := NewFileLoader()
 	registry := NewExecutorRegistry()
 
-	// Create executors
 	bashExecutor, err := NewBashExecutor(filepath.Join(cacheDir, "bash"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bash executor: %w", err)
@@ -89,7 +87,6 @@ func (m *Manager) InvalidateCache(path string) {
 }
 
 func (m *Manager) validateInputs(block *Block, inputs map[string]interface{}) error {
-	// Check required inputs
 	for name, schema := range block.Inputs {
 		value, exists := inputs[name]
 
@@ -97,19 +94,16 @@ func (m *Manager) validateInputs(block *Block, inputs map[string]interface{}) er
 			if schema.Required {
 				return fmt.Errorf("required input '%s' is missing", name)
 			}
-			// Use default value if provided
 			if schema.Default != nil {
 				inputs[name] = schema.Default
 			}
 			continue
 		}
 
-		// Type validation
 		if err := validateType(name, value, schema.Type); err != nil {
 			return err
 		}
 
-		// Enum validation
 		if len(schema.Enum) > 0 {
 			if err := validateEnum(name, value, schema.Enum); err != nil {
 				return err

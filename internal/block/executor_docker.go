@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -135,26 +134,22 @@ func (e *DockerExecutor) isLocalPath(image string) bool {
 
 // validateLocalPath validates that a local path exists and is accessible
 func (e *DockerExecutor) validateLocalPath(path string) error {
-	// Resolve the path
 	resolvedPath, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}
 
-	// Check if path exists
 	info, err := os.Stat(resolvedPath)
 	if err != nil {
 		return fmt.Errorf("path does not exist: %w", err)
 	}
 
-	// If it's a directory, check for Dockerfile
 	if info.IsDir() {
 		dockerfilePath := filepath.Join(resolvedPath, "Dockerfile")
 		if _, err := os.Stat(dockerfilePath); err != nil {
 			return fmt.Errorf("directory does not contain Dockerfile: %w", err)
 		}
 	} else {
-		// If it's a file, ensure it's named Dockerfile
 		if filepath.Base(resolvedPath) != "Dockerfile" {
 			return fmt.Errorf("file must be named 'Dockerfile'")
 		}
@@ -227,19 +222,16 @@ func (e *DockerExecutor) buildImageFromLocal(execCtx *execcontext.ExecutionConte
 
 // generateImageName generates a unique image name based on dockerfile path and content
 func (e *DockerExecutor) generateImageName(dockerfilePath string) (string, error) {
-	// Read dockerfile content for hashing
 	content, err := os.ReadFile(dockerfilePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read dockerfile: %w", err)
 	}
 
-	// Create hash of path and content
 	hasher := sha256.New()
 	hasher.Write([]byte(dockerfilePath))
 	hasher.Write(content)
 	hash := fmt.Sprintf("%x", hasher.Sum(nil))[:12] // Use first 12 chars
 
-	// Generate image name
 	imageName := fmt.Sprintf("lacquer-local:%s", hash)
 	return imageName, nil
 }
@@ -259,14 +251,11 @@ func (e *DockerExecutor) checkDockerAvailable() error {
 }
 
 func (e *DockerExecutor) pullImageIfNeeded(ctx context.Context, image string) error {
-	// Check if image exists locally
 	cmd := exec.CommandContext(ctx, "docker", "image", "inspect", image)
 	if err := cmd.Run(); err == nil {
-		// Image exists locally
 		return nil
 	}
 
-	// Pull the image
 	pullCtx, cancel := context.WithTimeout(ctx, e.pullTimeout)
 	defer cancel()
 
@@ -280,22 +269,4 @@ func (e *DockerExecutor) pullImageIfNeeded(ctx context.Context, image string) er
 	}
 
 	return nil
-}
-
-func (e *DockerExecutor) streamLogs(ctx context.Context, containerID string) {
-	// Stream container logs for debugging
-	// This is a simplified version - in production, you'd want better log management
-	cmd := exec.CommandContext(ctx, "docker", "logs", "-f", containerID)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return
-	}
-
-	go func() {
-		defer stdout.Close()
-		io.Copy(io.Discard, stdout) // In production, send to proper logger
-	}()
-
-	cmd.Start()
 }

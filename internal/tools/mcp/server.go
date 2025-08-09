@@ -95,7 +95,6 @@ func (s *Server) initializeLocal(ctx context.Context) error {
 
 	s.process = cmd
 
-	// Create MCP client for stdio transport
 	s.client = NewMCPClient(&StdioTransport{
 		stdin:  stdin,
 		stdout: stdout,
@@ -191,7 +190,6 @@ func (s *Server) ExecuteTool(execCtx *execcontext.ExecutionContext, toolName str
 		return nil, fmt.Errorf("MCP client not initialized")
 	}
 
-	// Execute the tool
 	result, err := client.CallTool(execCtx.Context.Context, toolName, parameters)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute tool: %w", err)
@@ -212,22 +210,17 @@ func (s *Server) Close() error {
 	s.closed = true
 	close(s.closeChan)
 
-	// Close the client
 	if s.client != nil {
 		if err := s.client.Close(); err != nil {
 			return fmt.Errorf("failed to close MCP client: %w", err)
 		}
 	}
 
-	// Terminate local process if running
 	if s.process != nil {
-		// Try graceful shutdown first
 		if err := s.process.Process.Signal(os.Interrupt); err != nil {
-			// Force kill if interrupt fails
 			s.process.Process.Kill()
 		}
 
-		// Wait for process to exit with timeout
 		done := make(chan error, 1)
 		go func() {
 			done <- s.process.Wait()
@@ -235,9 +228,7 @@ func (s *Server) Close() error {
 
 		select {
 		case <-done:
-			// Process exited
 		case <-time.After(5 * time.Second):
-			// Force kill after timeout
 			s.process.Process.Kill()
 		}
 	}
@@ -251,7 +242,6 @@ func (s *Server) monitorProcess() {
 		return
 	}
 
-	// Wait for process to exit
 	err := s.process.Wait()
 
 	s.mu.Lock()
@@ -282,7 +272,6 @@ func (t *StdioTransport) Send(ctx context.Context, message []byte) error {
 
 // Receive receives a message from stdio
 func (t *StdioTransport) Receive(ctx context.Context) ([]byte, error) {
-	// Read until newline
 	var buf []byte
 	tmp := make([]byte, 1)
 
@@ -325,28 +314,23 @@ func (t *StdioTransport) Close() error {
 
 // CreateTransportFromURL creates a transport based on the URL scheme
 func CreateTransportFromURL(serverURL string, auth *ast.MCPAuthConfig) (MCPTransport, error) {
-	// Parse URL to determine transport type
 	u, err := url.Parse(serverURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 
-	// Create auth provider
 	authProvider, err := CreateAuthProvider(auth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth provider: %w", err)
 	}
 
-	// Default timeout
 	timeout := 30 * time.Second
 
 	var transport MCPTransport
 	switch u.Scheme {
 	case "http", "https":
-		// Create HTTP transport
 		httpTransport := NewHTTPMCPTransport(serverURL, timeout)
 
-		// Set auth header if needed
 		if authProvider != nil {
 			authHeader, err := authProvider.GetAuthHeader(context.Background())
 			if err != nil {
@@ -360,10 +344,8 @@ func CreateTransportFromURL(serverURL string, auth *ast.MCPAuthConfig) (MCPTrans
 		transport = httpTransport
 
 	case "ws", "wss":
-		// Create WebSocket transport
 		wsTransport := NewWebSocketMCPTransport(serverURL, timeout)
 
-		// Set auth header if needed
 		if authProvider != nil {
 			authHeader, err := authProvider.GetAuthHeader(context.Background())
 			if err != nil {

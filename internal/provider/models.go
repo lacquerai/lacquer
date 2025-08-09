@@ -58,14 +58,14 @@ type Message struct {
 
 // Image Source Types
 type Base64ImageSourceParam struct {
-	Data      string `json:"data,required" format:"byte"`
-	MediaType string `json:"media_type,omitzero,required"`
-	Type      string `json:"type,required"`
+	Data      string `json:"data" format:"byte"`
+	MediaType string `json:"media_type"`
+	Type      string `json:"type"`
 }
 
 type URLImageSourceParam struct {
-	URL  string `json:"url,required"`
-	Type string `json:"type,required"`
+	URL  string `json:"url"`
+	Type string `json:"type"`
 }
 
 type ImageBlockParamSourceUnion struct {
@@ -75,20 +75,20 @@ type ImageBlockParamSourceUnion struct {
 
 // Document Source Types
 type Base64PDFSourceParam struct {
-	Data      string `json:"data,required" format:"byte"`
-	MediaType string `json:"media_type,required"`
-	Type      string `json:"type,required"`
+	Data      string `json:"data" format:"byte"`
+	MediaType string `json:"media_type"`
+	Type      string `json:"type"`
 }
 
 type PlainTextSourceParam struct {
-	Data      string `json:"data,required"`
-	MediaType string `json:"media_type,required"`
-	Type      string `json:"type,required"`
+	Data      string `json:"data"`
+	MediaType string `json:"media_type"`
+	Type      string `json:"type"`
 }
 
 type ContentBlockSourceParam struct {
-	Content ContentBlockSourceContentUnionParam `json:"content,omitzero,required"`
-	Type    string                              `json:"type,required"`
+	Content ContentBlockSourceContentUnionParam `json:"content,omitzero"`
+	Type    string                              `json:"type"`
 }
 
 type ContentBlockSourceContentUnionParam struct {
@@ -97,38 +97,38 @@ type ContentBlockSourceContentUnionParam struct {
 }
 
 type URLPDFSourceParam struct {
-	URL  string `json:"url,required"`
-	Type string `json:"type,required"`
+	URL  string `json:"url"`
+	Type string `json:"type"`
 }
 
 type TextBlockParam struct {
-	Text string `json:"text,required"`
-	Type string `json:"type,required"` // text
+	Text string `json:"text"`
+	Type string `json:"type"` // text
 }
 
 type ImageBlockParam struct {
-	Source ImageBlockParamSourceUnion `json:"source,omitzero,required"`
-	Type   string                     `json:"type,required"` // image
+	Source ImageBlockParamSourceUnion `json:"source,omitzero"`
+	Type   string                     `json:"type"` // image
 }
 
 type ToolUseBlockParam struct {
-	ID    string          `json:"id,required"`
-	Input json.RawMessage `json:"input,omitzero,required"`
-	Name  string          `json:"name,required"`
-	Type  string          `json:"type,required"` // tool_use
+	ID    string          `json:"id"`
+	Input json.RawMessage `json:"input,omitzero"`
+	Name  string          `json:"name"`
+	Type  string          `json:"type"` // tool_use
 }
 
 type ToolResultBlockParam struct {
-	ToolUseID string `json:"tool_use_id,required"`
+	ToolUseID string `json:"tool_use_id"`
 	IsError   *bool  `json:"is_error,omitzero"`
 	Content   string `json:"content,omitzero"`
-	Type      string `json:"type,required"` // tool_result
+	Type      string `json:"type"` // tool_result
 }
 
 type ThinkingBlockParam struct {
-	Signature string `json:"signature,required"`
-	Thinking  string `json:"thinking,required"`
-	Type      string `json:"type,required"` // thinking
+	Signature string `json:"signature"`
+	Thinking  string `json:"thinking"`
+	Type      string `json:"type"` // thinking
 }
 
 type ContentBlockType string
@@ -277,7 +277,6 @@ func (mr *Registry) RegisterProvider(provider Provider) error {
 
 	mr.providers[name] = provider
 
-	// Register supported models
 	models, err := mr.modelCache.GetModels(context.Background(), provider)
 	if err != nil {
 		return fmt.Errorf("failed to get models: %w", err)
@@ -323,18 +322,6 @@ func (mr *Registry) GetProviderByName(name string) (Provider, error) {
 	return provider, nil
 }
 
-// ListProviders returns all registered provider names
-func (mr *Registry) ListProviders() []string {
-	mr.mu.RLock()
-	defer mr.mu.RUnlock()
-
-	names := make([]string, 0, len(mr.providers))
-	for name := range mr.providers {
-		names = append(names, name)
-	}
-	return names
-}
-
 // IsModelSupported checks if a model is supported
 func (mr *Registry) IsModelSupported(providerName, model string) bool {
 	mr.mu.RLock()
@@ -345,21 +332,6 @@ func (mr *Registry) IsModelSupported(providerName, model string) bool {
 	}
 
 	return mr.modelMap[providerName][model]
-}
-
-// Close closes all providers
-func (mr *Registry) Close() error {
-	mr.mu.Lock()
-	defer mr.mu.Unlock()
-
-	var lastErr error
-	for _, provider := range mr.providers {
-		if err := provider.Close(); err != nil {
-			lastErr = err
-		}
-	}
-
-	return lastErr
 }
 
 // MockModelProvider is a mock implementation for testing

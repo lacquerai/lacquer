@@ -36,18 +36,15 @@ func (p *MCPToolProvider) AddToolDefinition(tool *ast.Tool) ([]tools.Tool, error
 		return nil, fmt.Errorf("MCP server configuration is required for MCP tools")
 	}
 
-	// Validate the configuration
 	if err := validateMCPConfig(tool.MCPServer); err != nil {
 		return nil, fmt.Errorf("invalid MCP server configuration: %w", err)
 	}
 
-	// Create or get the MCP server for this tool
 	server, err := p.getOrCreateServer(tool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MCP server: %w", err)
 	}
 
-	// Register the tool with the server
 	toolsList := make([]tools.Tool, len(server.tools))
 	p.mu.Lock()
 	for i, tool := range server.tools {
@@ -79,7 +76,6 @@ func (p *MCPToolProvider) ExecuteTool(execCtx *execcontext.ExecutionContext, too
 		return nil, fmt.Errorf("MCP tool '%s' not found", toolName)
 	}
 
-	// Execute the tool through the MCP server
 	result, err := server.ExecuteTool(execCtx, toolName, parameters)
 	if err != nil {
 		return &tools.Result{
@@ -125,8 +121,6 @@ func (p *MCPToolProvider) Close() error {
 func (p *MCPToolProvider) getOrCreateServer(tool *ast.Tool) (*Server, error) {
 	config := tool.MCPServer
 
-	// For now, create a new server for each tool
-	// In the future, we might want to share servers based on URL/command
 	server := NewServer(config)
 
 	if err := server.Initialize(context.Background()); err != nil {
@@ -161,7 +155,6 @@ func validateMCPConfig(config *ast.MCPServerConfig) error {
 		return fmt.Errorf("invalid MCP server type: %s", config.Type)
 	}
 
-	// Validate auth if present
 	if config.Auth != nil {
 		if err := validateAuthConfig(config.Auth); err != nil {
 			return fmt.Errorf("invalid auth configuration: %w", err)

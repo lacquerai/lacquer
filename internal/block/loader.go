@@ -32,13 +32,11 @@ func NewFileLoader() *FileLoader {
 
 // Load loads a block from the given path
 func (l *FileLoader) Load(ctx context.Context, path string) (*Block, error) {
-	// Resolve to absolute path
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve block path: %w", err)
 	}
 
-	// Check if directory exists
 	info, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -49,7 +47,6 @@ func (l *FileLoader) Load(ctx context.Context, path string) (*Block, error) {
 
 	blockConfigFile := absPath
 	if info.IsDir() {
-		// Look for block configuration file in directory
 		entries, err := os.ReadDir(absPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read block directory: %w", err)
@@ -76,7 +73,6 @@ func (l *FileLoader) Load(ctx context.Context, path string) (*Block, error) {
 		return cached, nil
 	}
 
-	// Load block configuration
 	configData, err := os.ReadFile(blockConfigFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -85,22 +81,18 @@ func (l *FileLoader) Load(ctx context.Context, path string) (*Block, error) {
 		return nil, fmt.Errorf("failed to read block workflow file: %w", err)
 	}
 
-	// Parse block metadata
 	var block Block
 	if err := yaml.Unmarshal(configData, &block); err != nil {
 		return nil, fmt.Errorf("failed to parse block workflow file: %w", err)
 	}
 
-	// Set defaults and validate
 	block.Path = absPath
 	if block.Runtime == "" {
 		block.Runtime = RuntimeNative
 	}
 
-	// Validate runtime type
 	switch block.Runtime {
 	case RuntimeNative, RuntimeBash, RuntimeDocker:
-		// Valid runtime types
 	default:
 		return nil, fmt.Errorf("unsupported runtime type: %s", block.Runtime)
 	}
@@ -109,13 +101,11 @@ func (l *FileLoader) Load(ctx context.Context, path string) (*Block, error) {
 		return nil, err
 	}
 
-	// Get file mod time for caching
 	fileInfo, err := os.Stat(blockConfigFile)
 	if err == nil {
 		block.ModTime = fileInfo.ModTime()
 	}
 
-	// Update cache
 	l.updateCache(blockConfigFile, &block)
 
 	return &block, nil
@@ -151,14 +141,12 @@ func (l *FileLoader) getFromCache(configPath string) (*Block, bool) {
 		return nil, false
 	}
 
-	// Check if file has been modified
 	fileInfo, err := os.Stat(configPath)
 	if err != nil {
 		return nil, false
 	}
 
 	if fileInfo.ModTime().After(entry.modTime) {
-		// File has been modified, invalidate cache
 		l.cacheMu.Lock()
 		delete(l.cache, configPath)
 		l.cacheMu.Unlock()
@@ -193,14 +181,12 @@ func (l *FileLoader) validateBlock(block *Block) error {
 		}
 	}
 
-	// Validate input schemas
 	for name, input := range block.Inputs {
 		if err := validateSchema(name, input.Type, "input"); err != nil {
 			return err
 		}
 	}
 
-	// Validate output schemas
 	for name, output := range block.Outputs {
 		if err := validateSchema(name, output.Type, "output"); err != nil {
 			return err

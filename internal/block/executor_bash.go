@@ -20,7 +20,6 @@ type BashExecutor struct {
 
 // NewBashExecutor creates a new Bash script executor
 func NewBashExecutor(cacheDir string) (*BashExecutor, error) {
-	// Create cache directory if it doesn't exist
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}
@@ -42,7 +41,6 @@ func (e *BashExecutor) Validate(block *Block) error {
 }
 
 func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *Block, inputJSON json.RawMessage) (interface{}, error) {
-	// Get or prepare the script
 	scriptPath, err := e.getOrPrepare(block)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare bash script: %w", err)
@@ -53,18 +51,15 @@ func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *
 		return nil, fmt.Errorf("failed to unmarshal input: %w", err)
 	}
 
-	// Prepare execution input
 	execInput := ExecutionInput{
 		Inputs: inputs,
 		Env:    make(map[string]string),
 	}
 
-	// Add environment variables
 	execInput.Env["WORKSPACE"] = execCtx.Cwd
 	execInput.Env["LOG_LEVEL"] = os.Getenv("LOG_LEVEL")
 	execInput.Env["LACQUER_INPUTS"] = string(inputJSON)
 
-	// Execute the script
 	cmd := exec.CommandContext(execCtx.Context.Context, "bash", scriptPath)
 
 	jsonInput, err := json.Marshal(execInput)
@@ -78,16 +73,12 @@ func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	// cmd dir needs to be the directory of the workflow file
 	cmd.Dir = execCtx.Cwd
-
-	// Set environment variables
 	cmd.Env = os.Environ()
 	for key, value := range execInput.Env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Run with timeout
 	done := make(chan error)
 	go func() {
 		done <- cmd.Run()
@@ -141,13 +132,10 @@ func (e *BashExecutor) getOrPrepare(block *Block) (string, error) {
 	scriptName := fmt.Sprintf("block_%s_%s.sh", block.Name, cacheKey[:8])
 	scriptPath := filepath.Join(e.cacheDir, scriptName)
 
-	// Check if already cached
 	if _, err := os.Stat(scriptPath); err == nil {
-		// Script exists in cache
 		return scriptPath, nil
 	}
 
-	// Write script to cache file
 	if err := os.WriteFile(scriptPath, []byte(block.Script), 0755); err != nil {
 		return "", fmt.Errorf("failed to write script: %w", err)
 	}

@@ -64,7 +64,6 @@ func NewMCPClient(transport MCPTransport) *MCPClient {
 
 // Initialize initializes the MCP connection
 func (c *MCPClient) Initialize(ctx context.Context) error {
-	// Send initialize request
 	params := map[string]interface{}{
 		"protocolVersion": "0.1.0",
 		"capabilities": map[string]interface{}{
@@ -81,7 +80,6 @@ func (c *MCPClient) Initialize(ctx context.Context) error {
 		return fmt.Errorf("initialize failed: %w", err)
 	}
 
-	// Send initialized notification
 	if err := c.notify(ctx, "notifications/initialized", nil); err != nil {
 		return fmt.Errorf("initialized notification failed: %w", err)
 	}
@@ -108,7 +106,6 @@ func (c *MCPClient) CallTool(ctx context.Context, name string, arguments json.Ra
 		"name": name,
 	}
 
-	// Parse arguments if provided
 	if len(arguments) > 0 {
 		var args interface{}
 		if err := json.Unmarshal(arguments, &args); err != nil {
@@ -136,7 +133,6 @@ func (c *MCPClient) Close() error {
 	close(c.closeChan)
 	c.mu.Unlock()
 
-	// Close all pending requests
 	c.mu.Lock()
 	for _, ch := range c.pending {
 		close(ch)
@@ -144,16 +140,13 @@ func (c *MCPClient) Close() error {
 	c.pending = nil
 	c.mu.Unlock()
 
-	// Close transport
 	return c.transport.Close()
 }
 
 // call makes an RPC call and waits for the response
 func (c *MCPClient) call(ctx context.Context, method string, params interface{}, result interface{}) error {
-	// Generate request ID
 	id := c.requestID.Add(1)
 
-	// Create response channel
 	respChan := make(chan *MCPResponse, 1)
 	c.mu.Lock()
 	if c.closed {
@@ -163,14 +156,12 @@ func (c *MCPClient) call(ctx context.Context, method string, params interface{},
 	c.pending[id] = respChan
 	c.mu.Unlock()
 
-	// Clean up on exit
 	defer func() {
 		c.mu.Lock()
 		delete(c.pending, id)
 		c.mu.Unlock()
 	}()
 
-	// Marshal params
 	var paramsJSON json.RawMessage
 	if params != nil {
 		var err error
@@ -180,7 +171,6 @@ func (c *MCPClient) call(ctx context.Context, method string, params interface{},
 		}
 	}
 
-	// Create and send message
 	msg := MCPMessage{
 		JSONRPC: "2.0",
 		ID:      &id,
@@ -197,7 +187,6 @@ func (c *MCPClient) call(ctx context.Context, method string, params interface{},
 		return fmt.Errorf("failed to send message: %w", err)
 	}
 
-	// Wait for response
 	select {
 	case resp := <-respChan:
 		if resp == nil {
@@ -221,7 +210,6 @@ func (c *MCPClient) call(ctx context.Context, method string, params interface{},
 
 // notify sends a notification (no response expected)
 func (c *MCPClient) notify(ctx context.Context, method string, params interface{}) error {
-	// Marshal params
 	var paramsJSON json.RawMessage
 	if params != nil {
 		var err error
@@ -231,7 +219,6 @@ func (c *MCPClient) notify(ctx context.Context, method string, params interface{
 		}
 	}
 
-	// Create and send message (no ID for notifications)
 	msg := MCPMessage{
 		JSONRPC: "2.0",
 		Method:  method,
@@ -255,22 +242,17 @@ func (c *MCPClient) receiveLoop() {
 		default:
 		}
 
-		// Receive message
 		msgBytes, err := c.transport.Receive(context.Background())
 		if err != nil {
-			// Connection error, close client
 			c.Close()
 			return
 		}
 
-		// Parse message
 		var msg MCPMessage
 		if err := json.Unmarshal(msgBytes, &msg); err != nil {
-			// Invalid message, skip
 			continue
 		}
 
-		// Handle response
 		if msg.ID != nil {
 			c.mu.Lock()
 			ch, ok := c.pending[*msg.ID]
@@ -288,6 +270,6 @@ func (c *MCPClient) receiveLoop() {
 			}
 		}
 
-		// TODO: Handle server-initiated requests/notifications
+		// @TODO: Handle server-initiated requests/notifications
 	}
 }

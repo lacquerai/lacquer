@@ -7,13 +7,12 @@ import (
 	"github.com/lacquerai/lacquer/internal/execcontext"
 )
 
-// ExecutorRegistry manages block executors by runtime type
+// ExecutorRegistry manages executors for different runtime types
 type ExecutorRegistry struct {
 	executors map[RuntimeType]Executor
 	mu        sync.RWMutex
 }
 
-// NewExecutorRegistry creates a new executor registry
 func NewExecutorRegistry() *ExecutorRegistry {
 	return &ExecutorRegistry{
 		executors: make(map[RuntimeType]Executor),
@@ -35,19 +34,17 @@ func (r *ExecutorRegistry) Get(runtime RuntimeType) (Executor, bool) {
 	return executor, ok
 }
 
-// Execute runs a block using the appropriate executor
+// Execute runs a block using the appropriate executor and validates the block
 func (r *ExecutorRegistry) Execute(execCtx *execcontext.ExecutionContext, block *Block, inputs map[string]interface{}) (interface{}, error) {
 	executor, ok := r.Get(block.Runtime)
 	if !ok {
 		return nil, fmt.Errorf("no executor registered for runtime: %s", block.Runtime)
 	}
 
-	// Validate the block with the executor
 	if err := executor.Validate(block); err != nil {
 		return nil, fmt.Errorf("block validation failed: %w", err)
 	}
 
-	// Execute the block
 	outputs, err := executor.Execute(execCtx, block, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("block execution failed: %w", err)

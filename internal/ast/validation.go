@@ -59,7 +59,7 @@ func (ve *ValidationError) Error() string {
 type ValidationResult struct {
 	Valid  bool               `json:"valid"`
 	Errors []*ValidationError `json:"errors,omitempty"`
-	// TODO: add warning output to the CLI, currently we only collect these
+	// @TODO: add warning output to the CLI, currently we only collect these
 	// as potential improvements
 	Warnings []*ValidationError `json:"warnings,omitempty"`
 }
@@ -131,7 +131,6 @@ func NewValidator(w *Workflow) *Validator {
 func (v *Validator) ValidateWorkflow() *ValidationResult {
 	w := v.workflow
 
-	// Basic structure validation
 	if w.Version != "1.0" {
 		v.result.AddFieldError("", "version", fmt.Sprintf("unsupported version: %s", w.Version))
 	}
@@ -145,7 +144,6 @@ func (v *Validator) ValidateWorkflow() *ValidationResult {
 		v.validateInputs(w.Inputs, "inputs")
 	}
 
-	// Validate agents
 	if w.Agents != nil {
 		v.validateAgents()
 	}
@@ -448,7 +446,6 @@ func (v *Validator) validateInputParam(param *InputParam, path string) {
 		}
 	}
 
-	// Validate numeric constraints
 	if param.Minimum != nil && param.Maximum != nil && *param.Minimum > *param.Maximum {
 		v.result.AddFieldError(path, "minimum", "minimum cannot be greater than maximum")
 	}
@@ -560,19 +557,16 @@ func (v *Validator) validateStep(step *Step, path string) {
 }
 
 func (v *Validator) validateWhileStep(path string, step *Step) {
-	// Validate that while condition is provided
 	if step.While == "" {
 		v.result.AddFieldError(path, "while", "while step must have a condition")
 		return
 	}
 
-	// Validate that steps array is provided and not empty
 	if len(step.Steps) == 0 {
 		v.result.AddFieldError(path, "steps", "while step must have sub-steps")
 		return
 	}
 
-	// Recursively validate sub-steps
 	stepIDs := make(map[string]bool)
 	for i, subStep := range step.Steps {
 		subStepPath := fmt.Sprintf("%s.steps[%d]", path, i)
@@ -668,12 +662,10 @@ func isValidFilePath(path string) bool {
 		return false
 	}
 
-	// Basic path validation
 	if strings.Contains(path, "..") {
-		return false // Prevent directory traversal
+		return false
 	}
 
-	// Must have a file extension for scripts
 	if !strings.HasPrefix(path, "./") && !strings.HasPrefix(path, "/") {
 		return false
 	}
@@ -687,7 +679,6 @@ func isValidURL(urlStr string) bool {
 		return false
 	}
 
-	// Basic URL validation
 	matched, _ := regexp.MatchString(`^https?://[^\s/$.?#].[^\s]*$`, urlStr)
 	return matched
 }
@@ -698,19 +689,16 @@ func isValidDuration(duration string) bool {
 		return false
 	}
 
-	// Use Go's time.ParseDuration for validation
 	_, err := parseTemplateDuration(duration)
 	return err == nil
 }
 
 // parseTemplateDuration parses duration strings similar to time.ParseDuration
 func parseTemplateDuration(s string) (time.Duration, error) {
-	// Simple regex for duration validation
 	matched, _ := regexp.MatchString(`^[0-9]+[a-zA-Z]+$`, s)
 	if !matched {
 		return 0, fmt.Errorf("invalid duration format")
 	}
 
-	// For validation purposes, just check the format
 	return time.Second, nil
 }
