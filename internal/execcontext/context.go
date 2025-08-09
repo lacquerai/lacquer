@@ -351,20 +351,17 @@ func (ec *ExecutionContext) GetExecutionSummary() ExecutionSummary {
 		Outputs:   ec.Outputs,
 	}
 
-	// Calculate duration if completed
 	if summary.Status == ExecutionStatusCompleted || summary.Status == ExecutionStatusFailed {
 		summary.EndTime = time.Now()
 		summary.Duration = summary.EndTime.Sub(ec.StartTime)
 	}
 
-	// Add step results in order
 	for _, step := range ec.Workflow.Workflow.Steps {
 		if result, exists := ec.StepResults[step.ID]; exists {
 			summary.Steps = append(summary.Steps, *result)
 		}
 	}
 
-	// Calculate token usage
 	for _, result := range ec.StepResults {
 		if result.TokenUsage != nil {
 			summary.TotalTokens += result.TokenUsage.TotalTokens
