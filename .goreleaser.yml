@@ -75,7 +75,7 @@ release:
   prerelease: auto
   mode: append
   header: |
-    ## Lacquer {{ .Tag }} ({{ .Date }})
+    # Lacquer {{ .Tag }}
 
     Welcome to this new release of Lacquer! Where AI workflows get their shine.
   footer: |
