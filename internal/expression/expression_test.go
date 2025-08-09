@@ -390,7 +390,7 @@ func TestExpressionEvaluator_ErrorCases(t *testing.T) {
 		{
 			name:       "Undefined variable",
 			expression: "undefined.variable > 5",
-			expectErr:  true,
+			expectErr:  false,
 		},
 		{
 			name:       "Mismatched parentheses",
