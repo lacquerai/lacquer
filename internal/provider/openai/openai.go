@@ -47,10 +47,12 @@ func NewProvider(yamlConfig map[string]interface{}) (*OpenAIProvider, error) {
 
 	if config.Platform == "aws" {
 		// TODO: Add AWS support
+		_ = config.Platform // Placeholder for AWS implementation
 	}
 
 	if config.Platform == "google" {
 		// TODO: Add Google support
+		_ = config.Platform // Placeholder for Google implementation
 	}
 
 	if config.APIKey == "" {

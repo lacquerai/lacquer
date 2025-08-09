@@ -20,7 +20,7 @@ type BashExecutor struct {
 
 // NewBashExecutor creates a new Bash script executor
 func NewBashExecutor(cacheDir string) (*BashExecutor, error) {
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
@@ -60,7 +60,7 @@ func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *
 	execInput.Env["LOG_LEVEL"] = os.Getenv("LOG_LEVEL")
 	execInput.Env["LACQUER_INPUTS"] = string(inputJSON)
 
-	cmd := exec.CommandContext(execCtx.Context.Context, "bash", scriptPath)
+	cmd := exec.CommandContext(execCtx.Context.Context, "bash", scriptPath) // #nosec G204 - scriptPath is controlled internally
 
 	jsonInput, err := json.Marshal(execInput)
 	if err != nil {
@@ -108,7 +108,7 @@ func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *
 	var output map[string]interface{}
 	out := stdout.Bytes()
 	if err := json.Unmarshal(out, &output); err != nil {
-		return stdout.String(), nil
+		return stdout.String(), nil //nolint:nilerr // Intentional: fallback to raw string output
 	}
 
 	return output, nil
@@ -136,7 +136,7 @@ func (e *BashExecutor) getOrPrepare(block *Block) (string, error) {
 		return scriptPath, nil
 	}
 
-	if err := os.WriteFile(scriptPath, []byte(block.Script), 0755); err != nil {
+	if err := os.WriteFile(scriptPath, []byte(block.Script), 0600); err != nil {
 		return "", fmt.Errorf("failed to write script: %w", err)
 	}
 

@@ -1,7 +1,7 @@
 package expression
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -396,7 +396,7 @@ func (fr *FunctionRegistry) registerContextFunctions() {
 			}
 
 			combined := strings.Join(paths, "|")
-			hash := md5.Sum([]byte(combined))
+			hash := sha256.Sum256([]byte(combined))
 
 			return fmt.Sprintf("%x", hash), nil
 		},

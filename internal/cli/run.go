@@ -120,9 +120,9 @@ func runWorkflow(ctx execcontext.RunContext, workflowFile string, inputs map[str
 	result, err := runner.RunWorkflow(ctx, workflowFile, inputs)
 	runner.Close()
 	if err != nil {
-		switch err.(type) {
+		switch e := err.(type) {
 		case *engine.InputValidationResult:
-			printValidationErrors(ctx, err.(*engine.InputValidationResult))
+			printValidationErrors(ctx, e)
 		case *parser.MultiErrorEnhanced:
 			result := NewValidationResult(workflowFile)
 			result.CollectError(err)

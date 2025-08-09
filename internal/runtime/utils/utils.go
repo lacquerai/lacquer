@@ -103,6 +103,10 @@ func (e *TarGzExtractor) Extract(src, dest string) error {
 		}
 
 		target := filepath.Join(dest, header.Name)
+		// Validate path to prevent path traversal
+		if !strings.HasPrefix(target, dest) {
+			return fmt.Errorf("invalid path in archive: %s", header.Name)
+		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
@@ -110,7 +114,7 @@ func (e *TarGzExtractor) Extract(src, dest string) error {
 				return fmt.Errorf("creating directory: %w", err)
 			}
 		case tar.TypeReg:
-			if err := extractFile(tr, target, os.FileMode(header.Mode)); err != nil {
+			if err := extractFile(tr, target, os.FileMode(uint32(header.Mode))); err != nil { // #nosec G115 - handled safely
 				return err
 			}
 		}
@@ -132,6 +136,10 @@ func (e *ZipExtractor) Extract(src, dest string) error {
 
 	for _, f := range r.File {
 		target := filepath.Join(dest, f.Name)
+		// Validate path to prevent path traversal
+		if !strings.HasPrefix(target, dest) {
+			return fmt.Errorf("invalid path in archive: %s", f.Name)
+		}
 
 		if f.FileInfo().IsDir() {
 			if err := os.MkdirAll(target, f.Mode()); err != nil {

@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	// Cleanup
-	os.RemoveAll(tempDir)
+	_ = os.RemoveAll(tempDir) // Cleanup; ignore error
 	os.Exit(code)
 }
 
@@ -223,7 +223,7 @@ func TestNodeRuntimeDownload(t *testing.T) {
 				}
 
 				// Test execution
-				cmd := exec.Command(nodeBin, "--version")
+				cmd := exec.Command(nodeBin, "--version") // #nosec G204 - test code with controlled binary
 				output, err := cmd.Output()
 				if err != nil {
 					t.Errorf("Failed to run node --version: %v", err)
@@ -574,7 +574,7 @@ func TestWorkflowIntegration(t *testing.T) {
 
 	// Create a test project
 	projectDir := filepath.Join(getTestCacheDir(t), "test-project")
-	if err := os.MkdirAll(projectDir, 0755); err != nil {
+	if err := os.MkdirAll(projectDir, 0750); err != nil {
 		t.Fatalf("Failed to create project dir: %v", err)
 	}
 
@@ -588,14 +588,14 @@ func main() {
     fmt.Println("Hello from Go!")
 }
 `
-	if err := os.WriteFile(goFile, []byte(goContent), 0644); err != nil {
+	if err := os.WriteFile(goFile, []byte(goContent), 0600); err != nil {
 		t.Fatalf("Failed to write Go file: %v", err)
 	}
 
 	// Create a simple Node.js file
 	jsFile := filepath.Join(projectDir, "app.js")
 	jsContent := `console.log("Hello from Node.js!");`
-	if err := os.WriteFile(jsFile, []byte(jsContent), 0644); err != nil {
+	if err := os.WriteFile(jsFile, []byte(jsContent), 0600); err != nil {
 		t.Fatalf("Failed to write JS file: %v", err)
 	}
 
@@ -621,7 +621,7 @@ func main() {
 			goExe = "go.exe"
 		}
 
-		cmd := exec.Command(filepath.Join(goBin, goExe), "run", "main.go")
+		cmd := exec.Command(filepath.Join(goBin, goExe), "run", "main.go") // #nosec G204 - test code
 		cmd.Dir = projectDir
 		cmd.Env = env
 
@@ -642,7 +642,7 @@ func main() {
 			nodeExe = "node.exe"
 		}
 
-		cmd := exec.Command(filepath.Join(nodeBin, nodeExe), "app.js")
+		cmd := exec.Command(filepath.Join(nodeBin, nodeExe), "app.js") // #nosec G204 - test code
 		cmd.Dir = projectDir
 		cmd.Env = env
 

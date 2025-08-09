@@ -73,7 +73,7 @@ workflow:
 
 // findAvailablePort finds an available port for testing
 func findAvailablePort() int {
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0") // Bind to localhost only
 	if err != nil {
 		return 8080 // fallback port
 	}
@@ -137,7 +137,7 @@ func setupTestSuite(t *testing.T) *ServerTestSuite {
 	}
 }
 
-func (suite *ServerTestSuite) cleanup(t *testing.T) {
+func (suite *ServerTestSuite) cleanup(_ *testing.T) {
 	if suite.server.server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

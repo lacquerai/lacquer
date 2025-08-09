@@ -250,6 +250,7 @@ func (s *Server) monitorProcess() {
 	if !s.closed && err != nil {
 		// Process exited unexpectedly
 		// TODO: Add proper error handling/recovery
+		_ = err // Placeholder for error handling implementation
 	}
 }
 

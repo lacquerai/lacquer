@@ -88,7 +88,7 @@ func ValidateWorkflowInputs(workflow *ast.Workflow, providedInputs map[string]an
 }
 
 // validateInputValue validates a single input value against its parameter definition
-func validateInputValue(fieldName string, value any, param *ast.InputParam) (any, error) {
+func validateInputValue(_ string, value any, param *ast.InputParam) (any, error) {
 	if param.Type == "" {
 		return value, nil
 	}

@@ -256,16 +256,14 @@ func (e *Executor) executeSteps(execCtx *execcontext.ExecutionContext, steps []*
 			}
 
 			return err
-		} else {
-			if e.progressChan != nil {
-				e.progressChan <- pkgEvents.ExecutionEvent{
-					Type:      pkgEvents.EventStepCompleted,
-					Timestamp: time.Now(),
-					RunID:     execCtx.RunID,
-					StepID:    step.ID,
-					StepIndex: i + 1,
-					Duration:  stepDuration,
-				}
+		} else if e.progressChan != nil {
+			e.progressChan <- pkgEvents.ExecutionEvent{
+				Type:      pkgEvents.EventStepCompleted,
+				Timestamp: time.Now(),
+				RunID:     execCtx.RunID,
+				StepID:    step.ID,
+				StepIndex: i + 1,
+				Duration:  stepDuration,
 			}
 		}
 	}

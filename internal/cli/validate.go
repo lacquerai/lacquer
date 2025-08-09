@@ -99,9 +99,10 @@ func (v *ValidationResult) CollectError(err error) {
 			v.Issues = append(v.Issues, validationIssue)
 
 			// Add simple error messages for backward compatibility
-			if issue.Severity == parser.SeverityError {
+			switch issue.Severity {
+			case parser.SeverityError:
 				v.Errors = append(v.Errors, issue.Title)
-			} else if issue.Severity == parser.SeverityWarning {
+			case parser.SeverityWarning:
 				v.Warnings = append(v.Warnings, issue.Title)
 			}
 		}
@@ -262,7 +263,8 @@ func collectFiles(args []string, recursive bool) ([]string, error) {
 			return nil, fmt.Errorf("cannot access %s: %w", arg, err)
 		}
 
-		if info.IsDir() {
+		switch {
+		case info.IsDir():
 			if recursive {
 				err := filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
 					if err != nil {
@@ -279,9 +281,9 @@ func collectFiles(args []string, recursive bool) ([]string, error) {
 			} else {
 				return nil, fmt.Errorf("%s is a directory, use --recursive to validate directories", arg)
 			}
-		} else if isLacquerFile(arg) {
+		case isLacquerFile(arg):
 			files = append(files, arg)
-		} else {
+		default:
 			return nil, fmt.Errorf("%s is not a Lacquer workflow file (.laq.yaml or .laq.yml)", arg)
 		}
 	}
@@ -321,15 +323,16 @@ func printValidationResultStyled(w io.Writer, result ValidationResult) {
 	}
 
 	// Print enhanced error details if available
-	if result.EnhancedError != nil {
+	switch {
+	case result.EnhancedError != nil:
 		for _, issue := range result.EnhancedError.GetAllIssues() {
 			printEnhancedIssueStyled(w, result, issue)
 		}
-	} else if len(result.Issues) > 0 {
+	case len(result.Issues) > 0:
 		for _, issue := range result.Issues {
 			printValidationIssueStyled(w, result, issue)
 		}
-	} else {
+	default:
 		// Fallback to simple error messages
 		for _, errMsg := range result.Errors {
 			fmt.Fprintf(w, "  %s\n", style.ErrorStyle.Render(errMsg))

@@ -73,7 +73,7 @@ func (l *FileLoader) Load(ctx context.Context, path string) (*Block, error) {
 		return cached, nil
 	}
 
-	configData, err := os.ReadFile(blockConfigFile)
+	configData, err := os.ReadFile(blockConfigFile) // #nosec G304 - blockConfigFile is validated
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("block workflow file not found: %s", path)

@@ -227,7 +227,7 @@ func (p *Provider) Generate(gtx provider.GenerateContext, request *provider.Requ
 	// Make the API call with retries
 	response, err := p.client.Messages.New(gtx.Context, anthropicReq, option.WithRequestTimeout(time.Minute*10))
 	if err != nil {
-		return nil, nil, fmt.Errorf("Anthropic API call failed: %w", err)
+		return nil, nil, fmt.Errorf("anthropic API call failed: %w", err)
 	}
 
 	// Convert usage information

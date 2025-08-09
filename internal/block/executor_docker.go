@@ -116,7 +116,7 @@ func (e *DockerExecutor) Execute(execCtx *execcontext.ExecutionContext, block *B
 	// Parse output
 	var output map[string]interface{}
 	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		return stdout.String(), nil
+		return stdout.String(), nil //nolint:nilerr // Intentional: fallback to raw string output
 	}
 
 	return output, nil
@@ -149,10 +149,8 @@ func (e *DockerExecutor) validateLocalPath(path string) error {
 		if _, err := os.Stat(dockerfilePath); err != nil {
 			return fmt.Errorf("directory does not contain Dockerfile: %w", err)
 		}
-	} else {
-		if filepath.Base(resolvedPath) != "Dockerfile" {
-			return fmt.Errorf("file must be named 'Dockerfile'")
-		}
+	} else if filepath.Base(resolvedPath) != "Dockerfile" {
+		return fmt.Errorf("file must be named 'Dockerfile'")
 	}
 
 	return nil
@@ -222,7 +220,7 @@ func (e *DockerExecutor) buildImageFromLocal(execCtx *execcontext.ExecutionConte
 
 // generateImageName generates a unique image name based on dockerfile path and content
 func (e *DockerExecutor) generateImageName(dockerfilePath string) (string, error) {
-	content, err := os.ReadFile(dockerfilePath)
+	content, err := os.ReadFile(dockerfilePath) // #nosec G304 - dockerfilePath is validated
 	if err != nil {
 		return "", fmt.Errorf("failed to read dockerfile: %w", err)
 	}

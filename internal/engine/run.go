@@ -345,7 +345,7 @@ func (r *Runner) RunWorkflow(ctx execcontext.RunContext, workflowFile string, in
 
 // executeWithProgress runs the workflow executor while sending real-time
 // progress events to registered listeners.
-func (r *Runner) executeWithProgress(executor WorkflowExecutor, execCtx *execcontext.ExecutionContext, result *ExecutionResult) error {
+func (r *Runner) executeWithProgress(executor WorkflowExecutor, execCtx *execcontext.ExecutionContext, _ *ExecutionResult) error {
 	// Create a progress channel for real-time updates
 	progressChan := make(chan pkgEvents.ExecutionEvent, 100)
 	defer close(progressChan)
@@ -462,7 +462,7 @@ func (pt *CLIProgressTracker) startStep(stepID string, stepIndex, totalSteps int
 }
 
 // updateStepProgress updates the display text for an active step's spinner.
-func (pt *CLIProgressTracker) updateStepProgress(stepID string, actionID string, text string) {
+func (pt *CLIProgressTracker) updateStepProgress(stepID string, _ string, text string) {
 	pt.mu.RLock()
 	defer pt.mu.RUnlock()
 
@@ -530,7 +530,7 @@ func (pt *CLIProgressTracker) failActionSpinner(stepID string, actionID string) 
 }
 
 // completeStep finalizes a step's display with a success indicator and stops its spinner.
-func (pt *CLIProgressTracker) completeStep(stepID string, duration time.Duration) {
+func (pt *CLIProgressTracker) completeStep(stepID string, _ time.Duration) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 
@@ -545,7 +545,7 @@ func (pt *CLIProgressTracker) completeStep(stepID string, duration time.Duration
 }
 
 // failStep finalizes a step's display with an error indicator and stops its spinner.
-func (pt *CLIProgressTracker) failStep(stepID string, duration time.Duration, _ string) {
+func (pt *CLIProgressTracker) failStep(stepID string, _ time.Duration, _ string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 

@@ -84,7 +84,7 @@ func (stp *ScriptToolProvider) AddToolDefinition(tool *ast.Tool) ([]tools.Tool, 
 		Name:        tool.Name,
 		Description: tool.Description,
 		ScriptPath:  tool.Script,
-		Content:     string(tool.Script),
+		Content:     tool.Script,
 		Parameters:  tool.Parameters,
 	}
 

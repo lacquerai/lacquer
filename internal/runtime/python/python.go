@@ -340,7 +340,7 @@ func (p *PythonRuntime) isSourceDistribution(downloadURL string) bool {
 
 func (p *PythonRuntime) buildPython(ctx context.Context, sourceDir string) error {
 	// Configure
-	configureCmd := exec.CommandContext(ctx, "./configure", "--prefix="+sourceDir, "--enable-optimizations")
+	configureCmd := exec.CommandContext(ctx, "./configure", "--prefix="+sourceDir, "--enable-optimizations") // #nosec G204 - controlled build process
 	configureCmd.Dir = sourceDir
 	configureCmd.Stdout = os.Stdout
 	configureCmd.Stderr = os.Stderr

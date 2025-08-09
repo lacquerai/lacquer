@@ -1,8 +1,9 @@
 package events
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"strings"
 	"time"
 
@@ -131,7 +132,8 @@ func generateRandomPromptingText() string {
 		"Sketching ideas in the digital ether...",
 	}
 
-	return promptingTexts[rand.Intn(len(promptingTexts))]
+	n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(promptingTexts))))
+	return promptingTexts[n.Int64()]
 }
 
 func generateRandomUsageText(rawTool string) string {
@@ -152,5 +154,6 @@ func generateRandomUsageText(rawTool string) string {
 		fmt.Sprintf("Letting %s tool stretch its computational legs...", toolName),
 	}
 
-	return usageTexts[rand.Intn(len(usageTexts))]
+	n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(usageTexts))))
+	return usageTexts[n.Int64()]
 }

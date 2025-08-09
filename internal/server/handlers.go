@@ -109,7 +109,7 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 }
 
 // executeWorkflowAsync executes a workflow in the background
-func (s *Server) executeWorkflowAsync(ctx context.Context, workflow *ast.Workflow, execCtx *execcontext.ExecutionContext, runID, workflowID string) {
+func (s *Server) executeWorkflowAsync(_ context.Context, workflow *ast.Workflow, execCtx *execcontext.ExecutionContext, runID, workflowID string) {
 	runner := engine.NewRunner(s.manager)
 	result, err := runner.RunWorkflowRaw(execCtx, workflow, time.Now())
 	defer runner.Close()
@@ -139,7 +139,7 @@ func (s *Server) getExecution(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	_ = json.NewEncoder(w).Encode(status) // Ignore encoding error
 }
 
 // streamWorkflow provides WebSocket streaming for workflow execution
@@ -210,7 +210,7 @@ func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
 func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{ // Ignore encoding error
 		"status":            "healthy",
 		"workflows_loaded":  s.registry.Count(),
 		"active_executions": s.manager.GetActiveExecutions(),

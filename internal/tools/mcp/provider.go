@@ -85,7 +85,7 @@ func (p *MCPToolProvider) ExecuteTool(execCtx *execcontext.ExecutionContext, too
 			Metadata: map[string]interface{}{
 				"server_type": server.config.Type,
 			},
-		}, nil
+		}, nil //nolint:nilerr // Intentional: converting error to result object
 	}
 
 	return &tools.Result{

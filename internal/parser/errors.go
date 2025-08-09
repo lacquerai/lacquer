@@ -280,7 +280,7 @@ func (r *ErrorReporter) buildContext(pos ast.Position, radius int) *ErrorContext
 
 // generateSuggestion creates helpful suggestions based on error patterns
 func (r *ErrorReporter) generateSuggestion(message, category string) *ErrorSuggestion {
-	message = strings.ToLower(message)
+	_ = strings.ToLower(message) // For future TODO implementation
 
 	// @TODO: Implement suggestion generation based on category and message
 

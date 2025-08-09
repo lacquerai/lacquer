@@ -942,7 +942,7 @@ func (p *Parser) parsePostfix() (Expression, error) {
 		case TokenDot:
 			p.advance()
 			if p.current().Type != TokenIdent {
-				return nil, fmt.Errorf("expected identifier after .")
+				return nil, fmt.Errorf("expected identifier after '.'")
 			}
 			field := p.current().Value
 			p.advance()
@@ -1183,19 +1183,20 @@ func Tokenize(input string) ([]Token, error) {
 			tokens = append(tokens, Token{Type: TokenString, Value: val})
 			i++
 		default:
-			if unicode.IsDigit(rune(input[i])) {
+			switch {
+			case unicode.IsDigit(rune(input[i])):
 				start := i
 				for i < len(input) && (unicode.IsDigit(rune(input[i])) || input[i] == '.') {
 					i++
 				}
 				tokens = append(tokens, Token{Type: TokenNumber, Value: input[start:i]})
-			} else if unicode.IsLetter(rune(input[i])) {
+			case unicode.IsLetter(rune(input[i])):
 				start := i
 				for i < len(input) && (unicode.IsLetter(rune(input[i])) || unicode.IsDigit(rune(input[i])) || input[i] == '_') {
 					i++
 				}
 				tokens = append(tokens, Token{Type: TokenIdent, Value: input[start:i]})
-			} else {
+			default:
 				return nil, fmt.Errorf("unexpected character: %c", input[i])
 			}
 		}

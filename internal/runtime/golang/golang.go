@@ -74,7 +74,7 @@ func (g *GoRuntime) Get(ctx context.Context, version string) (string, error) {
 
 	// Download archive
 	archivePath := filepath.Join(tempDir, filepath.Base(downloadURL))
-	file, err := os.Create(archivePath)
+	file, err := os.Create(archivePath) // #nosec G304 - archivePath is controlled internally
 	if err != nil {
 		return "", fmt.Errorf("creating archive file: %w", err)
 	}

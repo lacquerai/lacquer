@@ -179,10 +179,6 @@ func NewProvider(yamlConfig map[string]interface{}) (*ClaudeCodeProvider, error)
 	return provider, nil
 }
 
-func (p *ClaudeCodeProvider) isLocal() bool {
-	return true
-}
-
 // Generate generates a response using Claude Code with streaming enabled by default
 func (p *ClaudeCodeProvider) Generate(ctx provider.GenerateContext, request *provider.Request, progressChan chan<- pkgEvents.ExecutionEvent) ([]provider.Message, *execcontext.TokenUsage, error) {
 	p.progressChan = progressChan
@@ -194,7 +190,7 @@ func (p *ClaudeCodeProvider) Generate(ctx provider.GenerateContext, request *pro
 
 	content := response.Content
 	if response.Error != "" {
-		return nil, nil, fmt.Errorf("Claude Code error: %s", response.Error)
+		return nil, nil, fmt.Errorf("claude Code error: %s", response.Error)
 	}
 
 	return []provider.Message{
@@ -296,7 +292,7 @@ func (p *ClaudeCodeProvider) execute(ctx provider.GenerateContext, request *prov
 		Str("prompt_preview", truncateString(prompt, 100)).
 		Msg("Executing Claude Code command")
 
-	cmd := exec.CommandContext(ctx.Context, execPath, args...)
+	cmd := exec.CommandContext(ctx.Context, execPath, args...) // #nosec G204 - execPath is validated internally
 	cmd.Dir = p.workingDir
 
 	stdErrPipe, err := cmd.StderrPipe()
@@ -581,55 +577,5 @@ func detectClaudeCodeExecutable(configPath string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Claude Code executable not found. Please install Claude Code CLI or set executable_path in configuration")
-}
-
-func (p *ClaudeCodeProvider) progress(message string) pkgEvents.ExecutionEvent {
-	return pkgEvents.ExecutionEvent{
-		Type: pkgEvents.EventStepProgress,
-		Metadata: map[string]interface{}{
-			"message": message,
-		},
-	}
-}
-
-// formatInputParams formats input parameters as a single-line key-value string
-func (p *ClaudeCodeProvider) formatInputParams(input map[string]interface{}) string {
-	if len(input) == 0 {
-		return "(no parameters)"
-	}
-
-	var parts []string
-	for key, value := range input {
-		// Format value based on type
-		var valueStr string
-		switch v := value.(type) {
-		case string:
-			// Truncate long strings
-			if len(v) > 50 {
-				valueStr = fmt.Sprintf("%.47s...", v)
-			} else {
-				valueStr = v
-			}
-		case bool:
-			valueStr = fmt.Sprintf("%t", v)
-		case int, int64, float64:
-			valueStr = fmt.Sprintf("%v", v)
-		default:
-			// For complex types, use JSON representation but keep it short
-			if jsonBytes, err := json.Marshal(v); err == nil {
-				jsonStr := string(jsonBytes)
-				if len(jsonStr) > 50 {
-					valueStr = fmt.Sprintf("%.47s...", jsonStr)
-				} else {
-					valueStr = jsonStr
-				}
-			} else {
-				valueStr = fmt.Sprintf("%v", v)
-			}
-		}
-		parts = append(parts, fmt.Sprintf("%s=%s", key, valueStr))
-	}
-
-	return strings.Join(parts, ", ")
+	return "", fmt.Errorf("claude Code executable not found. Please install Claude Code CLI or set executable_path in configuration")
 }

@@ -169,7 +169,7 @@ func performUpdate(cmd *cobra.Command, force bool) {
 	}
 
 	// Make the downloaded file executable
-	if err := os.Chmod(tempFile, 0755); err != nil {
+	if err := os.Chmod(tempFile, 0600); err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "%s Failed to make binary executable: %s\n", style.ErrorIcon(), err)
 		return
 	}
@@ -217,7 +217,7 @@ func fetchLatestVersion() (version, downloadURL string, err error) {
 
 // downloadBinary downloads the binary to a temporary file
 func downloadBinary(url string) (string, error) {
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) // #nosec G107 - URL comes from GitHub API
 	if err != nil {
 		return "", fmt.Errorf("failed to download binary: %w", err)
 	}

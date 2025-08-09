@@ -330,7 +330,7 @@ func findNodeRoot(dir string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Node.js executable not found")
+	return "", fmt.Errorf("node.js executable not found")
 }
 
 func compareVersions(v1, v2 string) int {

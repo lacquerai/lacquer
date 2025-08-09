@@ -492,7 +492,7 @@ var (
 
 	errorStyle = style.ErrorStyle
 
-	successStyle = style.SuccessStyle
+	_ = style.SuccessStyle // Future use
 )
 
 // Update handles messages
@@ -604,8 +604,7 @@ func (m model) handleEnter() (tea.Model, tea.Cmd) {
 
 // Handle tab key
 func (m model) handleTab() (tea.Model, tea.Cmd) {
-	switch m.step {
-	case StepDescription:
+	if m.step == StepDescription {
 		// Move to next step if description is filled
 		if strings.TrimSpace(m.description.Value()) != "" {
 			return m.handleEnter()
@@ -795,7 +794,7 @@ func (m model) renderSummaryStep() string {
 		m.answers.description))
 
 	// Model providers
-	providers := "None selected"
+	var providers string
 	if len(m.answers.modelProviders) > 0 {
 		providers = strings.Join(m.answers.modelProviders, ", ")
 	} else {
@@ -880,8 +879,8 @@ func isValidProjectName(name string) bool {
 	}
 
 	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') || r == '-' || r == '_') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') &&
+			(r < '0' || r > '9') && r != '-' && r != '_' {
 			return false
 		}
 	}

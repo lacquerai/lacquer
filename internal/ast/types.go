@@ -113,7 +113,7 @@ type Workflow struct {
 	Metadata *WorkflowMetadata `yaml:"metadata,omitempty" json:"metadata,omitempty"`
 	// Agents defines AI agents that can be referenced in workflow steps.
 	// Each agent has a unique name and configuration.
-	Agents map[string]*Agent `yaml:"agents,omitempty" json:"agents,omitempty""`
+	Agents map[string]*Agent `yaml:"agents,omitempty" json:"agents,omitempty"`
 	// Requirements specifies the runtime programs needed to execute this workflow.
 	// These will requirements will be installed on the machine running the workflow.
 	Requirements *Requirements `yaml:"requirements,omitempty" json:"requirements,omitempty"`
