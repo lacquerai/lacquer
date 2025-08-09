@@ -41,22 +41,11 @@ type TestSpinner struct {
 	PostUpdate func(s *TestSpinner)
 }
 
-var (
-	testIDCounter = 0
-	counterMutex  = &sync.Mutex{}
-)
-
 type TestOption func(*TestSpinner)
 
 // New provides a pointer to an instance of TestSpinner with the supplied options.
 func NewTestSpinner(cs []string, d time.Duration, options ...TestOption) *TestSpinner {
-	counterMutex.Lock()
-	id := fmt.Sprintf("spinner-%d", testIDCounter)
-	testIDCounter++
-	counterMutex.Unlock()
-
 	s := &TestSpinner{
-		ID:         id,
 		Delay:      d,
 		chars:      cs,
 		color:      color.New(color.FgWhite).SprintFunc(),
@@ -259,12 +248,32 @@ func (s *TerminalSpinner) Stop() {
 	s.spinner.Stop()
 }
 
-func NewSpinner(w io.Writer) Spinner {
+type SpinnerManager struct {
+	mu      *sync.Mutex
+	writer  io.Writer
+	counter int
+}
+
+func NewSpinnerManager(w io.Writer) *SpinnerManager {
+	return &SpinnerManager{
+		writer: w,
+		mu:     &sync.Mutex{},
+	}
+}
+
+func (s *SpinnerManager) Start() Spinner {
+	s.mu.Lock()
+	defer func() {
+		s.counter++
+		s.mu.Unlock()
+	}()
+
 	if os.Getenv("LACQUER_TEST") == "true" {
-		return NewTestSpinner(spinner.CharSets[9], 100*time.Millisecond, func(s *TestSpinner) {
-			s.Writer = w
+		return NewTestSpinner(spinner.CharSets[9], 100*time.Millisecond, func(ts *TestSpinner) {
+			ts.Writer = s.writer
+			ts.ID = fmt.Sprintf("spinner-%d", s.counter)
 		})
 	}
 
-	return NewTerminalSpinner(spinner.CharSets[9], 100*time.Millisecond, spinner.WithWriter(w))
+	return NewTerminalSpinner(spinner.CharSets[9], 100*time.Millisecond, spinner.WithWriter(s.writer))
 }

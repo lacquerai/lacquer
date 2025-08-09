@@ -1,17 +1,17 @@
 
 Running state-updates workflow (4 steps)
 
-[Spinner spinner-7]: Running step initialize_state (1/4)
-[Finish spinner-7]✓  Running step initialize_state (1/4)
+[Spinner spinner-0]: Running step initialize_state (1/4)
+[Finish spinner-0]✓  Running step initialize_state (1/4)
 
-[Spinner spinner-8]: Running step first_calculation (2/4)
-[Finish spinner-8]✓  Running step first_calculation (2/4)
+[Spinner spinner-1]: Running step first_calculation (2/4)
+[Finish spinner-1]✓  Running step first_calculation (2/4)
 
-[Spinner spinner-9]: Running step second_calculation (3/4)
-[Finish spinner-9]✓  Running step second_calculation (3/4)
+[Spinner spinner-2]: Running step second_calculation (3/4)
+[Finish spinner-2]✓  Running step second_calculation (3/4)
 
-[Spinner spinner-10]: Running step finalize_state (4/4)
-[Finish spinner-10]✓  Running step finalize_state (4/4)
+[Spinner spinner-3]: Running step finalize_state (4/4)
+[Finish spinner-3]✓  Running step finalize_state (4/4)
 
 
 ✓ Workflow completed successfully (TIME)

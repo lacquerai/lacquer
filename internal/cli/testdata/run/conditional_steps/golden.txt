@@ -1,23 +1,23 @@
 
 Running conditional-steps workflow (7 steps)
 
-[Spinner spinner-11]: Running step check_number (1/7)
-[Finish spinner-11]✓  Running step check_number (1/7)
+[Spinner spinner-0]: Running step check_number (1/7)
+[Finish spinner-0]✓  Running step check_number (1/7)
 
-[Spinner spinner-12]: Running step analyze_large_number (3/7)
-[spinner-12] + +
+[Spinner spinner-1]: Running step analyze_large_number (3/7)
+[spinner-1] + +
    The number 75 is categorized as "large".
    Please provide an analysis of what makes this a large number and its mathematical properties.
-[spinner-12] +✓ +  
-[Finish spinner-12]✓  Running step analyze_large_number (3/7)
+[spinner-1] +✓ +  
+[Finish spinner-1]✓  Running step analyze_large_number (3/7)
    ✓ The number 75 is categorized as "large".
      Please provide an analysis of what makes this a large number and its mathematical properties.
 
-[Spinner spinner-13]: Running step finalize_analysis (6/7)
-[Finish spinner-13]✓  Running step finalize_analysis (6/7)
+[Spinner spinner-2]: Running step finalize_analysis (6/7)
+[Finish spinner-2]✓  Running step finalize_analysis (6/7)
 
-[Spinner spinner-14]: Running step conditional_summary (7/7)
-[Finish spinner-14]✓  Running step conditional_summary (7/7)
+[Spinner spinner-3]: Running step conditional_summary (7/7)
+[Finish spinner-3]✓  Running step conditional_summary (7/7)
 
 
 ✓ Workflow completed successfully (TIME)

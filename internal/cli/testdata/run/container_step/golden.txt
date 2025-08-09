@@ -1,11 +1,11 @@
 
 Running container-step workflow (2 steps)
 
-[Spinner spinner-5]: Running step process_in_container (1/2)
-[Finish spinner-5]✓  Running step process_in_container (1/2)
+[Spinner spinner-0]: Running step process_in_container (1/2)
+[Finish spinner-0]✓  Running step process_in_container (1/2)
 
-[Spinner spinner-6]: Running step process_golang_container (2/2)
-[Finish spinner-6]✓  Running step process_golang_container (2/2)
+[Spinner spinner-1]: Running step process_golang_container (2/2)
+[Finish spinner-1]✓  Running step process_golang_container (2/2)
 
 
 ✓ Workflow completed successfully (TIME)
