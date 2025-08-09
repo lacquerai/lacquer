@@ -38,7 +38,7 @@ func TestDockerExecutor(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create workspace: %v", err)
 		}
-		defer os.RemoveAll(workspace)
+		defer func() { _ = os.RemoveAll(workspace) }()
 
 		execCtx := &execcontext.ExecutionContext{
 			RunID: "test-run",

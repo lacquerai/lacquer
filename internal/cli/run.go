@@ -77,10 +77,10 @@ This command:
 				fmt.Fprintf(cmd.OutOrStderr(), "failed to open input file: %s\n", err)
 				os.Exit(1)
 			}
-			json.NewDecoder(file).Decode(&inputsMap)
-			file.Close()
+			_ = json.NewDecoder(file).Decode(&inputsMap)
+			_ = file.Close()
 		} else if inputJSONRaw != "" {
-			json.Unmarshal([]byte(inputJSONRaw), &inputsMap)
+			_ = json.Unmarshal([]byte(inputJSONRaw), &inputsMap)
 		}
 
 		for k, v := range inputs {
@@ -211,7 +211,7 @@ func printValidationErrors(w io.Writer, validationResult *engine.InputValidation
 	for i, err := range validationResult.Errors {
 		// Add spacing between errors for better readability
 		if i > 0 {
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w)
 		}
 
 		// Format field name with color/emphasis

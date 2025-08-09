@@ -77,7 +77,7 @@ func findAvailablePort() int {
 	if err != nil {
 		return 8080 // fallback port
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	return listener.Addr().(*net.TCPAddr).Port
 }
 
@@ -408,7 +408,13 @@ func TestServerIntegration_WebSocketStream_NotFound(t *testing.T) {
 
 	// Test WebSocket with non-existent run ID
 	wsURL := fmt.Sprintf("ws://%s/api/v1/workflows/test-workflow/stream?run_id=non-existent", addr)
-	_, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+	if conn != nil {
+		conn.Close()
+	}
 	assert.Error(t, err)
 	// WebSocket dial should fail or return error status
 }
@@ -421,7 +427,13 @@ func TestServerIntegration_WebSocketStream_MissingRunID(t *testing.T) {
 
 	// Test WebSocket without run_id parameter
 	wsURL := fmt.Sprintf("ws://%s/api/v1/workflows/test-workflow/stream", addr)
-	_, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+	if conn != nil {
+		conn.Close()
+	}
 	assert.Error(t, err)
 	// Should fail due to missing run_id parameter
 }

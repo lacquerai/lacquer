@@ -67,7 +67,7 @@ func (n *NodeRuntime) Get(ctx context.Context, version string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("creating temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Download archive
 	archivePath := filepath.Join(tempDir, filepath.Base(downloadURL))
@@ -77,10 +77,10 @@ func (n *NodeRuntime) Get(ctx context.Context, version string) (string, error) {
 	}
 
 	if err := n.downloader.Download(ctx, downloadURL, file); err != nil {
-		file.Close()
+		_ = file.Close()
 		return "", fmt.Errorf("downloading Node.js: %w", err)
 	}
-	file.Close()
+	_ = file.Close()
 
 	// Extract archive
 	extractor, err := utils.GetExtractor(archivePath)
@@ -150,7 +150,7 @@ func (n *NodeRuntime) List(ctx context.Context) ([]types.Version, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching versions: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var releases []nodeRelease
 	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
@@ -350,10 +350,10 @@ func compareVersions(v1, v2 string) int {
 		var p1, p2 int
 
 		if i < len(parts1) {
-			fmt.Sscanf(parts1[i], "%d", &p1)
+			_, _ = fmt.Sscanf(parts1[i], "%d", &p1)
 		}
 		if i < len(parts2) {
-			fmt.Sscanf(parts2[i], "%d", &p2)
+			_, _ = fmt.Sscanf(parts2[i], "%d", &p2)
 		}
 
 		if p1 > p2 {

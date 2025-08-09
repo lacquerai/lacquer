@@ -83,13 +83,13 @@ func (e *TarGzExtractor) Extract(src, dest string) error {
 	if err != nil {
 		return fmt.Errorf("opening archive: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	gz, err := gzip.NewReader(file)
 	if err != nil {
 		return fmt.Errorf("creating gzip reader: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 
 	tr := tar.NewReader(gz)
 
@@ -128,7 +128,7 @@ func (e *ZipExtractor) Extract(src, dest string) error {
 	if err != nil {
 		return fmt.Errorf("opening zip: %w", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	for _, f := range r.File {
 		target := filepath.Join(dest, f.Name)
@@ -150,10 +150,10 @@ func (e *ZipExtractor) Extract(src, dest string) error {
 		}
 
 		if err := extractFile(rc, target, f.Mode()); err != nil {
-			rc.Close()
+			_ = rc.Close()
 			return err
 		}
-		rc.Close()
+		_ = rc.Close()
 	}
 
 	return nil

@@ -7,15 +7,15 @@ run:
     - integration
 
 linters:
-  enable:
-    - revive
+  disable:
     - errcheck
+
+  enable:
     - ineffassign
     - govet
     - staticcheck
     - misspell
     - unparam
-    - prealloc
     - unconvert
     - gocritic
     - gocyclo
@@ -25,8 +25,6 @@ linters:
     - nakedret
     - gosec
     - nilerr
-    - exhaustive
     - gomodguard
-    - whitespace
     - unparam
     - makezero

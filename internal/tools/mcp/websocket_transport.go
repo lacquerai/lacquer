@@ -55,7 +55,10 @@ func (t *WebSocketTransport) Connect(ctx context.Context) error {
 		header.Set("Authorization", t.authHeader)
 	}
 
-	conn, _, err := dialer.DialContext(ctx, t.url, header)
+	conn, resp, err := dialer.DialContext(ctx, t.url, header)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to connect to WebSocket: %w", err)
 	}

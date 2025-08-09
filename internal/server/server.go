@@ -253,7 +253,7 @@ func (em *ExecutionManager) FinishExecution(runID string, outputs map[string]any
 	// Close WebSocket clients
 	status.clientsMu.Lock()
 	for client := range status.clients {
-		client.Close()
+		_ = client.Close()
 	}
 	status.clientsMu.Unlock()
 }
@@ -286,7 +286,7 @@ func (em *ExecutionManager) AddProgressEvent(runID string, event pkgEvents.Execu
 
 	eventJSON, _ := json.Marshal(event)
 	for client := range status.clients {
-		client.WriteMessage(websocket.TextMessage, eventJSON)
+		_ = client.WriteMessage(websocket.TextMessage, eventJSON)
 	}
 }
 

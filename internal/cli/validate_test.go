@@ -185,11 +185,11 @@ func assertGoldenFile(t *testing.T, directory string, stdout *bytes.Buffer, stde
 	}
 
 	if *rewriteGolden {
-		os.WriteFile(filepath.Join(directory, "golden.txt"), []byte(actual), 0644)
+		_ = os.WriteFile(filepath.Join(directory, "golden.txt"), []byte(actual), 0644)
 		return
 	}
 
 	if !assert.Equal(t, string(golden), actual) {
-		os.WriteFile(filepath.Join(directory, "actual.txt"), []byte(actual), 0644)
+		_ = os.WriteFile(filepath.Join(directory, "actual.txt"), []byte(actual), 0644)
 	}
 }

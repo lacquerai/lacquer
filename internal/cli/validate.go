@@ -374,7 +374,7 @@ func printValidationIssueStyled(w io.Writer, result ValidationResult, issue *Val
 		boxStyle = style.InfoBoxStyle
 	}
 
-	fmt.Fprint(w, boxStyle.Render(output.String()))
+	_, _ = fmt.Fprint(w, boxStyle.Render(output.String()))
 }
 
 // printEnhancedIssueStyled prints a detailed enhanced error with full context and styling
@@ -433,5 +433,5 @@ func printEnhancedIssueStyled(w io.Writer, result ValidationResult, issue *parse
 		boxStyle = style.InfoBoxStyle
 	}
 
-	fmt.Fprint(w, boxStyle.Render(output.String()))
+	_, _ = fmt.Fprint(w, boxStyle.Render(output.String()))
 }

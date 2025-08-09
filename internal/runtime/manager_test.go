@@ -31,7 +31,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// Set test cache directory
-	os.Setenv("TEST_CACHE_DIR", tempDir)
+	_ = os.Setenv("TEST_CACHE_DIR", tempDir)
 
 	// Run tests
 	code := m.Run()

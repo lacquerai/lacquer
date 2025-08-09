@@ -457,5 +457,5 @@ func (rc RunContext) Write(p []byte) (n int, err error) {
 }
 
 func (rc RunContext) Printf(format string, v ...any) {
-	fmt.Fprintf(rc.StdOut, format, v...)
+	_, _ = fmt.Fprintf(rc.StdOut, format, v...)
 }

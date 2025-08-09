@@ -100,7 +100,7 @@ func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *
 		}
 	case <-execCtx.Context.Context.Done():
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 		return nil, fmt.Errorf("block execution timeout")
 	}

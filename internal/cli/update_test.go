@@ -32,12 +32,12 @@ func TestUpdateCacheOperations(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "lacquer_test_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Temporarily change the home directory for testing
 	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempDir)
-	defer os.Setenv("HOME", originalHome)
+	_ = os.Setenv("HOME", tempDir)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
 	// Test data
 	updateInfo := &UpdateInfo{
@@ -67,12 +67,12 @@ func TestUpdateCacheExpiry(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "lacquer_test_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Temporarily change the home directory for testing
 	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempDir)
-	defer os.Setenv("HOME", originalHome)
+	_ = os.Setenv("HOME", tempDir)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
 	// Create an expired cache entry
 	expiredInfo := &UpdateInfo{
@@ -109,20 +109,20 @@ func TestLoadUpdateCacheWithInvalidJSON(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "lacquer_test_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Temporarily change the home directory for testing
 	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempDir)
-	defer os.Setenv("HOME", originalHome)
+	_ = os.Setenv("HOME", tempDir)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
 	// Create .lacquer directory
 	lacquerDir := filepath.Join(tempDir, ".lacquer")
-	os.MkdirAll(lacquerDir, 0755)
+	_ = os.MkdirAll(lacquerDir, 0755)
 
 	// Write invalid JSON to cache file
 	cacheFile := filepath.Join(tempDir, updateCacheFile)
-	os.WriteFile(cacheFile, []byte("invalid json"), 0644)
+	_ = os.WriteFile(cacheFile, []byte("invalid json"), 0644)
 
 	// Test loading invalid cache
 	loadedInfo := loadUpdateCache()
@@ -133,12 +133,12 @@ func TestLoadUpdateCacheWithNonexistentFile(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "lacquer_test_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Temporarily change the home directory for testing
 	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempDir)
-	defer os.Setenv("HOME", originalHome)
+	_ = os.Setenv("HOME", tempDir)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
 	// Test loading nonexistent cache
 	loadedInfo := loadUpdateCache()
@@ -149,12 +149,12 @@ func TestSaveUpdateCacheCreatesDirectory(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "lacquer_test_*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Temporarily change the home directory for testing
 	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempDir)
-	defer os.Setenv("HOME", originalHome)
+	_ = os.Setenv("HOME", tempDir)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
 	// Test data
 	updateInfo := &UpdateInfo{

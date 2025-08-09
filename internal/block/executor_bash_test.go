@@ -13,7 +13,7 @@ func TestBashExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	executor, err := NewBashExecutor(tmpDir)
 	if err != nil {
@@ -49,7 +49,7 @@ echo "{\"sum\": $sum}"
 	if err != nil {
 		t.Fatalf("Failed to create workspace: %v", err)
 	}
-	defer os.RemoveAll(workspace)
+	defer func() { _ = os.RemoveAll(workspace) }()
 
 	ctx := context.Background()
 	inputs := map[string]interface{}{

@@ -37,7 +37,7 @@ func (s *Server) listWorkflows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"workflows": workflows,
 	})
 }
@@ -77,7 +77,7 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 	if !validationResult.Valid {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(formatValidationErrors(validationResult))
+		_ = json.NewEncoder(w).Encode(formatValidationErrors(validationResult))
 		return
 	}
 
@@ -98,7 +98,7 @@ func (s *Server) executeWorkflow(w http.ResponseWriter, r *http.Request) {
 	status := s.manager.StartExecution(runID, workflowID, cancel, processedInputs)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"run_id":      runID,
 		"workflow_id": workflowID,
 		"status":      "running",
@@ -164,7 +164,7 @@ func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("WebSocket upgrade failed")
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	status.clientsMu.Lock()
 	status.clients[conn] = true
@@ -172,7 +172,7 @@ func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	for _, event := range status.Progress {
 		eventJSON, _ := json.Marshal(event)
-		conn.WriteMessage(websocket.TextMessage, eventJSON)
+		_ = conn.WriteMessage(websocket.TextMessage, eventJSON)
 	}
 
 	if status.Status != "running" {
@@ -186,7 +186,7 @@ func (s *Server) streamWorkflow(w http.ResponseWriter, r *http.Request) {
 			finalEvent.Error = status.Error
 		}
 		eventJSON, _ := json.Marshal(finalEvent)
-		conn.WriteMessage(websocket.TextMessage, eventJSON)
+		_ = conn.WriteMessage(websocket.TextMessage, eventJSON)
 	}
 
 	for {

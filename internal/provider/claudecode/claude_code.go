@@ -207,9 +207,9 @@ func (p *ClaudeCodeProvider) Generate(ctx provider.GenerateContext, request *pro
 
 func (p *ClaudeCodeProvider) Close() error {
 	if p.session != nil {
-		p.session.Stderr.Close()
-		p.session.Stdout.Close()
-		p.session.Process.Process.Kill()
+		_ = p.session.Stderr.Close()
+		_ = p.session.Stdout.Close()
+		_ = p.session.Process.Process.Kill()
 		p.session = nil
 	}
 

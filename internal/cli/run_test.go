@@ -172,7 +172,7 @@ func (ts *TestServer) handleNormalMode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(response))
+	_, _ = w.Write([]byte(response))
 }
 
 // handleCaptureMode acts as a reverse proxy and captures responses
@@ -219,7 +219,7 @@ func (ts *TestServer) handleCaptureMode(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Failed to proxy request: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	defer targetResp.Body.Close()
+	defer func() { _ = targetResp.Body.Close() }()
 
 	// Copy response headers
 	for key, values := range targetResp.Header {
@@ -247,7 +247,7 @@ func (ts *TestServer) handleCaptureMode(w http.ResponseWriter, r *http.Request) 
 			} else {
 				capturedResponse = responseBody // fallback to raw if decompression fails
 			}
-			gzipReader.Close()
+			_ = gzipReader.Close()
 		} else {
 			capturedResponse = responseBody // fallback to raw if decompression fails
 		}
@@ -267,7 +267,7 @@ func (ts *TestServer) handleCaptureMode(w http.ResponseWriter, r *http.Request) 
 
 	// Write response status and body (keeping original compression)
 	w.WriteHeader(targetResp.StatusCode)
-	w.Write(responseBody)
+	_, _ = w.Write(responseBody)
 }
 
 // Reset clears all stored responses and call indices

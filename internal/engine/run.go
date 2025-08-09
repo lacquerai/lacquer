@@ -623,8 +623,7 @@ func printWorkflowInfo(w io.Writer, workflow *ast.Workflow) {
 	name := getWorkflowName(workflow)
 	stepCount := len(workflow.Workflow.Steps)
 
-	fmt.Fprintf(w, "\nRunning %s workflow (%d steps)\n\n", style.InfoStyle.Render(name), stepCount)
-
+	_, _ = fmt.Fprintf(w, "\nRunning %s workflow (%d steps)\n\n", style.InfoStyle.Render(name), stepCount)
 }
 
 // getWorkflowName extracts the workflow name from metadata or returns a default.

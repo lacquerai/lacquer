@@ -215,7 +215,7 @@ func (wm *WorkflowManager) pollWorkflowResults(workflowID string) (pollResultMsg
 		}
 
 		if wm.out != nil {
-			fmt.Fprintf(wm.out, "Status: %s, continuing...\n", pollResult.Status)
+			_, _ = fmt.Fprintf(wm.out, "Status: %s, continuing...\n", pollResult.Status)
 		}
 	}
 }
@@ -266,7 +266,7 @@ func (wm *WorkflowManager) runWorkflowProcess() (map[string]string, error) {
 	}
 
 	if wm.out != nil {
-		fmt.Fprintf(wm.out, "Generating workflow (ID: %s)...\n", workflowID)
+		_, _ = fmt.Fprintf(wm.out, "Generating workflow (ID: %s)...\n", workflowID)
 	}
 
 	// Poll for results
@@ -358,7 +358,7 @@ func validateNonInteractiveFlags(flags InitFlags) error {
 
 // runNonInteractiveInit runs the initialization without the interactive wizard
 func runNonInteractiveInit(runCtx execcontext.RunContext, flags InitFlags) error {
-	fmt.Fprintf(runCtx.StdOut, "Initializing project %s...\n", flags.ProjectName)
+	_, _ = fmt.Fprintf(runCtx.StdOut, "Initializing project %s...\n", flags.ProjectName)
 
 	wm := &WorkflowManager{
 		answers: ProjectAnswers{
@@ -374,7 +374,7 @@ func runNonInteractiveInit(runCtx execcontext.RunContext, flags InitFlags) error
 		return fmt.Errorf("failed to generate workflow: %w", err)
 	}
 
-	fmt.Fprint(wm.out, renderCompleteStep(flags.ProjectName, generatedFiles))
+	_, _ = fmt.Fprint(wm.out, renderCompleteStep(flags.ProjectName, generatedFiles))
 
 	return nil
 }

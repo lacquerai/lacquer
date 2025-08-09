@@ -80,7 +80,7 @@ func (p *PythonRuntime) Get(ctx context.Context, version string) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("creating temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Download archive
 	archivePath := filepath.Join(tempDir, filepath.Base(downloadURL))
@@ -90,10 +90,10 @@ func (p *PythonRuntime) Get(ctx context.Context, version string) (string, error)
 	}
 
 	if err := p.downloader.Download(ctx, downloadURL, file); err != nil {
-		file.Close()
+		_ = file.Close()
 		return "", fmt.Errorf("downloading Python: %w", err)
 	}
-	file.Close()
+	_ = file.Close()
 
 	// Extract archive
 	extractor, err := utils.GetExtractor(archivePath)
@@ -164,7 +164,7 @@ func (p *PythonRuntime) List(ctx context.Context) ([]types.Version, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching versions: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var apiResponse []pythonRelease
 	body, err := io.ReadAll(resp.Body)

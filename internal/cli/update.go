@@ -159,7 +159,7 @@ func performUpdate(cmd *cobra.Command, force bool) {
 		fmt.Fprintf(cmd.ErrOrStderr(), "%s Failed to download update: %s\n", style.ErrorIcon(), err)
 		return
 	}
-	defer os.Remove(tempFile)
+	defer func() { _ = os.Remove(tempFile) }()
 
 	// Get current executable path
 	currentExe, err := os.Executable()
@@ -232,7 +232,7 @@ func downloadBinary(url string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary file: %w", err)
 	}
-	defer tempFile.Close()
+	defer func() { _ = tempFile.Close() }()
 
 	// Copy the downloaded content
 	_, err = io.Copy(tempFile, resp.Body)
@@ -257,12 +257,12 @@ func replaceBinary(currentPath, newPath string) error {
 		// Move new binary to current location
 		if err := os.Rename(newPath, currentPath); err != nil {
 			// Try to restore backup if move failed
-			os.Rename(backupPath, currentPath)
+			_ = os.Rename(backupPath, currentPath)
 			return fmt.Errorf("failed to move new binary: %w", err)
 		}
 
 		// Remove backup
-		os.Remove(backupPath)
+		_ = os.Remove(backupPath)
 	} else {
 		// On Unix systems, we can replace the file directly
 		if err := os.Rename(newPath, currentPath); err != nil {
@@ -307,7 +307,7 @@ func saveUpdateCache(updateInfo *UpdateInfo) {
 	}
 
 	lacquerDir := filepath.Join(homeDir, ".lacquer")
-	os.MkdirAll(lacquerDir, 0755)
+	_ = os.MkdirAll(lacquerDir, 0755)
 
 	cacheFile := filepath.Join(homeDir, updateCacheFile)
 	data, err := json.MarshalIndent(updateInfo, "", "  ")
@@ -315,7 +315,7 @@ func saveUpdateCache(updateInfo *UpdateInfo) {
 		return
 	}
 
-	os.WriteFile(cacheFile, data, 0644)
+	_ = os.WriteFile(cacheFile, data, 0644)
 }
 
 // ShouldShowUpdateNotification checks if we should show an update notification

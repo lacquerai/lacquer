@@ -229,7 +229,7 @@ func (g *GoRuntime) checkInstalled(ctx context.Context, version string) (string,
 	cmd := exec.CommandContext(ctx, "go", "version")
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	cmd.Run()
+	_ = cmd.Run()
 
 	output := out.String()
 	if strings.Contains(output, version) {
@@ -237,7 +237,7 @@ func (g *GoRuntime) checkInstalled(ctx context.Context, version string) (string,
 		cmd := exec.CommandContext(ctx, "which", "go")
 		cmd.Stdout = &out
 		cmd.Stderr = &out
-		cmd.Run()
+		_ = cmd.Run()
 
 		return strings.Trim(out.String(), "\n"), true
 	}
@@ -277,10 +277,10 @@ func compareVersions(v1, v2 string) int {
 	for i := 1; i < 4; i++ {
 		var p1, p2 int
 		if i < len(parts1) && parts1[i] != "" {
-			fmt.Sscanf(parts1[i], "%d", &p1)
+			_, _ = fmt.Sscanf(parts1[i], "%d", &p1)
 		}
 		if i < len(parts2) && parts2[i] != "" {
-			fmt.Sscanf(parts2[i], "%d", &p2)
+			_, _ = fmt.Sscanf(parts2[i], "%d", &p2)
 		}
 
 		if p1 > p2 {
