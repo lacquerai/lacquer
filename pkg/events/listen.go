@@ -8,15 +8,8 @@
 package events
 
 import (
-	"io"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
-
-func init() {
-	log.Logger.Output(io.Discard)
-}
 
 // ExecutionEventType represents the type of execution event that occurred during
 // workflow processing. These events provide granular visibility into the workflow
@@ -87,6 +80,8 @@ type ExecutionEvent struct {
 	Text string `json:"text,omitempty"`
 	// Metadata contains additional structured data specific to the event type.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	// Diagnostics contains additional diagnostic information about the event.
+	Diagnostics []string `json:"diagnostics,omitempty"`
 }
 
 // Listener defines the interface for tracking workflow execution progress.

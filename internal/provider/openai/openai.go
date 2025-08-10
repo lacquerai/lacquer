@@ -104,25 +104,23 @@ func (p *OpenAIProvider) Generate(ctx provider.GenerateContext, request *provide
 		maxTokens = int64(*request.MaxTokens)
 	}
 
-	var temperature float64
-	if request.Temperature != nil {
-		temperature = *request.Temperature
-	}
-
-	var topP float64
-	if request.TopP != nil {
-		topP = *request.TopP
-	}
-
-	response, err := p.client.Chat.Completions.New(ctx.Context, openai.ChatCompletionNewParams{
+	params := openai.ChatCompletionNewParams{
 		Model:               request.Model,
 		Messages:            p.buildOpenAIRequest(request),
-		Temperature:         openai.Float(temperature),
 		MaxCompletionTokens: openai.Int(maxTokens),
-		TopP:                openai.Float(topP),
 		N:                   openai.Int(1),
 		Tools:               tools,
-	})
+	}
+
+	if request.Temperature != nil {
+		params.Temperature = openai.Float(*request.Temperature)
+	}
+
+	if request.TopP != nil {
+		params.TopP = openai.Float(*request.TopP)
+	}
+
+	response, err := p.client.Chat.Completions.New(ctx.Context, params)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create OpenAI completion: %w", err)
 	}
@@ -140,7 +138,26 @@ func (p *OpenAIProvider) Generate(ctx provider.GenerateContext, request *provide
 		Int("completion_tokens", tokenUsage.CompletionTokens).
 		Msg("OpenAI API call completed")
 
+	var truncated bool
+	if response.Choices[0].FinishReason == "length" {
+		log.Warn().
+			Str("model", request.Model).
+			Msg("API call completed with length limit, this might cause your workflow to fail with truncated responses, please consider increasing the max_tokens parameter")
+		truncated = true
+	}
+
 	messages := p.extractResponseContent(response)
+	if truncated {
+		if len(messages) > 0 {
+			messages[len(messages)-1].IsTruncated = true
+		} else {
+			messages = append(messages, provider.Message{
+				Role:        "assistant",
+				Content:     []provider.ContentBlockParamUnion{provider.NewTextBlock("")},
+				IsTruncated: true,
+			})
+		}
+	}
 
 	return messages, tokenUsage, nil
 }

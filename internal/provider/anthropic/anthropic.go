@@ -237,11 +237,30 @@ func (p *Provider) Generate(gtx provider.GenerateContext, request *provider.Requ
 		TotalTokens:      int(response.Usage.InputTokens + response.Usage.OutputTokens),
 	}
 
+	var truncated bool
+	if response.StopReason == "max_tokens" {
+		truncated = true
+	}
+
 	content := make([]provider.Message, len(response.Content))
 	for i, contentBlock := range response.Content {
 		message := p.anthropicContentToModelMessage(contentBlock)
 		if message != nil {
 			content[i] = *message
+		}
+
+		if i == len(response.Content)-1 {
+			content[i].IsTruncated = truncated
+		}
+	}
+
+	if len(content) == 0 && truncated {
+		content = []provider.Message{
+			{
+				Role:        "assistant",
+				Content:     []provider.ContentBlockParamUnion{provider.NewTextBlock("")},
+				IsTruncated: true,
+			},
 		}
 	}
 

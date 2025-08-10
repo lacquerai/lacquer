@@ -52,8 +52,9 @@ type Info struct {
 }
 
 type Message struct {
-	Role    string                   `json:"role"`
-	Content []ContentBlockParamUnion `json:"content"`
+	Role        string                   `json:"role"`
+	IsTruncated bool                     `json:"-"`
+	Content     []ContentBlockParamUnion `json:"content"`
 }
 
 // Image Source Types

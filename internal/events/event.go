@@ -65,13 +65,14 @@ func NewPromptAgentEvent(stepID, actionID string, runID string, prompt ...string
 	}
 }
 
-func NewAgentCompletedEvent(step *ast.Step, actionID string, runID string) pkgEvents.ExecutionEvent {
+func NewAgentCompletedEvent(step *ast.Step, actionID string, runID string, diagnostics ...string) pkgEvents.ExecutionEvent {
 	return pkgEvents.ExecutionEvent{
-		Type:      pkgEvents.EventStepActionCompleted,
-		ActionID:  actionID,
-		Timestamp: time.Now(),
-		RunID:     runID,
-		StepID:    step.ID,
+		Type:        pkgEvents.EventStepActionCompleted,
+		ActionID:    actionID,
+		Timestamp:   time.Now(),
+		RunID:       runID,
+		StepID:      step.ID,
+		Diagnostics: diagnostics,
 	}
 }
 

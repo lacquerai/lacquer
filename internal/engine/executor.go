@@ -599,7 +599,12 @@ func (e *Executor) executeConversationWithTools(execCtx *execcontext.ExecutionCo
 			return "", fmt.Errorf("model generation failed: %w", err)
 		}
 
-		e.progressChan <- events.NewAgentCompletedEvent(step, actionID, execCtx.RunID)
+		var diagnostics []string
+		if responseMessages[len(responseMessages)-1].IsTruncated {
+			diagnostics = append(diagnostics, "Agent response was truncated because max_tokens was reached. This will impact the likelihood of your workflow creating the correct outputs. Please consider increasing the max_tokens parameter")
+		}
+
+		e.progressChan <- events.NewAgentCompletedEvent(step, actionID, execCtx.RunID, diagnostics...)
 
 		// Check if the response contains tool calls if there are no tool calls
 		// its safe to exit with a final response from the response

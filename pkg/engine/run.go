@@ -12,13 +12,7 @@ import (
 	"github.com/lacquerai/lacquer/internal/engine"
 	"github.com/lacquerai/lacquer/internal/execcontext"
 	"github.com/lacquerai/lacquer/pkg/events"
-
-	"github.com/rs/zerolog/log"
 )
-
-func init() {
-	log.Logger.Output(io.Discard)
-}
 
 // Option represents a functional option for configuring workflow execution.
 // Options allow customization of the workflow runner behavior, such as

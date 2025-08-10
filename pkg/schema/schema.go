@@ -35,9 +35,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-
-	"github.com/rs/zerolog/log"
 
 	"github.com/lacquerai/lacquer/internal/ast"
 	"github.com/lacquerai/lacquer/internal/expression"
@@ -45,10 +42,6 @@ import (
 	"github.com/lacquerai/lacquer/internal/provider/anthropic"
 	"github.com/lacquerai/lacquer/internal/provider/openai"
 )
-
-func init() {
-	log.Logger.Output(io.Discard)
-}
 
 // SchemaOutput represents the complete schema information for Lacquer workflows.
 // This structure contains all the metadata needed to understand and validate

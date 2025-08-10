@@ -412,7 +412,7 @@ func (pt *CLIProgressTracker) StartListening(progressChan <-chan pkgEvents.Execu
 			pt.createActionSpinner(event.StepID, event.ActionID, event.Text)
 
 		case pkgEvents.EventStepActionCompleted:
-			pt.completeActionSpinner(event.StepID, event.ActionID)
+			pt.completeActionSpinner(event.StepID, event.ActionID, event.Diagnostics...)
 
 		case pkgEvents.EventStepActionFailed:
 			pt.failActionSpinner(event.StepID, event.ActionID)
@@ -500,16 +500,28 @@ func (pt *CLIProgressTracker) createActionSpinner(stepID string, actionID string
 }
 
 // completeActionSpinner marks an action as completed with a success icon.
-func (pt *CLIProgressTracker) completeActionSpinner(stepID string, actionID string) {
+func (pt *CLIProgressTracker) completeActionSpinner(stepID string, actionID string, diagnostics ...string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 
 	if state, exists := pt.steps[stepID]; exists {
 		state.mu.Lock()
 		for i, action := range state.actions {
-			if action.id == actionID {
+			if action.id != actionID {
+				continue
+			}
+
+			if len(diagnostics) > 0 {
+				state.actions[i].text = style.SuccessIcon() + " " + strings.TrimSpace(strings.ReplaceAll(action.text, "...", "")) + "\n\n"
+				for _, v := range diagnostics {
+					state.actions[i].text += style.WarningIcon() + " " + v
+
+					if v != diagnostics[len(diagnostics)-1] {
+						state.actions[i].text += "\n"
+					}
+				}
+			} else {
 				state.actions[i].text = style.SuccessIcon() + " " + strings.TrimSpace(strings.ReplaceAll(action.text, "...", ""))
-				break
 			}
 		}
 
