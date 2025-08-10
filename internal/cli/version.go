@@ -15,6 +15,7 @@ var (
 	Version   = "dev"
 	Commit    = "unknown"
 	Date      = "unknown"
+	BuiltBy   = "unknown"
 	GoVersion = runtime.Version()
 )
 
@@ -40,6 +41,7 @@ type VersionInfo struct {
 	Version   string `json:"version" yaml:"version"`
 	Commit    string `json:"commit" yaml:"commit"`
 	Date      string `json:"date" yaml:"date"`
+	BuiltBy   string `json:"built_by" yaml:"built_by"`
 	GoVersion string `json:"go_version" yaml:"go_version"`
 	Platform  string `json:"platform" yaml:"platform"`
 }
@@ -49,6 +51,7 @@ func showVersion(cmd *cobra.Command) {
 		Version:   Version,
 		Commit:    Commit,
 		Date:      Date,
+		BuiltBy:   BuiltBy,
 		GoVersion: GoVersion,
 		Platform:  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 	}
