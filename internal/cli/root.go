@@ -30,9 +30,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "laq",
 	Short: "Lacquer - Where AI workflows get their shine",
-	Long: `Lacquer is a domain-specific language (DSL) and runtime for orchestrating AI agent workflows.
-
-The laq CLI tool enables developers to create, validate, and run AI workflows using a declarative YAML-based syntax.
+	Long: `Lacquer is a domain-specific language (DSL) and runtime for orchestrating AI agents.
 
 Visit https://lacquer.ai/docs for documentation and examples.`,
 	Version: getVersion(),
