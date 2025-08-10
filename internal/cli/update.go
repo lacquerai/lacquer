@@ -1,6 +1,10 @@
 package cli
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/minio/selfupdate"
 	"github.com/spf13/cobra"
 
 	"github.com/lacquerai/lacquer/internal/style"
@@ -140,30 +145,17 @@ func performUpdate(cmd *cobra.Command, force bool) {
 
 	fmt.Fprintf(cmd.OutOrStdout(), "%s Downloading laq %s...\n", style.InfoIcon(), updateInfo.LatestVersion)
 
-	// Download the new binary
-	tempFile, err := downloadBinary(updateInfo.DownloadURL)
+	binary, err := downloadAndExtractBinary(updateInfo.DownloadURL)
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "%s Failed to download update: %s\n", style.ErrorIcon(), err)
 		return
 	}
-	defer func() { _ = os.Remove(tempFile) }()
 
-	// Get current executable path
-	currentExe, err := os.Executable()
-	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s Failed to get current executable path: %s\n", style.ErrorIcon(), err)
-		return
-	}
-
-	// Make the downloaded file executable
-	if err := os.Chmod(tempFile, 0600); err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s Failed to make binary executable: %s\n", style.ErrorIcon(), err)
-		return
-	}
-
-	// Replace the current binary
-	if err := replaceBinary(currentExe, tempFile); err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s Failed to replace binary: %s\n", style.ErrorIcon(), err)
+	if err := selfupdate.Apply(binary, selfupdate.Options{}); err != nil {
+		if err := selfupdate.RollbackError(err); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "%s Failed to rollback update: %s\n", style.ErrorIcon(), err)
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "%s Failed to apply update: %s\n", style.ErrorIcon(), err)
 		return
 	}
 
@@ -198,62 +190,87 @@ func fetchLatestVersion() (version, downloadURL string, err error) {
 	return "", "", fmt.Errorf("no binary found for platform %s/%s", runtime.GOOS, runtime.GOARCH)
 }
 
-// downloadBinary downloads the binary to a temporary file
-func downloadBinary(url string) (string, error) {
+// downloadAndExtractBinary downloads the archive and extracts the laq binary
+func downloadAndExtractBinary(url string) (io.Reader, error) {
 	resp, err := http.Get(url) // #nosec G107 - URL comes from GitHub API
 	if err != nil {
-		return "", fmt.Errorf("failed to download binary: %w", err)
+		return nil, fmt.Errorf("failed to download archive: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download failed with status %d", resp.StatusCode)
+		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
 	}
 
-	// Create temporary file
-	tempFile, err := os.CreateTemp("", "laq_update_*")
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to create temporary file: %w", err)
-	}
-	defer func() { _ = tempFile.Close() }()
-
-	// Copy the downloaded content
-	_, err = io.Copy(tempFile, resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to write binary: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	return tempFile.Name(), nil
+	if strings.HasSuffix(url, ".tar.gz") {
+		return extractFromTarGz(bytes.NewReader(data))
+	} else if strings.HasSuffix(url, ".zip") {
+		return extractFromZip(bytes.NewReader(data), int64(len(data)))
+	}
+
+	return nil, fmt.Errorf("unsupported archive format")
 }
 
-// replaceBinary replaces the current binary with the new one
-func replaceBinary(currentPath, newPath string) error {
-	// On Windows, we can't replace a running executable directly
-	if runtime.GOOS == "windows" {
-		backupPath := currentPath + ".bak"
+// extractFromTarGz extracts the laq binary from a tar.gz archive
+func extractFromTarGz(r io.Reader) (io.Reader, error) {
+	gzr, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer gzr.Close()
 
-		// Move current binary to backup
-		if err := os.Rename(currentPath, backupPath); err != nil {
-			return fmt.Errorf("failed to backup current binary: %w", err)
+	tr := tar.NewReader(gzr)
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read tar header: %w", err)
 		}
 
-		// Move new binary to current location
-		if err := os.Rename(newPath, currentPath); err != nil {
-			// Try to restore backup if move failed
-			_ = os.Rename(backupPath, currentPath)
-			return fmt.Errorf("failed to move new binary: %w", err)
-		}
-
-		// Remove backup
-		_ = os.Remove(backupPath)
-	} else {
-		// On Unix systems, we can replace the file directly
-		if err := os.Rename(newPath, currentPath); err != nil {
-			return fmt.Errorf("failed to replace binary: %w", err)
+		if strings.HasSuffix(header.Name, "laq") || strings.HasSuffix(header.Name, "laq.exe") {
+			data, err := io.ReadAll(tr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read binary from tar: %w", err)
+			}
+			return bytes.NewReader(data), nil
 		}
 	}
 
-	return nil
+	return nil, fmt.Errorf("laq binary not found in tar.gz archive")
+}
+
+// extractFromZip extracts the laq binary from a zip archive
+func extractFromZip(r io.ReaderAt, size int64) (io.Reader, error) {
+	zr, err := zip.NewReader(r, size)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create zip reader: %w", err)
+	}
+
+	for _, file := range zr.File {
+		if strings.HasSuffix(file.Name, "laq") || strings.HasSuffix(file.Name, "laq.exe") {
+			rc, err := file.Open()
+			if err != nil {
+				return nil, fmt.Errorf("failed to open file in zip: %w", err)
+			}
+			defer rc.Close()
+
+			data, err := io.ReadAll(rc)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read binary from zip: %w", err)
+			}
+			return bytes.NewReader(data), nil
+		}
+	}
+
+	return nil, fmt.Errorf("laq binary not found in zip archive")
 }
 
 // normalizeVersion removes 'v' prefix from version strings
