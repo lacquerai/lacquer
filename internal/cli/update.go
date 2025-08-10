@@ -76,23 +76,12 @@ func init() {
 
 // checkForUpdate checks if a newer version is available
 func checkForUpdate(cmd *cobra.Command, verbose bool) *UpdateInfo {
-	// Try to load cached update info
 	updateInfo := loadUpdateCache()
 
-	// Check if cache is still valid
 	if updateInfo != nil && time.Since(updateInfo.LastChecked) < cacheExpiry {
-		if verbose {
-			if updateInfo.CurrentIsOld {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s A newer version (%s) is available!\n", style.InfoIcon(), updateInfo.LatestVersion)
-				fmt.Fprintf(cmd.OutOrStdout(), "Run 'laq update' to upgrade.\n")
-			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s You are running the latest version (%s)\n", style.SuccessIcon(), Version)
-			}
-		}
 		return updateInfo
 	}
 
-	// Fetch latest version info from GitHub
 	latest, downloadURL, err := fetchLatestVersion()
 	if err != nil {
 		if verbose {
@@ -101,7 +90,6 @@ func checkForUpdate(cmd *cobra.Command, verbose bool) *UpdateInfo {
 		return nil
 	}
 
-	// Compare versions
 	currentVersion := normalizeVersion(Version)
 	latestVersion := normalizeVersion(latest)
 
@@ -112,7 +100,6 @@ func checkForUpdate(cmd *cobra.Command, verbose bool) *UpdateInfo {
 	if err1 == nil && err2 == nil {
 		isOutdated = currentSemver.LessThan(latestSemver)
 	} else {
-		// Fallback to string comparison if semver parsing fails
 		isOutdated = currentVersion != latestVersion && Version != "dev"
 	}
 
@@ -201,13 +188,9 @@ func fetchLatestVersion() (version, downloadURL string, err error) {
 	}
 
 	// Find the appropriate asset for current platform
-	assetName := fmt.Sprintf("laq_%s_%s", runtime.GOOS, runtime.GOARCH)
-	if runtime.GOOS == "windows" {
-		assetName += ".exe"
-	}
-
+	assetName := fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)
 	for _, asset := range release.Assets {
-		if strings.Contains(asset.Name, assetName) {
+		if strings.Contains(strings.ToLower(asset.Name), strings.ToLower(assetName)) {
 			return release.TagName, asset.BrowserDownloadURL, nil
 		}
 	}
@@ -323,8 +306,6 @@ func saveUpdateCache(updateInfo *UpdateInfo) {
 func ShouldShowUpdateNotification() *UpdateInfo {
 	updateInfo := loadUpdateCache()
 
-	// If no cache exists or cache is expired, don't show notification
-	// (to avoid blocking CLI operations with network calls)
 	if updateInfo == nil || time.Since(updateInfo.LastChecked) > cacheExpiry {
 		return nil
 	}

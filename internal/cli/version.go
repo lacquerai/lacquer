@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"runtime"
 
 	"github.com/lacquerai/lacquer/internal/style"
@@ -60,14 +61,10 @@ func showVersion(cmd *cobra.Command) {
 	case "yaml":
 		style.PrintYAML(cmd.OutOrStdout(), versionInfo)
 	default:
-		printText(versionInfo)
+		printText(cmd.OutOrStdout(), versionInfo)
 	}
 }
 
-func printText(info VersionInfo) {
-	fmt.Printf("laq version %s\n", info.Version)
-	fmt.Printf("Commit: %s\n", info.Commit)
-	fmt.Printf("Built: %s\n", info.Date)
-	fmt.Printf("Go version: %s\n", info.GoVersion)
-	fmt.Printf("Platform: %s\n", info.Platform)
+func printText(w io.Writer, info VersionInfo) {
+	fmt.Fprintf(w, "%s", info.Version)
 }
