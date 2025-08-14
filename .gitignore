@@ -150,3 +150,6 @@ node_modules
 
 #schema
 schema.json
+
+# workflows
+laq_workflows

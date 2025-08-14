@@ -125,7 +125,7 @@ docs-serve: docs-clean
 	@echo "Checking if port 8000 is available..."
 	@if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then \
 		echo "Port 8000 is already in use. Attempting to stop existing server..."; \
-		pkill -f "python.*http.server.*8000" 2>/dev/null || true; \
+		kill $(lsof -t -i :8000) 2>/dev/null || true; \
 		sleep 2; \
 		if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then \
 			echo "Failed to free port 8000. Please manually stop the process using port 8000 and try again."; \

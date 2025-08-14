@@ -140,23 +140,6 @@ func (s *TestSpinner) Stop() {
 	}
 }
 
-// Restart will stop and start the indicator.
-func (s *TestSpinner) Restart() {
-	s.Stop()
-	time.Sleep(10 * time.Millisecond) // small delay to ensure clean restart
-	s.Start()
-}
-
-// Reverse will reverse the order of the slice assigned to the indicator.
-func (s *TestSpinner) Reverse() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i, j := 0, len(s.chars)-1; i < j; i, j = i+1, j-1 {
-		s.chars[i], s.chars[j] = s.chars[j], s.chars[i]
-	}
-	fmt.Fprintf(s.Writer, "[REVERSED CHARSET]\n")
-}
-
 func (s *TestSpinner) SetFinalMSG(finalMSG string) {
 	s.FinalMSG = finalMSG
 }

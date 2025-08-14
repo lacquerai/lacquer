@@ -145,6 +145,15 @@ func (as ActionStates) String() string {
 		indentation := "   "
 		successIndentation := ""
 
+		// Truncate if there are more than 10 lines so that we don't have to scroll
+		if len(lines) > 10 {
+			truncatedLines := make([]string, 0, 10)
+			truncatedLines = append(truncatedLines, lines[0:3]...)
+			truncatedLines = append(truncatedLines, fmt.Sprintf("... and %d more lines", len(lines)-6))
+			truncatedLines = append(truncatedLines, lines[len(lines)-3:]...)
+			lines = truncatedLines
+		}
+
 		for i, line := range lines {
 			// Check for success icon to determine additional indentation
 			if i == 0 && strings.HasPrefix(line, style.SuccessIcon()) {
@@ -174,7 +183,6 @@ func (as ActionStates) String() string {
 
 			// Wrap the line content if needed
 			wrappedLines := wrapLine(lineContent, maxWidth)
-
 			// Write the lines with proper indentation
 			for j, wrappedLine := range wrappedLines {
 				if i == 0 && j == 0 {
@@ -186,6 +194,7 @@ func (as ActionStates) String() string {
 				}
 			}
 		}
+
 		text.WriteString("\n")
 	}
 	return text.String()

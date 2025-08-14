@@ -102,7 +102,7 @@ const (
 
 var (
 	quitKey = key.NewBinding(
-		key.WithKeys("ctrl+c", "q"),
+		key.WithKeys("ctrl+c"),
 		key.WithHelp("Ctrl+C", "Quit"),
 	)
 	enterKey = key.NewBinding(
