@@ -7,54 +7,65 @@
 
 ---
 
-## Orchestrate AI Agents with Code, Not Clicks
 
-Lacquer is a blazing-fast, code-first orchestration engine for AI agent workflows. Bring **GitHub Actions-style workflows** to AI and define complex multi-agent systems in simple YAML.
-
-Built for artisans who prefer **terminals** over drag-and-drop.
+Lacquer is an open-source **AI orchestration engine** inspired by GitHub Actions. Define complex agent workflows in familiar YAML, test locally, and ship anywhere with a single binary. Built for developers who prefer **terminals** over drag-and-drop.
 
 ```yaml
 version: "1.0"
 
 agents:
-  assistant:
+  code_reviewer:
     provider: openai
     model: gpt-4
-    temperature: 0.7
+    temperature: 0.3
+    system_prompt: You are an expert code reviewer who analyses pull requests.
 
 inputs:
-  topic:
-    type: string
-    description: Topic to explore
-  
+  pr_number:
+    type: integer
+    description: Pull request number to review
+    required: true
+
 workflow:
   steps:
-    - id: research
-      agent: assistant
-      prompt: "Tell me about ${{ inputs.topic }}"
+    - id: fetch_pr
+      run: node scripts/fetch_pr.js
+      with:
+        pr_number: ${{ inputs.pr_number }}
 
-    - id: summarize
-      agent: assistant
-      prompt: "Summarize this in 3 bullet points: ${{ steps.research.output }}"
-  
+    - id: analyze_changes
+      agent: code_reviewer
+      prompt: |
+        Please analyze this pull request and help me review it:
+        
+        ${{ steps.fetch_pr.outputs.diff }}
+        
+        Please provide:
+        1. **Summary**: What does this PR do in simple terms?
+        2. **Key Changes**: What are the main files/functions modified?
+        3. **Potential Concerns**: Any issues or risks to be aware of?
+        
+        Keep explanations clear and accessible.
+
   outputs:
-    summary: "${{ steps.summarize.output }}"
+    pr_analysis: "${{ steps.analyze_changes.output }}"
+
 ```
 
 ```bash
-$ laq run workflow.laq.yml --input topic="quantum computing"
+$ laq run workflow.laq.yml pr.laq.yml --input pr_number=3442
 
-Running research_workflow (2 steps)
+Running pull_request_analysis (2 steps)
 
-✓ Step research completed (2.1s)
-✓ Step summarize completed (1.3s)
+✓ Step fetch_pr completed (2.1s)
+✓ Step analyze_changes completed (1.3s)
 
 ✓ Workflow completed successfully
 
 Outputs:
 
 summary: 
-  • Quantum computing ...
+  • This PR adds the new laq function to the ...
 ```
 
 ## 🚀 Quick Start

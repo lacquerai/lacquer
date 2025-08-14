@@ -333,7 +333,10 @@ body {
 
 .hero-code pre {
     margin: 0 auto;
-    box-shadow: 0 0 20px 10px rgba(255, 218, 51, 0.03);
+    box-shadow: 0 0 20px 10px var(--midnight);
+    font-size: 0.8rem;
+    padding-top: 0px;
+    padding-bottom: 0px;
 }
 
 pre {
@@ -345,6 +348,8 @@ pre {
     font-size: 0.875rem;
     max-width: 48rem;
     text-align: left;
+    border-radius: 0.5rem;
+    overflow: hidden;
 }
 
 code .token.key {
@@ -490,12 +495,24 @@ code .token-multiline {
     background-color: var(--navy);
     border: 1px solid var(--chameleon);
     padding: 1.5rem;
-    text-align: center;
     transition: border-color 0.3s ease;
+    box-shadow: 0 0 10px 10px var(--midnight);
+    border-radius: 0.5rem;
 }
 
 .card-header {
     margin-bottom: 1rem;
+}
+
+.card-header svg {
+    width: 3rem;
+    height: 3rem;
+    color: var(--chameleon);
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background-color: var(--midnight);
+    border-radius: 50%;
+    border: 2px solid var(--chameleon);
 }
 
 .card-icon {
@@ -533,8 +550,10 @@ code .token-multiline {
 .tabs {
     width: 100%;
     border: 1px solid var(--chameleon);
-    box-shadow: 0 0 20px 10px rgba(255, 218, 51, 0.03);
+    box-shadow: 0 0 20px 10px var(--midnight);
     margin-bottom: 2rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
 }
 
 .tabs-list {
@@ -611,11 +630,11 @@ code .token-multiline {
 .step-command code {
     color: var(--sunset);
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.875rem;
+    font-size: 0.785rem;
 }
 
 .step-description {
-    color: var(--warmgray);
+    color: var(--offwhite);
 }
 
 /* Community Stats */
