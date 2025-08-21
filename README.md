@@ -102,7 +102,6 @@ agents:
             - "/etc/kubernetes/manifests"
 ```
 </details>
-</br>
 <details>
 <summary>
 🛠️ <b>Local tools</b> - Extend your agents automation abilities by building your own custom tools in any language.
@@ -131,7 +130,6 @@ agents:
 ```
 </details>
 
-</br>
 <details>
 <summary>
 📦 <b>Script and container support</b> - Run steps with any language or container.
@@ -154,7 +152,6 @@ steps:
 ```
 </details>
 
-</br>
 <details>
 <summary>
 🔀 <b>Complex control flow</b> - Run steps conditionally based on the output of previous steps or break out steps into sub steps which run until a condition is met.
@@ -207,7 +204,6 @@ steps:
 
 </details>
 
-</br>
 <details>
 <summary>
 📊 <b>Built in state management</b> - Lacquer keeps track of the state of your workflow and can be used to build complex workflows.
@@ -234,7 +230,6 @@ workflow:
 
 </details>
 
-</br>
 <details>
 <summary>
 🧩 <b>Composable steps</b> - Build reusable workflow components that enforce consistent operational procedures across teams and environments.
@@ -256,7 +251,6 @@ steps:
 
 </details>
 
-</br>
 <details>
 <summary>
 🤖 <b>Multi-agent support</b> - Define multiple agents with different models, prompts, and tools to perform different tasks. Support out the box for OpenAI, Anthropic, and Claude Code models.
@@ -281,7 +275,6 @@ agents:
 
 </details>
 
-</br>
 <details>
 <summary>
 📤 <b>Output marshalling</b> - Constrain your agent steps to only return the data you need and then use it in later steps.
@@ -324,7 +317,6 @@ workflow:
 
 </details>
 
-</br>
 <details>
 <summary>
 🌐 <b>HTTP server</b> - Once you're done prototyping your workflow, ship it to production and expose it to your team using a simple REST API.
