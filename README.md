@@ -55,7 +55,7 @@ laq run debug-pod.laq.yml --input pod_name=api-server-7d9c5
 
 Building AI automation for internal tasks seems like a drag when current solutions are built for the no-code crowd:
 
-- **Drag-and-drop UIs** when you live in the terminal
+- **Drag-and-drop UIs** that don't fit developer workflows
 - **No version control** for auditing changes or rollbacks  
 - **Vendor lock-in** making internal approval a nightmare
 - **Black box systems** you can't debug, extend or embed
