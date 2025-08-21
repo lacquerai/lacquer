@@ -25,6 +25,10 @@ type LocalModelProvider interface {
 	isLocal() bool
 }
 
+type AliasesModelProvider interface {
+	ModelAlias(model string, models []string) (string, error)
+}
+
 // Provider defines the interface for AI model providers
 type Provider interface {
 	// Generate generates a response from the model
@@ -293,6 +297,24 @@ func (mr *Registry) RegisterProvider(provider Provider) error {
 	return nil
 }
 
+func (mr *Registry) ModelAlias(providerName, model string) (string, error) {
+	provider, exists := mr.providers[providerName]
+	if !exists {
+		return "", fmt.Errorf("provider %s not found", providerName)
+	}
+
+	if v, ok := provider.(AliasesModelProvider); ok {
+		modelList := []string{}
+		for m := range mr.modelMap[providerName] {
+			modelList = append(modelList, m)
+		}
+
+		return v.ModelAlias(model, modelList)
+	}
+
+	return model, nil
+}
+
 // GetProviderForModel returns the provider for a specific model from a specific provider
 func (mr *Registry) GetProviderForModel(providerName, model string) (Provider, error) {
 	mr.mu.RLock()
@@ -304,7 +326,12 @@ func (mr *Registry) GetProviderForModel(providerName, model string) (Provider, e
 	}
 
 	if !mr.IsModelSupported(providerName, model) {
-		return nil, fmt.Errorf("model %s not supported by provider %s", model, providerName)
+		models, _ := provider.ListModels(context.Background())
+		modelList := []string{}
+		for _, m := range models {
+			modelList = append(modelList, m.ID)
+		}
+		return nil, fmt.Errorf("model %s not supported by provider %s. Supported models: %s", model, providerName, strings.Join(modelList, ", "))
 	}
 
 	return provider, nil

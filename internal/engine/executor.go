@@ -506,7 +506,15 @@ func (e *Executor) executeAgentStepWithTools(execCtx *execcontext.ExecutionConte
 		return "", fmt.Errorf("failed to build initial prompt: %w", err)
 	}
 
-	provider, err := e.modelRegistry.GetProviderForModel(agent.Provider, agent.Model)
+	// if the model is an alias, get the actual model name
+	// this is useful for users who want to use the models without certain suffixes
+	// e.g. claude-opus-4-20250514 -> claude-opus-4
+	model, err := e.modelRegistry.ModelAlias(agent.Provider, agent.Model)
+	if err == nil {
+		agent.Model = model
+	}
+
+	provider, err := e.modelRegistry.GetProviderForModel(agent.Provider, model)
 	if err != nil {
 		return "", fmt.Errorf("failed to get provider %s for model %s: %w", agent.Provider, agent.Model, err)
 	}

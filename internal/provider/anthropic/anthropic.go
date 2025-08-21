@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -193,7 +195,7 @@ func NewProvider(yamlConfig map[string]interface{}) (*Provider, error) {
 	if config.APIKey == "" && config.Platform == "" {
 		config.APIKey = GetAnthropicAPIKeyFromEnv()
 		if config.APIKey == "" {
-			return nil, fmt.Errorf("anthropic API key is required")
+			return nil, fmt.Errorf("please set an ANTHROPIC_API_KEY environment variable")
 		}
 		options = append(options, option.WithAPIKey(config.APIKey))
 	}
@@ -300,6 +302,69 @@ func (p *Provider) GetName() string {
 	// }
 
 	return p.name
+}
+
+var modelSuffix = regexp.MustCompile(`-\d{8}$`)
+
+// ModelAlias returns the actual model name if the model is an alias
+// e.g. claude-opus-4 -> claude-opus-4-20250514
+func (p *Provider) ModelAlias(model string, models []string) (string, error) {
+	if model == "" {
+		return "", fmt.Errorf("model cannot be empty")
+	}
+
+	var matches []string
+
+	for _, m := range models {
+		if strings.HasPrefix(m, model) {
+			matches = append(matches, m)
+		}
+	}
+
+	if len(matches) == 0 {
+		return model, nil
+	}
+
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+
+	// otherwise sort the matches by the date suffix and return the latest
+	sort.Slice(matches, func(i, j int) bool {
+		dateStringI := modelSuffix.FindStringSubmatch(matches[i])
+		dateStringJ := modelSuffix.FindStringSubmatch(matches[j])
+
+		// Handle cases where no date suffix is found
+		if len(dateStringI) == 0 && len(dateStringJ) == 0 {
+			return matches[i] < matches[j] // Fallback to lexicographic sort
+		}
+		if len(dateStringI) == 0 {
+			return false // j has date, i doesn't, so j should come first
+		}
+		if len(dateStringJ) == 0 {
+			return true // i has date, j doesn't, so i should come first
+		}
+
+		dateStrI := strings.TrimPrefix(dateStringI[0], "-")
+		dateStrJ := strings.TrimPrefix(dateStringJ[0], "-")
+
+		dateI, errI := time.Parse("20060102", dateStrI)
+		dateJ, errJ := time.Parse("20060102", dateStrJ)
+
+		if errI != nil && errJ != nil {
+			return matches[i] < matches[j] // Fallback to lexicographic sort
+		}
+		if errI != nil {
+			return false // j has valid date, i doesn't
+		}
+		if errJ != nil {
+			return true // i has valid date, j doesn't
+		}
+
+		return dateI.After(dateJ)
+	})
+
+	return matches[0], nil
 }
 
 // ListModels dynamically fetches available models from the Anthropic API
