@@ -1,20 +1,19 @@
 agents:
-  researcher:
+  ops_assistant:
     provider: openai
     model: gpt-4
     temperature: 0.2
-    system_prompt: You are a helpful researcher that answers questions about a given topic.
+    system_prompt: You investigate production issues and query infrastructure state.
     tools:
-      - name: search_web
-        script: "node ./scripts/web_search.js"
-        description: |
-          the search_web tool provides a easy way to search the web for information.
-          Use this tool to get the latest information on a given topic, it will provide
-          a short summary of the latest information on the given topic.
+      - name: query_metrics
+        script: "python ./tools/prometheus_query.py"
+        description: "Query Prometheus for system metrics"
         parameters:
           type: object
           properties:
             query:
               type: string
-              description: |
-                The given topic that you want to search for.
+              description: "PromQL query to execute"
+            timerange:
+              type: string
+              description: "Time range (e.g., '5m', '1h', '24h')"

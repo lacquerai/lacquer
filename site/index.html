@@ -4,16 +4,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lacquer - AI Workflow Orchestration</title>
-    <meta name="description" content="Lacquer is an open-source AI orchestration engine inspired by GitHub Actions. Define complex agent workflows in familiar YAML, test locally, and ship anywhere with a single binary.">
-    <meta name="keywords" content="AI, workflow, orchestration, automation, agents, YAML, open-source, GitHub Actions, AI agents, machine learning">
+    <title>Lacquer - Codify Engineering Processes into Reliable AI Workflows</title>
+    <meta name="description" content="Lacquer is a lightweight AI workflow engine that codifies repeatable engineering processes like incident response, data wrangling, and customer support into reliable YAML workflows that never skip a step. Think GitHub Actions, but for AI-powered engineering tasks.">
+    <meta name="keywords" content="AI workflow, DevOps automation, platform engineering, incident response, SRE tools, GitOps, infrastructure automation, Kubernetes, YAML workflows, AI agents">
     <meta name="author" content="Lacquer AI">
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://lacquer.ai/">
-    <meta property="og:title" content="Lacquer - The perfect finish for your AI workflow">
-    <meta property="og:description" content="Lacquer is an open-source AI orchestration engine inspired by GitHub Actions. Define complex agent workflows in familiar YAML, test locally, and ship anywhere.">
+    <meta property="og:title" content="Lacquer - Codify Engineering Processes into Reliable AI Workflows">
+    <meta property="og:description" content="Lightweight AI workflow engine for DevOps and platform teams. Codify repeatable engineering processes into reliable YAML workflows. GitOps native, zero dependencies, production ready.">
     <meta property="og:image" content="https://lacquer.ai/banner.png">
     <meta property="og:site_name" content="Lacquer">
     <meta property="og:locale" content="en_US">
@@ -21,8 +21,8 @@
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://lacquer.ai/">
-    <meta property="twitter:title" content="Lacquer - The perfect finish for your AI workflow">
-    <meta property="twitter:description" content="Lacquer is an open-source AI orchestration engine inspired by GitHub Actions. Define complex agent workflows in familiar YAML, test locally, and ship anywhere.">
+    <meta property="twitter:title" content="Lacquer - Codify Engineering Processes into Reliable AI Workflows">
+    <meta property="twitter:description" content="Lightweight AI workflow engine for DevOps and platform teams. Codify repeatable engineering processes into reliable YAML workflows. GitOps native, zero dependencies, production ready.">
     <meta property="twitter:image" content="https://lacquer.ai/banner.png">
     <meta property="twitter:creator" content="@lacquerai">
     <meta property="twitter:site" content="@lacquerai">
@@ -91,10 +91,10 @@
                         <img src="icon.png" alt="Lacquer Mascot" class="mascot-image">
                     </div>
                     <h1 class="hero-title">
-                        Orchestrate AI Agents with <span class="text-lantern">Code</span>, Not Clicks
+                      Ship Internal Tools with <span class="text-lantern">AI Superpowers</span>
                     </h1>
                     <p class="hero-subtitle">
-                        Lacquer is an <span class="text-lantern">open-source</span> AI orchestration engine inspired by GitHub Actions. Define complex agent workflows in familiar YAML, test locally, and ship anywhere with a single binary.
+                        Lacquer is a <span class="text-lantern underline">open-source</span> AI workflow engine that turns repeatable engineering tasks into reliable YAML workflows that never skip a step. Think GitHub Actions, but for AI-powered internal tools.
                     </p>
                 </div>
 
@@ -103,39 +103,32 @@
                 <div class="hero-code">
                     <pre data-lang="yaml">
                         <code class="lang-yaml">
-<span class="token key">agents:</span>
-  <span class="token key">code_reviewer:</span>
-    <span class="token key">provider:</span> <span class="token string">openai</span>
-    <span class="token key">model:</span> <span class="token string">gpt-4</span>
-    <span class="token key">temperature:</span> <span class="token string">0.3</span>
-    <span class="token key">system_prompt:</span> <span class="token-string">You are an expert code reviewer who analyses code changes.</span>
-
 <span class="token key">inputs:</span>
-  <span class="token key">pr_number:</span>
-    <span class="token key">type:</span> <span class="token string">integer</span>
+  <span class="token key">pod_name:</span>
+    <span class="token key">type:</span> <span class="token string">string</span>
     <span class="token key">required:</span> <span class="token string">true</span>
 
+<span class="token key">agents:</span>
+  <span class="token key">assistant:</span>
+    <span class="token key">provider:</span> <span class="token string">anthropic</span>
+    <span class="token key">model:</span> <span class="token string">claude-sonnet-4</span>
+    <span class="token key">system_prompt:</span> <span class="token-multiline">|
+      You are a Kubernetes SRE expert. Analyze logs for: root causes, error patterns, 
+      service impact, and specific remediation steps.
+    </span>
 <span class="token key">workflow:</span>
   <span class="token key">steps:</span>
-    - <span class="token key">id:</span> <span class="token string">fetch_pr</span>
-      <span class="token key">run:</span> <span class="token string">node scripts/fetch_pr.js</span>
-      <span class="token key">with:</span>
-        <span class="token key">pr_number:</span> <span class="token string">${{ inputs.pr_number }}</span>
+    - <span class="token key">id:</span> <span class="token string">get_logs</span>
+      <span class="token key">run:</span> <span class="token string">"kubectl logs '${{ inputs.pod_name }}' --tail=50 | grep -E 'ERROR|WARN|Exception'"</span>
 
-    - <span class="token key">id:</span> <span class="token string">analyze_changes</span>
-      <span class="token key">agent:</span> <span class="token string">code_reviewer</span>
+    - <span class="token key">id:</span> <span class="token string">analyze_logs</span>
+      <span class="token key">agent:</span> <span class="token string">assistant</span>
       <span class="token key">prompt:</span> <span class="token-multiline">|
-        Please analyze this pull request and help me review it:
-        
-        ${{ steps.fetch_pr.outputs.diff }}
-        
-        Please provide:
-        1. **Summary**: What does this PR do in simple terms?
-        2. **Key Changes**: What are the main files/functions modified?
-        3. **Potential Concerns**: Any issues or risks to be aware of?
+        Analyze these recent error logs and identify root causes and recommended fixes:
+        ${{ steps.get_logs.output }}
       </span>
   <span class="token key">outputs:</span>
-    <span class="token key">pr_analysis:</span> <span class="token string">"${{ steps.analyze_changes.output }}"</span></code>
+    <span class="token key">issues:</span> <span class="token string">${{ steps.analyze_logs.output }}</span></code>
                     </pre>
                 </div>
 
@@ -162,9 +155,9 @@
         <section id="features" class="section-alt">
             <div class="container">
                 <div class="section-header">
-                    <h2 class="section-title">The perfect <span class="text-lantern">finish</span> for your <span
-                            class="text-lantern">AI workflow</span></h2>
-                    <p class="section-subtitle">Built for developers who prefer <span class="underline">terminals</span>
+                    <h2 class="section-title">Stop Building Workflows <span class="text-lantern">No One</span> Can <span
+                            class="text-lantern">Debug</span></h2>
+                    <p class="section-subtitle">Built for engineers who prefer <span class="underline">terminals</span>
                         over drag-and-drop</p>
                 </div>
 
@@ -172,14 +165,13 @@
                     <div class="card feature-card">
                         <div class="card-header">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m4.5-1.5 4.5 4.5-4.5 4.5" />
                           </svg>
                           
-                            <h3 class="card-title">Stop dragging boxes</h3>
+                            <h3 class="card-title">GitOps Native</h3>
                         </div>
                         <div class="card-content">
-                            <p>Write AI workflows in YAML, not drag-and-drop. Version control, code review and debug
-                                like real code.</p>
+                            <p>Your workflows are just YAML files. Commit them, review them, version them like any other code.</p>
                         </div>
                     </div>
 
@@ -199,28 +191,26 @@
                     <div class="card feature-card">
                         <div class="card-header">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="m6.115 5.19.319 1.913A6 6 0 0 0 8.11 10.36L9.75 12l-.387.775c-.217.433-.132.956.21 1.298l1.348 1.348c.21.21.329.497.329.795v1.089c0 .426.24.815.622 1.006l.153.076c.433.217.956.132 1.298-.21l.723-.723a8.7 8.7 0 0 0 2.288-4.042 1.087 1.087 0 0 0-.358-1.099l-1.33-1.108c-.251-.21-.582-.299-.905-.245l-1.17.195a1.125 1.125 0 0 1-.98-.314l-.295-.295a1.125 1.125 0 0 1 0-1.591l.13-.132a1.125 1.125 0 0 1 1.3-.21l.603.302a.809.809 0 0 0 1.086-1.086L14.25 7.5l1.256-.837a4.5 4.5 0 0 0 1.528-1.732l.146-.292M6.115 5.19A9 9 0 1 0 17.18 4.64M6.115 5.19A8.965 8.965 0 0 1 12 3c1.929 0 3.716.607 5.18 1.64" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
                           </svg>
                           
-                            <h3 class="card-title">Develop local, deploy global</h3>
+                            <h3 class="card-title">Local-First Development</h3>
                         </div>
                         <div class="card-content">
-                            <p>Prototype quickly on your laptop then ship to any cloud. No surprises between dev and
-                                production environments.</p>
+                            <p>Test everything on your laptop before deploying. No cloud account needed.</p>
                         </div>
                     </div>
 
                     <div class="card feature-card">
                         <div class="card-header">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.429 9.75 2.25 12l4.179 2.25m0-4.5 5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0 4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0-5.571 3-5.571-3" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
                           </svg>
                           
-                          <h3 class="card-title">Compose once, reuse everywhere</h3>
+                          <h3 class="card-title">Familiar DSL</h3>
                         </div>
                         <div class="card-content">
-                            <p>Build modular workflows that snap together like LEGO blocks. Share common patterns across
-                                projects and teams without copy-paste hell.</p>
+                            <p>If you've used GitHub Actions, you'll feel right at home.</p>
                         </div>
                     </div>
 
@@ -241,14 +231,13 @@
                     <div class="card feature-card">
                         <div class="card-header">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0 0 15 0m-15 0a7.5 7.5 0 1 1 15 0m-15 0H3m16.5 0H21m-1.5 0H12m-8.457 3.077 1.41-.513m14.095-5.13 1.41-.513M5.106 17.785l1.15-.964m11.49-9.642 1.149-.964M7.501 19.795l.75-1.3m7.5-12.99.75-1.3m-6.063 16.658.26-1.477m2.605-14.772.26-1.477m0 17.726-.26-1.477M10.698 4.614l-.26-1.477M16.5 19.794l-.75-1.299M7.5 4.205 12 12m6.894 5.785-1.149-.964M6.256 7.178l-1.15-.964m15.352 8.864-1.41-.513M4.954 9.435l-1.41-.514M12.002 12l-3.75 6.495" />
                           </svg>
                           
-                          <h3 class="card-title">Agents, not just prompts</h3>
+                          <h3 class="card-title">Production Ready</h3>
                         </div>
                         <div class="card-content">
-                            <p>Configure specialized AI agents with custom tools and behaviors. Build sophisticated
-                                multi-agent systems without the boilerplate.</p>
+                            <p>Built-in HTTP server, health checks, metrics, and observability. Deploy to Kubernetes, serverless, or regular VMs.</p>
                         </div>
                     </div>
                 </div>
@@ -262,71 +251,68 @@
             </div>
             <div class="container">
                 <div class="section-header">
-                    <h2 class="section-title"><span class="text-lantern">Buffing out</span> the complexity in AI
-                        orchestration</h2>
-                    <p class="section-subtitle">all the tools you need to build <span class="underline">production-ready</span> AI workflows</p>
+                    <h2 class="section-title">All the Features <span class="text-lantern">Engineering Teams</span> Need</h2>
+                    <p class="section-subtitle">Everything you need to build <span class="underline">production-ready</span> AI workflows for internal tooling</p>
                 </div>
 
 <!-- Tab Triggers -->
+<!-- Tab Triggers -->
 <div class="tabs">
   <div class="tabs-list">
-        <button class="tab-trigger active" data-tab="scripts">Script steps</button>
-        <button class="tab-trigger" data-tab="conditionals">Conditionals</button>
-        <button class="tab-trigger" data-tab="tools">Tool use</button>
+      <button class="tab-trigger active" data-tab="conditionals">Conditionals</button>
         <button class="tab-trigger" data-tab="mcp">MCP support</button>
+        <button class="tab-trigger" data-tab="scripts">Script steps</button>
         <button class="tab-trigger" data-tab="state">State management</button>
+        <button class="tab-trigger" data-tab="tools">Tool use</button>
   </div>
 
   <!-- Tab Contents -->
   
-    <div class="tab-content" id="tab-conditionals">
+    <div class="tab-content active" id="tab-conditionals">
       <div class="code-block">
         <pre><code class="lang-yaml">
 <span class="token key atrule">steps</span><span class="token punctuation">:</span>
-  <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> check_length
-    <span class="token key atrule">agent</span><span class="token punctuation">:</span> analyzer
-    <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token string">"Count words in: ${{ inputs.text }}"</span>
+  <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> check_health
+    <span class="token key atrule">agent</span><span class="token punctuation">:</span> monitor
+    <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token string">"Check health status of service: ${{ inputs.service_name }}"</span>
     <span class="token key atrule">outputs</span><span class="token punctuation">:</span>
-      <span class="token key atrule">word_count</span><span class="token punctuation">:</span> 
-        <span class="token key atrule">type</span><span class="token punctuation">:</span> integer
+      <span class="token key atrule">healthy</span><span class="token punctuation">:</span> 
+        <span class="token key atrule">type</span><span class="token punctuation">:</span> boolean
+        <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"Whether the service is healthy"</span>
+      <span class="token key atrule">error_rate</span><span class="token punctuation">:</span>
+        <span class="token key atrule">type</span><span class="token punctuation">:</span> float
+        <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"The error rate of the service"</span>
 
   <span class="token comment"># Conditionally execute steps</span>
-  <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> expand_text
-    <span class="token key atrule">condition</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> steps.check_length.outputs.word_count &lt; 100 <span class="token punctuation">}</span><span class="token punctuation">}</span>
-    <span class="token key atrule">agent</span><span class="token punctuation">:</span> writer
-    <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token string">"Expand this text to at least 100 words: ${{ inputs.text }}"</span>
-    <span class="token key atrule">outputs</span><span class="token punctuation">:</span>
-      <span class="token key atrule">expanded_text</span><span class="token punctuation">:</span> 
-        <span class="token key atrule">type</span><span class="token punctuation">:</span> string
+  <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> scale_up
+    <span class="token key atrule">condition</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> steps.check_health.outputs.error_rate <span class="token punctuation">></span> 0.05 <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token key atrule">run</span><span class="token punctuation">:</span> <span class="token string">"kubectl scale deployment ${{ inputs.service_name }} --replicas=5"</span>
 
-  <span class="token comment"># Break out logic into sub steps</span>
-  <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> refine_text
-    <span class="token key atrule">while</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> steps.refine_text.iteration &lt; 3 <span class="token important">&amp;&amp;</span> steps.refine_text.outputs.quality_score &lt; 8 <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  <span class="token comment"># Break out steps into sub steps and run until a condition is met</span>
+  <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> rolling_restart
+    <span class="token key atrule">while</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> steps.rolling_restart.iteration &lt; 3 <span class="token important">&amp;&amp;</span> <span class="token tag">!steps.rolling_restart.outputs.healthy</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
     <span class="token key atrule">steps</span><span class="token punctuation">:</span>
-      <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> analyze_quality
-        <span class="token key atrule">agent</span><span class="token punctuation">:</span> analyzer
+      <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> restart_pod
+        <span class="token key atrule">run</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
+          kubectl rollout restart deployment/${{ inputs.service_name }}
+          kubectl rollout status deployment/${{ inputs.service_name }} --timeout=300s</span>
+</span>
+      <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> verify_health
+        <span class="token key atrule">agent</span><span class="token punctuation">:</span> monitor
         <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
-          Analyze the quality of this text on a scale of 1-10:
-          ${{ steps.expand_text.outputs.expanded_text || inputs.text }}</span>
-          
-          <span class="token key atrule">Consider</span><span class="token punctuation">:</span> clarity<span class="token punctuation">,</span> engagement<span class="token punctuation">,</span> structure<span class="token punctuation">,</span> and flow.</span>
-        <span class="token key atrule">outputs</span><span class="token punctuation">:</span>
-          <span class="token key atrule">quality_score</span><span class="token punctuation">:</span> 
-            <span class="token key atrule">type</span><span class="token punctuation">:</span> integer
-          <span class="token key atrule">improvement_suggestions</span><span class="token punctuation">:</span> 
-            <span class="token key atrule">type</span><span class="token punctuation">:</span> string
+          Verify service health after restart:
+          - Check HTTP endpoints return 200
+          - Verify error rate &lt; 1%
+          - Confirm all pods are ready</span>
 
-      <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> apply_improvements
-        <span class="token key atrule">condition</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> steps.refine_text.steps.analyze_quality.outputs.quality_score &lt; 8 <span class="token punctuation">}</span><span class="token punctuation">}</span>
-        <span class="token key atrule">agent</span><span class="token punctuation">:</span> editor
-        <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
-          Improve this text based on these suggestions:
-          Text: ${{ steps.expand_text.outputs.expanded_text || inputs.text }}
-          Suggestions: ${{ steps.refine_text.steps.analyze_quality.outputs.improvement_suggestions }}</span></span>
+          <span class="token key atrule">Service</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> inputs.service_name <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
         <span class="token key atrule">outputs</span><span class="token punctuation">:</span>
-          <span class="token key atrule">improved_text</span><span class="token punctuation">:</span> 
-            <span class="token key atrule">type</span><span class="token punctuation">:</span> string
-
+          <span class="token key atrule">healthy</span><span class="token punctuation">:</span> 
+            <span class="token key atrule">type</span><span class="token punctuation">:</span> boolean
+            <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"Whether the service is healthy"</span>
+          <span class="token key atrule">metrics</span><span class="token punctuation">:</span> 
+            <span class="token key atrule">type</span><span class="token punctuation">:</span> object
+            <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"The metrics of the service"</span>
 </code></pre>
       </div>
     </div>
@@ -335,31 +321,31 @@
       <div class="code-block">
         <pre><code class="lang-yaml">
 <span class="token key atrule">agents</span><span class="token punctuation">:</span>
-  <span class="token key atrule">fixer</span><span class="token punctuation">:</span>
+  <span class="token key atrule">incident_responder</span><span class="token punctuation">:</span>
     <span class="token key atrule">provider</span><span class="token punctuation">:</span> anthropic
-    <span class="token key atrule">model</span><span class="token punctuation">:</span> claude<span class="token punctuation">-</span>4<span class="token punctuation">-</span>sonnet<span class="token punctuation">-</span><span class="token number">20240229</span>
+    <span class="token key atrule">model</span><span class="token punctuation">:</span> claude<span class="token punctuation">-</span>sonnet<span class="token punctuation">-</span><span class="token number">4</span>
     <span class="token key atrule">system_prompt</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
-      You are an expert code reviewer who:</span>
+      You are an SRE expert who:</span>
 
-      <span class="token punctuation">-</span> Identifies bugs and security issues
-      <span class="token punctuation">-</span> Suggests performance improvements
-      <span class="token punctuation">-</span> Ensures code follows best practices
-      <span class="token punctuation">-</span> Provides constructive feedback</span>
+      <span class="token punctuation">-</span> Analyzes production incidents
+      <span class="token punctuation">-</span> Identifies root causes from logs and metrics
+      <span class="token punctuation">-</span> Creates runbooks for remediation
+      <span class="token punctuation">-</span> Documents post<span class="token punctuation">-</span>mortems</span>
     <span class="token key atrule">tools</span><span class="token punctuation">:</span>
       <span class="token punctuation">-</span> <span class="token key atrule">name</span><span class="token punctuation">:</span> filesystem
-        <span class="token key atrule">description</span><span class="token punctuation">:</span> Filesystem access for code analysis
+        <span class="token key atrule">description</span><span class="token punctuation">:</span> Access runbooks and configuration files
         <span class="token key atrule">mcp_server</span><span class="token punctuation">:</span>
           <span class="token key atrule">type</span><span class="token punctuation">:</span> local
           <span class="token key atrule">command</span><span class="token punctuation">:</span> npx
           <span class="token key atrule">args</span><span class="token punctuation">:</span>
             <span class="token punctuation">-</span> <span class="token string">"-y"</span>
             <span class="token punctuation">-</span> <span class="token string">"@modelcontextprotocol/server-filesystem"</span>
-            <span class="token punctuation">-</span> <span class="token string">"/usr/src/app"</span>
+            <span class="token punctuation">-</span> <span class="token string">"/etc/kubernetes/manifests"</span>
 </code></pre>
       </div>
     </div>
 
-    <div class="tab-content active" id="tab-scripts">
+    <div class="tab-content" id="tab-scripts">
       <div class="code-block">
         <pre><code class="lang-yaml">
 <span class="token key atrule">requirements</span><span class="token punctuation">:</span>
@@ -407,17 +393,21 @@
       <div class="code-block">
         <pre><code class="lang-yaml">
 <span class="token key atrule">state</span><span class="token punctuation">:</span>
-  <span class="token key atrule">counter</span><span class="token punctuation">:</span> <span class="token number">0</span>
-  <span class="token key atrule">status</span><span class="token punctuation">:</span> <span class="token string">"pending"</span>
+  <span class="token key atrule">rollback_count</span><span class="token punctuation">:</span> <span class="token number">0</span>
+  <span class="token key atrule">deployment_status</span><span class="token punctuation">:</span> <span class="token string">"pending"</span>
 
 <span class="token key atrule">workflow</span><span class="token punctuation">:</span>
   <span class="token key atrule">steps</span><span class="token punctuation">:</span>
-    <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> process_item
-      <span class="token key atrule">agent</span><span class="token punctuation">:</span> processor
-      <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token string">"Process: ${{ inputs.item }}"</span>
+    <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> deploy_service
+      <span class="token key atrule">run</span><span class="token punctuation">:</span> <span class="token string">"helm upgrade --install ${{ inputs.service }} ./charts/${{ inputs.service }}"</span>
       <span class="token key atrule">updates</span><span class="token punctuation">:</span>
-        <span class="token key atrule">counter</span><span class="token punctuation">:</span> <span class="token string">"${{ state.counter + 1 }}"</span>
-        <span class="token key atrule">status</span><span class="token punctuation">:</span> <span class="token string">"${{ steps.process_item.outputs.success ? 'processing' : 'error' }}"</span>
+        <span class="token key atrule">deployment_status</span><span class="token punctuation">:</span> <span class="token string">"${{ steps.deploy_service.output ? 'deployed' : 'failed' }}"</span>
+        
+    <span class="token punctuation">-</span> <span class="token key atrule">id</span><span class="token punctuation">:</span> rollback_if_needed
+      <span class="token key atrule">condition</span><span class="token punctuation">:</span> $<span class="token punctuation">{</span><span class="token punctuation">{</span> state.deployment_status == 'failed' <span class="token punctuation">}</span><span class="token punctuation">}</span>
+      <span class="token key atrule">run</span><span class="token punctuation">:</span> <span class="token string">"helm rollback ${{ inputs.service }}"</span>
+      <span class="token key atrule">updates</span><span class="token punctuation">:</span>
+        <span class="token key atrule">rollback_count</span><span class="token punctuation">:</span> <span class="token string">"${{ state.rollback_count + 1 }}"</span>
 </code></pre>
       </div>
     </div>
@@ -426,30 +416,28 @@
       <div class="code-block">
         <pre><code class="lang-yaml">
 <span class="token key atrule">agents</span><span class="token punctuation">:</span>
-  <span class="token key atrule">researcher</span><span class="token punctuation">:</span>
+  <span class="token key atrule">ops_assistant</span><span class="token punctuation">:</span>
     <span class="token key atrule">provider</span><span class="token punctuation">:</span> openai
     <span class="token key atrule">model</span><span class="token punctuation">:</span> gpt<span class="token punctuation">-</span><span class="token number">4</span>
     <span class="token key atrule">temperature</span><span class="token punctuation">:</span> <span class="token number">0.2</span>
-    <span class="token key atrule">system_prompt</span><span class="token punctuation">:</span> You are a helpful researcher that answers questions about a given topic.
+    <span class="token key atrule">system_prompt</span><span class="token punctuation">:</span> You investigate production issues and query infrastructure state.
     <span class="token key atrule">tools</span><span class="token punctuation">:</span>
-      <span class="token punctuation">-</span> <span class="token key atrule">name</span><span class="token punctuation">:</span> search_web
-        <span class="token key atrule">script</span><span class="token punctuation">:</span> <span class="token string">"node ./scripts/web_search.js"</span>
-        <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
-          the search_web tool provides a easy way to search the web for information.
-          Use this tool to get the latest information on a given topic, it will provide
-          a short summary of the latest information on the given topic.</span></span>
+      <span class="token punctuation">-</span> <span class="token key atrule">name</span><span class="token punctuation">:</span> query_metrics
+        <span class="token key atrule">script</span><span class="token punctuation">:</span> <span class="token string">"python ./tools/prometheus_query.py"</span>
+        <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"Query Prometheus for system metrics"</span>
         <span class="token key atrule">parameters</span><span class="token punctuation">:</span>
           <span class="token key atrule">type</span><span class="token punctuation">:</span> object
           <span class="token key atrule">properties</span><span class="token punctuation">:</span>
             <span class="token key atrule">query</span><span class="token punctuation">:</span>
               <span class="token key atrule">type</span><span class="token punctuation">:</span> string
-              <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token-multiline"><span class="token punctuation">|</span><span class="token scalar string">
-                The given topic that you want to search for.</span></span>
+              <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"PromQL query to execute"</span>
+            <span class="token key atrule">timerange</span><span class="token punctuation">:</span>
+              <span class="token key atrule">type</span><span class="token punctuation">:</span> string
+              <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"Time range (e.g., '5m', '1h', '24h')"</span>
 </code></pre>
       </div>
     </div>
 </div>
-
 
 
                 <div class="cta-buttons">
@@ -467,9 +455,9 @@
         <section class="section-alt">
             <div class="container">
                 <div class="section-header">
-                    <h2 class="section-title">Craft Your First Workflow in <span class="text-lantern">30 Seconds</span>
+                    <h2 class="section-title">Get Started in <span class="text-lantern">60 Seconds</span>
                     </h2>
-                    <p class="section-subtitle"><span class="underline">Dead simple from the start</span></p>
+                    <p class="section-subtitle">From install to <span class="underline">first workflow</span> in under a minute</p>
                 </div>
 
                 <div class="grid grid-3">
@@ -495,7 +483,7 @@
                         <div class="step-number">3</div>
                         <h3 class="step-title">Run</h3>
                         <div class="step-command">
-                            <code>laq run <span class="text-lantern">workflow.laq.yaml</span></code>
+                            <code>laq run <span class="text-lantern">workflow.laq.yml</span></code>
                         </div>
                         <p class="step-description">Execute and see the magic</p>
                     </div>

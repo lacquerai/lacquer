@@ -1,44 +1,42 @@
 steps:
-  - id: check_length
-    agent: analyzer
-    prompt: "Count words in: ${{ inputs.text }}"
+  - id: check_health
+    agent: monitor
+    prompt: "Check health status of service: ${{ inputs.service_name }}"
     outputs:
-      word_count: 
-        type: integer
+      healthy: 
+        type: boolean
+        description: "Whether the service is healthy"
+      error_rate:
+        type: float
+        description: "The error rate of the service"
 
   # Conditionally execute steps
-  - id: expand_text
-    condition: ${{ steps.check_length.outputs.word_count < 100 }}
-    agent: writer
-    prompt: "Expand this text to at least 100 words: ${{ inputs.text }}"
-    outputs:
-      expanded_text: 
-        type: string
+  - id: scale_up
+    condition: ${{ steps.check_health.outputs.error_rate > 0.05 }}
+    run: "kubectl scale deployment ${{ inputs.service_name }} --replicas=5"
 
-  # Break out logic into sub steps
-  - id: refine_text
-    while: ${{ steps.refine_text.iteration < 3 && steps.refine_text.outputs.quality_score < 8 }}
+  # Break out steps into sub steps and run until a condition is met
+  - id: rolling_restart
+    while: ${{ steps.rolling_restart.iteration < 3 && !steps.rolling_restart.outputs.healthy }}
     steps:
-      - id: analyze_quality
-        agent: analyzer
-        prompt: |
-          Analyze the quality of this text on a scale of 1-10:
-          ${{ steps.expand_text.outputs.expanded_text || inputs.text }}
-          
-          Consider: clarity, engagement, structure, and flow.
-        outputs:
-          quality_score: 
-            type: integer
-          improvement_suggestions: 
-            type: string
+      - id: restart_pod
+        run: |
+          kubectl rollout restart deployment/${{ inputs.service_name }}
+          kubectl rollout status deployment/${{ inputs.service_name }} --timeout=300s
 
-      - id: apply_improvements
-        condition: ${{ steps.refine_text.steps.analyze_quality.outputs.quality_score < 8 }}
-        agent: editor
+      - id: verify_health
+        agent: monitor
         prompt: |
-          Improve this text based on these suggestions:
-          Text: ${{ steps.expand_text.outputs.expanded_text || inputs.text }}
-          Suggestions: ${{ steps.refine_text.steps.analyze_quality.outputs.improvement_suggestions }}
+          Verify service health after restart:
+          - Check HTTP endpoints return 200
+          - Verify error rate < 1%
+          - Confirm all pods are ready
+
+          Service: ${{ inputs.service_name }}
         outputs:
-          improved_text: 
-            type: string
+          healthy: 
+            type: boolean
+            description: "Whether the service is healthy"
+          metrics: 
+            type: object
+            description: "The metrics of the service"

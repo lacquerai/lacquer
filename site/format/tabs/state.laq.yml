@@ -1,12 +1,16 @@
 state:
-  counter: 0
-  status: "pending"
+  rollback_count: 0
+  deployment_status: "pending"
 
 workflow:
   steps:
-    - id: process_item
-      agent: processor
-      prompt: "Process: ${{ inputs.item }}"
+    - id: deploy_service
+      run: "helm upgrade --install ${{ inputs.service }} ./charts/${{ inputs.service }}"
       updates:
-        counter: "${{ state.counter + 1 }}"
-        status: "${{ steps.process_item.outputs.success ? 'processing' : 'error' }}"
+        deployment_status: "${{ steps.deploy_service.output ? 'deployed' : 'failed' }}"
+        
+    - id: rollback_if_needed
+      condition: ${{ state.deployment_status == 'failed' }}
+      run: "helm rollback ${{ inputs.service }}"
+      updates:
+        rollback_count: "${{ state.rollback_count + 1 }}"

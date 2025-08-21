@@ -1,21 +1,21 @@
 agents:
-  fixer:
+  incident_responder:
     provider: anthropic
-    model: claude-4-sonnet-20240229
+    model: claude-sonnet-4
     system_prompt: |
-      You are an expert code reviewer who:
+      You are an SRE expert who:
 
-      - Identifies bugs and security issues
-      - Suggests performance improvements
-      - Ensures code follows best practices
-      - Provides constructive feedback
+      - Analyzes production incidents
+      - Identifies root causes from logs and metrics
+      - Creates runbooks for remediation
+      - Documents post-mortems
     tools:
       - name: filesystem
-        description: Filesystem access for code analysis
+        description: Access runbooks and configuration files
         mcp_server:
           type: local
           command: npx
           args:
             - "-y"
             - "@modelcontextprotocol/server-filesystem"
-            - "/usr/src/app"
+            - "/etc/kubernetes/manifests"
