@@ -91,12 +91,12 @@ func (e *BashExecutor) ExecuteRaw(execCtx *execcontext.ExecutionContext, block *
 			if stderr.Len() > 0 {
 				var execErr ExecutionError
 				if jsonErr := json.Unmarshal(stderr.Bytes(), &execErr); jsonErr == nil {
-					return nil, fmt.Errorf("block execution failed: %s", execErr.Message)
+					return nil, fmt.Errorf("%s failed: %s", block.Script, execErr.Message)
 				}
-				return nil, fmt.Errorf("block execution failed: %s", stderr.String())
+				return nil, fmt.Errorf("%s failed: %s", block.Script, stderr.String())
 			}
 
-			return nil, fmt.Errorf("block execution failed: %w: %s", err, stdout.String())
+			return nil, fmt.Errorf("%s failed: %w: %s", block.Script, err, stdout.String())
 		}
 	case <-execCtx.Context.Context.Done():
 		if cmd.Process != nil {
