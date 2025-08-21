@@ -378,14 +378,6 @@ Apache 2.0 - Use it anywhere, modify it freely, ship it commercially.
 
 <div align="center">
 
-### Ready to ditch the drag-and-drop?
-
-<b>
-
-[⚡ Get Started](https://lacquer.ai) • [📖 Read the Docs](https://lacquer.ai/docs) • [⭐ Star on GitHub](https://github.com/lacquerai/lacquer)
-
-</b>
-
 <sub>Built with ❤️ by developers who prefer terminals over GUIs</sub>
 
 </div>
