@@ -58,7 +58,7 @@ func NewProvider(yamlConfig map[string]interface{}) (*OpenAIProvider, error) {
 	if config.APIKey == "" {
 		config.APIKey = GetOpenAIAPIKeyFromEnv()
 		if config.APIKey == "" {
-			return nil, fmt.Errorf("OpenAI API key is required")
+			return nil, fmt.Errorf("please set an OPENAI_API_KEY environment variable")
 		}
 		options = append(options, option.WithAPIKey(config.APIKey))
 	}
