@@ -1,6 +1,9 @@
 <p align="center">
-<img width="1240" height="480" alt="lacquer-banner-stars" src="https://github.com/user-attachments/assets/42844a33-c8cb-404b-ba56-54b803615e03" />
- <img alt="GitHub Release" src="https://img.shields.io/github/v/release/lacquerai/lacquer">
+<img width="1200" height="430" alt="Lacquer" src="https://github.com/user-attachments/assets/c6db4ce6-d671-4113-8c39-222794d1e11a" />
+</p>
+
+<p align="center">
+<img alt="GitHub Release" src="https://img.shields.io/github/v/release/lacquerai/lacquer">
 <img alt="GitHub License" src="https://img.shields.io/github/license/lacquerai/lacquer">
 <a href="https://lacquer.ai/docs">
 <img alt="Static Badge" src="https://img.shields.io/badge/docs-latest-blue">
