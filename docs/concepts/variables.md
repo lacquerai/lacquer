@@ -262,6 +262,14 @@ Finds files matching a glob pattern.
 - **Returns**: array
 - **Example**: `${{ glob("*.js") }}` → `["file1.js", "file2.js"]`
 
+#### file(path)
+
+Reads and returns the contents of a file.
+
+- **Parameters**: `path` (string)
+- **Returns**: string
+- **Example**: `${{ file("config.txt") }}` → `"file content here"`
+
 ### Workflow Status Functions
 
 #### always()

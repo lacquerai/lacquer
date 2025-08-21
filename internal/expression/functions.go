@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -392,7 +393,7 @@ func (fr *FunctionRegistry) registerContextFunctions() {
 			// In a real implementation, this would read and hash the actual files
 			var paths []string
 			for _, arg := range args {
-				paths = append(paths, toString(arg))
+				paths = append(paths, filepath.Join(execCtx.Cwd, toString(arg)))
 			}
 
 			combined := strings.Join(paths, "|")
@@ -420,7 +421,7 @@ func (fr *FunctionRegistry) registerFileFunctions() {
 			}
 
 			pattern := toString(args[0])
-			matches, err := filepath.Glob(pattern)
+			matches, err := filepath.Glob(filepath.Join(execCtx.Cwd, pattern))
 			if err != nil {
 				return nil, fmt.Errorf("glob pattern error: %v", err)
 			}
@@ -432,6 +433,30 @@ func (fr *FunctionRegistry) registerFileFunctions() {
 			}
 
 			return result, nil
+		},
+	}
+
+	// file(path) - reads and returns file contents
+	fr.functions["file"] = &FunctionDefinition{
+		Name:        "file",
+		Description: "Reads and returns the contents of a file",
+		Args: []Argument{
+			{Name: "path", Type: "string", Required: true},
+		},
+		Returns: "string",
+		Example: "file('config.txt') → 'file content here'",
+		Impl: func(args []interface{}, execCtx *execcontext.ExecutionContext) (interface{}, error) {
+			if len(args) != 1 {
+				return nil, fmt.Errorf("file() requires exactly 1 argument")
+			}
+
+			path := toString(args[0])
+			content, err := os.ReadFile(filepath.Join(execCtx.Cwd, path))
+			if err != nil {
+				return nil, fmt.Errorf("failed to read file '%s': %v", path, err)
+			}
+
+			return string(content), nil
 		},
 	}
 }
