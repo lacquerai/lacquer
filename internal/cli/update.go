@@ -64,7 +64,7 @@ This command:
 		force, _ := cmd.Flags().GetBool("force")
 
 		if checkOnly {
-			checkForUpdate(cmd, true)
+			checkForUpdate(cmd, true, true)
 			return
 		}
 
@@ -80,11 +80,13 @@ func init() {
 }
 
 // checkForUpdate checks if a newer version is available
-func checkForUpdate(cmd *cobra.Command, verbose bool) *UpdateInfo {
-	updateInfo := loadUpdateCache()
+func checkForUpdate(cmd *cobra.Command, verbose bool, withoutCache bool) *UpdateInfo {
+	if !withoutCache {
+		updateInfo := loadUpdateCache()
 
-	if updateInfo != nil && time.Since(updateInfo.LastChecked) < cacheExpiry {
-		return updateInfo
+		if updateInfo != nil && time.Since(updateInfo.LastChecked) < cacheExpiry {
+			return updateInfo
+		}
 	}
 
 	latest, downloadURL, err := fetchLatestVersion()
@@ -108,7 +110,7 @@ func checkForUpdate(cmd *cobra.Command, verbose bool) *UpdateInfo {
 		isOutdated = currentVersion != latestVersion && Version != "dev"
 	}
 
-	updateInfo = &UpdateInfo{
+	updateInfo := &UpdateInfo{
 		LastChecked:   time.Now(),
 		LatestVersion: latest,
 		CurrentIsOld:  isOutdated,
@@ -132,7 +134,7 @@ func checkForUpdate(cmd *cobra.Command, verbose bool) *UpdateInfo {
 
 // performUpdate downloads and installs the latest version
 func performUpdate(cmd *cobra.Command, force bool) {
-	updateInfo := checkForUpdate(cmd, false)
+	updateInfo := checkForUpdate(cmd, false, true)
 	if updateInfo == nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "%s Failed to check for updates\n", style.ErrorIcon())
 		return

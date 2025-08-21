@@ -167,7 +167,7 @@ func triggerBackgroundUpdateCheck() {
 
 	// This will check for updates and cache the result for future use
 	// It runs silently in the background and doesn't print anything
-	checkForUpdate(dummyCmd, false)
+	checkForUpdate(dummyCmd, false, false)
 }
 
 // showUpdateNotificationIfAvailable checks for available updates and shows a notification
