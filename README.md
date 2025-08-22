@@ -35,7 +35,7 @@ agents:
 workflow:
   steps:
     - id: get_logs
-      run: "kubectl logs '${{ inputs.pod_name }}' --tail=50 | grep -E 'ERROR|WARN|Exception'"
+      run: "kubectl logs '${{ inputs.pod_name }}' --tail=10 | grep -E 'ERROR|WARN|Exception'"
 
     - id: analyze_logs
       agent: assistant
